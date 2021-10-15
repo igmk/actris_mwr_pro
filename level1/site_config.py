@@ -14,7 +14,7 @@ def get_site_att(site: str,
     
     Example:
         from level1.site_config import get_site_att
-        att = get_site_att('site_name')
+        att = get_site_att('site_name','data_type')
        
     """
 

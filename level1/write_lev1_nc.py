@@ -14,12 +14,13 @@ def lev1_to_nc(site: str,
     
     Args:
         site: Name of site
+        data_type: Data type of the netCDF file
         path_to_lwp_files: Folder containing one day of RPG MWR binary files.
         output_file: Output file name.
         
     Examples:
         >>> from level1.write_lev1_nc import lev1_to_nc
-        >>> lev1_to_nc('site_name', '/path/to/files/', 'rpg_mwr.nc')
+        >>> lev1_to_nc('site_name', '1B01', '/path/to/files/', 'rpg_mwr.nc')
     """
 
     """Load and prepare data for netCDF writing"""
