@@ -8,7 +8,7 @@ FIELDS = ('description')
 SiteConfig = namedtuple('SiteConfig', FIELDS)
 SiteConfig.__new__.__defaults__ = (None,) * len(SiteConfig._fields)
 
-GLOBAL = {
+GLOBAL_1B01 = {
     'conventions': SiteConfig(
         description='Name of the conventions followed by the dataset',
     ),
@@ -80,6 +80,142 @@ GLOBAL = {
     ),
     'factory_history': SiteConfig(
         description='Logbook repair/replacement work performed',
+    ),
+
+}
+
+
+GLOBAL_1B11 = {
+    'conventions': SiteConfig(
+        description='Name of the conventions followed by the dataset',
+    ),
+    'title': SiteConfig(
+        description='A succinct description of what is in the dataset, composed of instrument type and site name',
+    ),
+    'history': SiteConfig(
+        description='Versioning of the datasets (containing date and software version)',
+    ),
+    'institution': SiteConfig(
+        description='Where the original data was produced',
+    ),
+    'source': SiteConfig(
+        description='The method of production of the original data',
+    ),
+    'comment': SiteConfig(
+        description='Miscellaneous Information about the dataset or methods used to produce it',
+    ),
+    'references': SiteConfig(
+        description='References that describe the data or methods used to produce it',
+    ),
+    'site_location': SiteConfig(
+        description='Name of measurement station',
+    ),
+    'instrument_id': SiteConfig(
+        description='E-PROFILE instrument identifier',
+    ),
+    'wigos_station_id': SiteConfig(
+        description='WIGOS Station identifier acording to WIGOS convention',
+    ),
+    'principal_investigator': SiteConfig(
+        description='Department responsible for the instrument',
+    ),
+    'ir_instrument_manufacturer': SiteConfig(
+        description='Manufacturer of the infrared radiometer',
+    ),
+    'ir_instrument_model': SiteConfig(
+        description='Infrared radiometer model',
+    ),
+    'network_name': SiteConfig(
+        description='Name of network(s) that instrument may be part of',
+    ),
+    'campaign_name': SiteConfig(
+        description='Name of campaign instrument may collect data for',
+    ),
+    'license': SiteConfig(
+        description='Data license',
+    ),
+    'factory_history': SiteConfig(
+        description='Logbook repair/replacement work performed',
+    ),
+    'ir_instrument_fabrication_year': SiteConfig(
+        description='Fabrication year of the infrared radiometer',
+    ),
+
+}
+
+
+GLOBAL_1B21 = {
+    'conventions': SiteConfig(
+        description='Name of the conventions followed by the dataset',
+    ),
+    'title': SiteConfig(
+        description='A succinct description of what is in the dataset, composed of instrument type and site name',
+    ),
+    'history': SiteConfig(
+        description='Versioning of the datasets (containing date and software version)',
+    ),
+    'institution': SiteConfig(
+        description='Where the original data was produced',
+    ),
+    'source': SiteConfig(
+        description='The method of production of the original data',
+    ),
+    'comment': SiteConfig(
+        description='Miscellaneous Information about the dataset or methods used to produce it',
+    ),
+    'references': SiteConfig(
+        description='References that describe the data or methods used to produce it',
+    ),
+    'site_location': SiteConfig(
+        description='Name of measurement station',
+    ),
+    'instrument_id': SiteConfig(
+        description='E-PROFILE instrument identifier',
+    ),
+    'wigos_station_id': SiteConfig(
+        description='WIGOS Station identifier acording to WIGOS convention',
+    ),
+    'principal_investigator': SiteConfig(
+        description='Department responsible for the instrument',
+    ),
+    'met_instrument_manufacturer': SiteConfig(
+        description='Manufacturer of the weather station',
+    ),
+    'met_instrument_model': SiteConfig(
+        description='Weather station model',
+    ),
+    'network_name': SiteConfig(
+        description='Name of network(s) that instrument may be part of',
+    ),
+    'campaign_name': SiteConfig(
+        description='Name of campaign instrument may collect data for',
+    ),
+    'license': SiteConfig(
+        description='Data license',
+    ),
+    'factory_history': SiteConfig(
+        description='Logbook repair/replacement work performed',
+    ),
+    'air_temperature_accuracy': SiteConfig(
+        description='Air temperature accuracy. Unit: K.',
+    ),
+    'relative_humidity_accuracy': SiteConfig(
+        description='Relative humidity accuracy. Unit: 1.',
+    ),
+    'air_pressure_accuracy': SiteConfig(
+        description='Air pressure accuracy. Unit: Pa.',
+    ),
+    'rain_rate_accuracy': SiteConfig(
+        description='Rain rate accuracy. Unit: mm/h.',
+    ),    
+    'wind_direction_accuracy': SiteConfig(
+        description='Wind direction accuracy. Unit: degrees.',
+    ),
+    'wind_speed_accuracy': SiteConfig(
+        description='Wind speed accuracy. Unit: m/s.',
+    ),    
+    'met_instrument_fabrication_year': SiteConfig(
+        description='Fabrication year of the infrared radiometer',
     ),
 
 }

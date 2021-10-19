@@ -33,14 +33,17 @@ class RpgArray:
 
     def fetch_attributes(self) -> list:
         """Returns list of user-defined attributes."""
+        
         attributes = []
         for attr in self.__dict__:
             if attr not in ('name', 'data', 'data_type', 'variable', 'dimensions'):
                 attributes.append(attr)
         return attributes
 
-    def set_attributes(self, attributes: MetaData) -> None:
+    def set_attributes(self, 
+                       attributes: MetaData) -> None:
         """Overwrites existing instance attributes."""
+        
         for key in attributes._fields:  # To iterate namedtuple fields.
             data = getattr(attributes, key)
             if data:
@@ -59,9 +62,10 @@ class RpgArray:
                 return np.array(numeric_value)
             except ValueError:
                 pass
-        raise ValueError(f'Incorrect CloudnetArray input: {self.variable}')
+        raise ValueError(f'Incorrect RpgArray input: {self.variable}')
 
-    def _init_units(self, units_from_user: Union[str, None]) -> str:
+    def _init_units(self, 
+                    units_from_user: Union[str, None]) -> str:
         if units_from_user is not None:
             return units_from_user
         return getattr(self.variable, 'units', '')
@@ -77,6 +81,7 @@ class RpgArray:
 
 class Rpg:
     """Base class for RPG MWR."""
+    
     def __init__(self, raw_data: dict):
         self.raw_data = raw_data
         self.data = {}
@@ -88,58 +93,33 @@ class Rpg:
             data[key] = RpgArray(self.raw_data[key], key)
         return data
     
+    
 def save_rpg(rpg: Rpg,
              output_file: str,
-             att: dict) -> Tuple[str, list]:
-
+             att: dict,
+             data_type: str) -> Tuple[str, list]:
     """Saves the RPG MWR file."""
-
-    dims = {'time': len(rpg.data['time'][:]),
-            'frequency': len(rpg.data['tb'][:].T)}
+    
+    if data_type == '1B01':
+        dims = {'time': len(rpg.data['time'][:]),
+                'frequency': len(rpg.data['tb'][:].T),
+                'n_receivers': len(rpg.data['t_rec'][:].T)}
+    elif data_type == '1B11':
+        dims = {'time': len(rpg.data['time'][:]),
+                'ir_wavelength': len(rpg.data['irt'][:].T)}
+    elif data_type == '1B21':
+        dims = {'time': len(rpg.data['time'][:])}        
+    else:
+        raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
 
     rootgrp = init_file(output_file, dims, rpg.data, att)
     rootgrp.close()
     
-def _get_dimensions(nc: netCDF4.Dataset, data: np.ndarray) -> tuple:
-
-    """Finds correct dimensions for a variable."""
-    if utils.isscalar(data):
-        return ()
-    variable_size = ()
-    file_dims = nc.dimensions
-    array_dims = data.shape
-    for length in array_dims:
-        dim = [key for key in file_dims.keys() if file_dims[key].size == length][0]
-        variable_size = variable_size + (dim,)
-    return variable_size
-
-
-def _write_vars2nc(nc: netCDF4.Dataset, cloudnet_variables: dict) -> None:
-
-    """Iterates over Cloudnet instances and write to netCDF file."""
-    for obj in cloudnet_variables.values():
-
-        if obj.data_type in (np.float32, np.float64):
-            fill_value = -999.
-        else:
-            fill_value = -99
-
-        size = obj.dimensions or _get_dimensions(nc, obj.data)
-        nc_variable = nc.createVariable(obj.name, obj.data_type, size, zlib=True,
-                                        fill_value=fill_value)
-        nc_variable[:] = obj.data
-        for attr in obj.fetch_attributes():
-            setattr(nc_variable, attr, getattr(obj, attr))
-
-def _add_standard_global_attributes(nc: netCDF4.Dataset, att_global) -> None:
-    for name, value in att_global.items():
-        setattr(nc, name, value)
-
+    
 def init_file(file_name: str,
               dimensions: dict,
               rpg_arrays: dict,
               att_global: dict) -> netCDF4.Dataset:
-
     """Initializes a RPG MWR file for writing.
     Args:
         file_name: File name to be generated.
@@ -154,19 +134,42 @@ def init_file(file_name: str,
     _write_vars2nc(nc, rpg_arrays)
     _add_standard_global_attributes(nc, att_global)
     return nc
+    
+    
+def _get_dimensions(nc: netCDF4.Dataset, 
+                    data: np.ndarray) -> tuple:
+    """Finds correct dimensions for a variable."""
+    
+    if utils.isscalar(data):
+        return ()
+    variable_size = ()
+    file_dims = nc.dimensions
+    array_dims = data.shape
+    for length in array_dims:
+        dim = [key for key in file_dims.keys() if file_dims[key].size == length][0]
+        variable_size = variable_size + (dim,)
+    return variable_size
 
-def update_attributes(rpg_variables: dict, attributes: dict) -> None:
 
-    """Overrides existing RpgArray-attributes.
-    Overrides existing attributes using hard-coded values.
-    New attributes are added.
-    Args:
-        rpg_variables: RpgArray instances.
-        attributes: Product-specific attributes.
-    """
-
-    for key in list(rpg_variables):
-        if key in attributes:
-            rpg_variables[key].set_attributes(attributes[key])
+def _write_vars2nc(nc: netCDF4.Dataset, 
+                   cloudnet_variables: dict) -> None:
+    """Iterates over Cloudnet instances and write to netCDF file."""
+    
+    for obj in cloudnet_variables.values():
+        if obj.data_type == 'f4':
+            fill_value = -999.
         else:
-            del rpg_variables[key]
+            fill_value = -99
+
+        size = obj.dimensions or _get_dimensions(nc, obj.data)
+        nc_variable = nc.createVariable(obj.name, obj.data_type, size, zlib=True,
+                                        fill_value=fill_value)
+        nc_variable[:] = obj.data
+        for attr in obj.fetch_attributes():
+            setattr(nc_variable, attr, getattr(obj, attr))
+            
+
+def _add_standard_global_attributes(nc: netCDF4.Dataset, 
+                                    att_global) -> None:
+    for name, value in att_global.items():
+        setattr(nc, name, value)

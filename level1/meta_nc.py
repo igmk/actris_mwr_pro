@@ -1,6 +1,35 @@
-"""Initialize Metadata of RPG MWR Level 1 variables for NetCDF file writing."""
-
 from collections import namedtuple
+
+def get_data_attributes(rpg_variables: dict, 
+                        data_type: str) -> dict:
+    """Adds Metadata for RPG MWR Level 1 variables for NetCDF file writing.
+    Args:
+        rpg_variables: RpgArray instances.
+        data_type: Data type of the netCDF file.
+        
+    Returns:
+        Dictionary
+        
+    Raises:
+        RuntimeError: Specified data type is not supported.
+    
+    Example:
+        from level1.meta_nc import get_data_attributes
+        att = get_data_attributes('data','data_type')    
+    """
+    
+    if data_type in ('1B01','1B11','1B21'):
+        
+        attributes = eval('ATTRIBUTES_'+ data_type)
+        for key in list(rpg_variables):
+            if key in attributes:
+                rpg_variables[key].set_attributes(attributes[key])
+            else:
+                del rpg_variables[key]
+    else:
+        raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
+    return rpg_variables
+
 
 FIELDS = (
     'long_name',
@@ -24,7 +53,6 @@ DEFINITIONS_1B01 = {
          'Bit 6: Rain flag\n'
          'Bit 7: Solar flag\n'
          'Bit 8: TB offset threshold')
-
 }
 
 ATTRIBUTES_1B01 = {
@@ -73,7 +101,7 @@ ATTRIBUTES_1B01 = {
     ),
     'beamwidth': MetaData(
         long_name='Full width at half maximum',
-        units='Degree',
+        units='degrees',
     ),
     'freq_shift': MetaData(
         long_name='frequency shift applied to correct measured brightness temperature for frequency offset of microwave radiometer channel',
@@ -123,3 +151,146 @@ ATTRIBUTES_1B01 = {
     ),
 }
 
+
+ATTRIBUTES_1B11 = {
+    'time': MetaData(
+        long_name='Time (UTC) of the measurement',
+        standard_name='time',
+        units='seconds since 1970-01-01 00:00:00.000',
+        comment='Time indication of samples is at end of integration-time',
+    ),
+    'time_bounds': MetaData(
+        long_name='Start and end time (UTC) of the measurements',
+        units='seconds since 1970-01-01 00:00:00.000',
+    ),
+    'station_latitude': MetaData(
+        long_name='Latitude of measurement station',
+        standard_name='latitude',
+        units='degrees_north',
+    ),
+    'station_longitude': MetaData(
+        long_name='Longitude of measurement station',
+        standard_name='longitude',
+        units='degrees_east',
+    ),
+    'station_altitude': MetaData(
+        long_name='Altitude above mean sea level of measurement station',
+        standard_name='altitude',
+        units='m',
+    ),
+    'ir_wavelength': MetaData(
+        long_name='Wavelength of infrared channels',
+        standard_name='sensor_band_central_radiation_wavelength',
+        units='µm',
+    ),
+    'ir_bandwidth': MetaData(
+        long_name='Bandwidth of the infrared channels central frequency',
+        standard_name='sensor_band_spectral_width',
+        units='µm',
+        comment='channel centre frequency',
+    ),
+    'ir_beamwidth': MetaData(
+        long_name='Full width at half maximum of the infrared channels',
+        units='degrees',
+    ),
+    'irt': MetaData(
+        long_name='Infrared brightness temperatures',
+        units='K'
+    ),
+    'azi': MetaData(
+        long_name='Sensor azimuth angle',
+        standard_name='sensor_azimuth_angle',
+        units='degrees',
+        comment='0=North, 90=East, 180=South, 270=West',
+    ),
+    'ele': MetaData(
+        long_name='Sensor elevation angle',
+        standard_name='sensor_elevation_angle',
+        units='degrees',
+        comment='0=horizon, 90=zenith',
+    ),
+    'irt_accuracy': MetaData(
+        long_name='Total absolute calibration uncertainty of infrared brightness temperature, one standard deviation',
+        units='K',
+        comment='pecify here source of this variable, e.g. literature value, specified by manufacturer, result of validation effort (updated irregularly).',
+    ),
+}
+
+
+DEFINITIONS_1B21 = {
+    'met_valid_flag':
+        ('\n'
+         'Bit 1: quality of air temperature data\n'
+         'Bit 2: quality of relative humidity data\n'
+         'Bit 3: quality of air pressure data\n'
+         'Bit 4: quality of rain rate data\n'
+         'Bit 5: quality of wind direction data\n'
+         'Bit 6: quality of wind speed data\n'
+         'Bit 7: not used\n'
+         'Bit 8: not used')
+}
+
+ATTRIBUTES_1B21 = {
+    'time': MetaData(
+        long_name='Time (UTC) of the measurement',
+        standard_name='time',
+        units='seconds since 1970-01-01 00:00:00.000',
+        comment='Time indication of samples is at end of integration-time',
+    ),
+    'time_bounds': MetaData(
+        long_name='Start and end time (UTC) of the measurements',
+        units='seconds since 1970-01-01 00:00:00.000',
+    ),
+    'station_latitude': MetaData(
+        long_name='Latitude of measurement station',
+        standard_name='latitude',
+        units='degrees_north',
+    ),
+    'station_longitude': MetaData(
+        long_name='Longitude of measurement station',
+        standard_name='longitude',
+        units='degrees_east',
+    ),
+    'station_altitude': MetaData(
+        long_name='Altitude above mean sea level of measurement station',
+        standard_name='altitude',
+        units='m',
+    ),
+    'air_temperature': MetaData(
+        long_name='Air temperature',
+        standard_name='air_temperature',
+        units='K',
+    ),
+    'relative_humidity': MetaData(
+        long_name='Relative humidity',
+        standard_name='relative_humidity',
+        units='1',
+    ),
+    'air_pressure': MetaData(
+        long_name='Air pressure',
+        standard_name='air_pressure',
+        units='Pa',
+    ),
+    'rain_rate': MetaData(
+        long_name='Precipitation amount',
+        standard_name='rainfall_rate',
+        units='mm/h',
+    ),    
+    'wind_direction': MetaData(
+        long_name='Wind direction',
+        standard_name='wind_from_direction',
+        units='degrees',
+    ),    
+    'wind_speed': MetaData(
+        long_name='Wind speed',
+        standard_name='wind_speed',
+        units='m/s',
+    ),     
+    'met_valid_flag': MetaData(
+        long_name='Meterological data validity flag',
+        standard_name='met_valid_flag',
+        units='1 (bit variable)',
+        definition=DEFINITIONS_1B21['met_valid_flag'],
+        comment='bit variable: 0=invalid, 1=valid data',
+    ),    
+}
