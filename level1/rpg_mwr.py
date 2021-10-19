@@ -109,6 +109,11 @@ def save_rpg(rpg: Rpg,
                 'ir_wavelength': len(rpg.data['irt'][:].T)}
     elif data_type == '1B21':
         dims = {'time': len(rpg.data['time'][:])}        
+    elif data_type == '1C01':
+        dims = {'time': len(rpg.data['time'][:]),
+                'frequency': len(rpg.data['tb'][:].T),
+                'n_receivers': len(rpg.data['t_rec'][:].T),
+                'ir_wavelength': len(rpg.data['irt'][:].T)}
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
 

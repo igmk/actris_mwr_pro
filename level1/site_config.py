@@ -1,4 +1,4 @@
-from level1.global_nc import GLOBAL_1B01, GLOBAL_1B11, GLOBAL_1B21
+from level1.global_nc import GLOBAL_1B01, GLOBAL_1B11, GLOBAL_1B21, GLOBAL_1C01
 
 def get_global_attributes(site: str, 
                           data_type: str) -> dict: 
@@ -126,7 +126,47 @@ def get_site_specs(site: str,
             'wind_speed_accuracy' : '',            
             'met_instrument_fabrication_year' : '',
             }             
+
+        elif data_type == '1C01':
         
+            specs = {
+            'conventions' : 'CF-1.8',
+            'title' : 'Juelich RPG HATPRO G5',
+            'history' : '',
+            'institution' : 'University of Cologne',
+            'source' : 'Ground Based Remote Sensing',
+            'comment' : '',
+            'references' : '',
+            'site_location' : 'Juelich, Germany',
+            'instrument_id' : '',
+            'wigos_station_id' : '',
+            'principal_investigator' : 'IGMK',
+            'instrument_manufacturer' : 'RPG',
+            'instrument_model' : 'RPG-HATPRO',
+            'instrument_generation' : 'G5',
+            'instrument_hw_id' : '',
+            'network_name' : 'ACTRIS',
+            'campaign_name' : '',
+            'dependencies' : '',
+            'license' : '',
+            'instrument_calibration_status' : '',
+            'date_of_last_absolute_calibration' : '',
+            'date_of_last_covariance_matrix' : '',
+            'type_of_automatic_calibrations_performed' : '',
+            'factory_history' : '',
+            'ir_instrument_manufacturer' : '',
+            'ir_instrument_model' : 'RPG-HATPRO',     
+            'ir_instrument_fabrication_year' : '',   
+            'met_instrument_manufacturer' : '',
+            'met_instrument_model' : '',    
+            'met_instrument_fabrication_year' : '',        
+            'air_temperature_accuracy' : '',
+            'relative_humidity_accuracy' : '',
+            'air_pressure_accuracy' : '',
+            'rain_rate_accuracy' : '',
+            'wind_direction_accuracy' : '',
+            'wind_speed_accuracy' : '',                  
+            }
             
         else:
             raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
