@@ -1,21 +1,23 @@
-## actris_mwr_pro
+# actris_mwr_pro
 
-This Python/Jupyter-notebook code to process ground based Microwave Radiometer 
-data is developed within the Aerosol Clouds and Trace Gases Researge 
-Infrastructure [ACTRIS project](https://actris.eu/).
-The program processes the measurement data ,starting from the binary data 
-comming from the instrument, and produces quality controlled Level 1 output
-and Level 2 products (LWP, IWV and temperature profiles). 
+This Python/Jupyter-notebook code to process ground-based Microwave Radiometer 
+data is developed within the [Aerosol Clouds and Trace Gases Research 
+Infrastructure (ACTRIS)](https://actris.eu/).
+The program processes the measurement data, starting from the binary data 
+coming from the instrument, and produces quality controlled Level 1 output
+and Level 2 products (LWP, IWV, and temperature profiles). 
 
-The code is based on the scientific knowledge builed at the Institute for 
-Geophysic and Meteorologie (IGMK) at the University of Cologne, Cologne, 
-Germany. The program was devdeloped and is mentained by Tobias Marke and 
-Lukas Pfitzenmaier in cooperation with Bernhard Pospichal and Ulrich Loehnert. 
+The code is based on the scientific knowledge build at the [Institute for 
+Geophysic and Meteorologie (IGMK)](https://actris.eu/), University of Cologne, Cologne, 
+Cologne, Germany, and lead by the Workingupe [Exploiting Observations in Meteorology (ExOb)]  
+(https://geomet.uni-koeln.de/forschung/ag-loehnert). The program was developed and 
+is maintained by Tobias Marke and Lukas Pfitzenmaier in cooperation with 
+Bernhard Pospichal and Ulrich Loehnert. 
 
 
-## Content of this documentation: ##
+# Content of this documentation: ##
 
-0. General stucture
+0. General structure
 
 1. How to call the program
 
@@ -29,26 +31,21 @@ Lukas Pfitzenmaier in cooperation with Bernhard Pospichal and Ulrich Loehnert.
     4.1 Level 1 - processing and data filter
     4.2 Level 2 - processing and data filter
     
- X. References
+ 5. References and Links
 
 
 ####################### DESCRIPTION OF THE PROCESSING #####################
 
 
-# 0. General stucture #
+## 0. General stucture #
 
-All code for this program is contained in direcotry scripts, and its 
-subdirectories. It is assuemd that the "folders" containing the functions
-are located in the same directory where you execute the program. 
-For Level 1 the "site_config.py" the Site Specific Information have to be 
-set that the output contains all relefant golbal atrigutes (Level1 > 
-site_config.py >get_site_specs).
-The data "input path" has to be set in the XYZ in "Level1".
-The output format of the Level 1 processing can be selected - for a 
-description see Section 3.1.  
+All code for this program is structured in directory scripts and their subdirectories. To guarantee a successful performance of the code,  the main script "MWR_PRO" which is calling all the functions from the folders and subfolders has to be located in the same directory as the folders. 
+For a successful Level 1 radiometer product, the site-specific global attributes for the NetCDF output have to be set in the "site_config.py" (go to: Level1 > site_config.py > get_site_specs).
+The data "input path"  and the "output path" of the data products are set in XYZ in "Level1".
+To specify which output formats are possible and what variables are contained, see Section 3.1.  
 
 
-# 1. How to call the program #
+## 1. How to call the program #
 
 Call the scripts with:
 - Run Level 1 processing - MWR_PRO()
@@ -57,66 +54,59 @@ Call the scripts with:
     to process the given date
 
 
-# 2. Setting data processing options (config file) #
+## 2. Setting data processing options (config file) #
 
 The settings required for running the program have to be set in the 
 configuration file (config_radarname, see above for calling the program). 
 This file includes:
 - input and output directories of the data
-- Level 1 output options (Level 1 data files comparable to the sigle 
-  input files, daily file contain all quality controlled data)
+- Level 1 output options (Level 1 data files comparable to the single 
+  input files, the daily file contain all quality controlled data)
 - Level 2 processing options:
-    - which 
-    - overwriting of output file(s)
-    - debugging
-    - definition of output file type
-    - whether moments are calculated from spectra or copied from RPG lv1 
-      file (this option is not available at the moment 10.7.2019)
-
-See config_example.m for details.
+    - set coefficients for the LWP and IWV processing 
+    - ???
+    - 
+See config_example.py for details.
 
 
-# 3. Input and output files #
+## 3. Input and output files #
 
 ## 3.1 Supported input files ##
 
 The program can handles the binary-files from RPG-HatPro:
-    i) binary files of type 1 created with RPG radar software version 1.
-    ii) netcdf files created from i) where no additional processing 
-        has been applied. 
-    iii) binary files of type 2 created with RPG radar software version 2. 
-    iv) binary files of type 3 created with RPG radar software version 3-5.
-This program automatically identifies the file type and adjusts reprocessing
-and creates a unified netcdf file for any of the file types i) to iv). 
-Input data directory defined in config file (config.datapath). Data is 
-assumed to be located in config.datapath/yyyy/mm/dd/
-Note that you need to have read access to the directory.
-The option of reading RPG lv1 binary files and converting them to netcdf is
-not working at the moment (10.7.2019).
-
+    i) binary files generated by the Radiometer Physics Humidity and Temperature Profiler (RPG Hatpro).
+    The RPG HatPro binary data consist out of:
+    - .BRT-files
+    - .BLB-files
+    - .HKD.-files
+    - .MET-files
+    - .IRT-files
+    Usually these files are placed by the software in daily folders (structure is Yyyyy/Mmm/Ddd/all-the-files). This is also the by defould structure the program reads the data in
+    ii) 
+    iii) 
+    iv)
 
 ## 3.2 Output files: Naming convention and types ##
 
-Two types of putput files are available. 
-    i) general file: includes all metadata information, all flags, 
-       all spectra, all moments
-    ii) compact file: includes only moments (no spectra), some metadata 
-Set in the config file if i), ii), or both should be created.
+In general, the output files generated by this processing code follow the data structure and naming convention created in the [EUMETNET Profiling Programme E-PROFILE](https://www.eumetnet.eu/). The developed NetCDF data structure for Microwave Radiometer will also be the final one used within ACTRIS and, therefore, the only one the data processing will deliver. Documentation of the E-Profile MWR-data format can be found [here](https://www.eumetnet.eu/activities/observations-programme/documents/).
 
-Naming convention for output files:
-i) radarname_station_yyyymmddHHMMSS_program_scan.nc,
-    example: joyrad94_nya_20190710000000_P01_ZEN.nc
-ii) radarname_station_yyyymmddHHMMSS_program_scan_compact.nc,
-    example: joyrad94_nya_20190710000000_P01_ZEN_compact.nc
-where radarname and station are specified in config file, program refers to 
-the program number (chirp table) defined in the RPG radar software, and 
-scan is the scanning strategy also set in the RPW radar software. 'program' 
-and 'scan' are copied from the input file name.
+The processing has two types of Level 1 output: 
+    i) hourly files which are comparable to the single input files:
+    ii) daily file: 
+All Level 1 output is quality checked. The different quality flags created are:
+ - Bit 1: Missing TB-value
+ - Bit 2: TB threshold (lower range)	 
+ - Bit 3: TB threshold (upper range) 
+ - Bit 4: Spectral consistency threshold
+ - Bit 5: Receiver sanity
+ - Bit 6: Rain flag 
+ - Bit 7: Solar flag 
 
-Output data directory defined in config file (config.outputpath). Data will
-be written in config.outputpath/yyyy/mm/dd/*.nc If directories are not 
-existing they will be created by the program. Note that you need to have 
-write access to the target directory.
+The processing has two types of Level 2 output: 
+
+## 4. Short description of the whole data processing (input -> Level 1 -> Level 2) ##
 
 
-# 4. Short description of the whole data processing (input -> Level 1 -> Level 2) #
+
+## 5. References and Links ##
+
