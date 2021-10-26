@@ -37,6 +37,8 @@ def prepare_data(path_to_files: str,
     if data_type == '1B01':
         rpg_bin = get_rpg_bin(path_to_files,'brt')
         rpg_bin.data['frequency'] = rpg_bin.header['_f']
+        rpg_blb = get_rpg_bin(path_to_files,'blb')
+        _add_blb(rpg_bin,rpg_blb)        
         _append_hkd(path_to_files,rpg_bin,data_type)
         
     elif data_type == '1B11':
@@ -106,3 +108,40 @@ def _add_interpol1(data0: dict,
             data0[output_name][:,ndim] = np.interp(data0['time'],time1,data1[:,ndim])
     else:
         data0[output_name] = np.interp(data0['time'],time1,data1)
+        
+        
+def _add_blb(brt: dict,
+             blb: dict) -> None:
+    "Add boundary-layer scans using a linear time axis"
+    
+    xx = 0
+    Fill_Value_Float = -999.
+    Fill_Value_Int = -99
+
+    time_add = np.ones( blb.header['n']*blb.header['_n_ang'], np.int32)*Fill_Value_Int
+    ele_add = np.ones( blb.header['n']*blb.header['_n_ang'], np.float32)*Fill_Value_Float
+    azi_add = np.ones( blb.header['n']*blb.header['_n_ang'], np.float32)*Fill_Value_Float
+    tb_add = np.ones( [blb.header['n']*blb.header['_n_ang'], blb.header['_n_f']], np.float32)*Fill_Value_Float
+    rain_add = np.ones( blb.header['n']*blb.header['_n_ang'], np.int32)*Fill_Value_Int
+
+    for time in range(blb.header['n']):
+        time_add[xx:xx+7] = np.linspace(blb.data['time'][time]-90,blb.data['time'][time],7)       
+        for ang in range(blb.header['_n_ang']):            
+            tb_add[xx,:] = np.squeeze(blb.data['tb'][time, :, ang])   
+            ele_add[xx] = blb.header['_ang'][ang]
+            azi_add[xx] = 0.
+            rain_add[xx] = blb.data['rf_mod'][time] & 1
+            xx += 1
+
+    brt.data['time'] = np.concatenate((brt.data['time'],time_add))    
+    ind = np.argsort(brt.data['time'])
+    brt.data['time'] = brt.data['time'][ind]
+    brt.data['ele'] = np.concatenate((brt.data['ele'],ele_add))
+    brt.data['ele'] = brt.data['ele'][ind]
+    brt.data['azi'] = np.concatenate((brt.data['azi'],azi_add))
+    brt.data['azi'] = brt.data['azi'][ind]
+    brt.data['tb'] = np.concatenate((brt.data['tb'],tb_add))
+    brt.data['tb'] = brt.data['tb'][ind,:]
+    brt.data['rain'] = np.concatenate((brt.data['rain'],rain_add))
+    brt.data['rain'] = brt.data['rain'][ind]
+    brt.header['n'] = brt.header['n'] + blb.header['n']*blb.header['_n_ang']

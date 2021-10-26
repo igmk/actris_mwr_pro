@@ -66,6 +66,25 @@ def stack_files(file_list):
     return header, data
 
 
+class RpgBin:
+    def __init__(self, file_list):
+        self.header, self.raw_data = stack_files(file_list)
+        self.date = self._get_date()
+        self.raw_data['time'] = utils.epoch2unix(self.raw_data['time'],self.header['_time_ref'])
+        self.data = {}
+        self._init_data()
+        
+    def _init_data(self):
+        for key in self.raw_data:
+            self.data[key] = self.raw_data[key]
+        
+    def _get_date(self):
+        epoch = datetime.datetime(2001, 1, 1).timestamp()
+        time_median = float(np.ma.median(self.raw_data['time']))
+        time_median += epoch
+        return datetime.datetime.utcfromtimestamp(time_median).strftime('%Y %m %d').split()    
+
+
 def read_brt(file_name: str) -> dict:    
     """ This function reads RPG MWR .BRT binary files. """
 
@@ -434,20 +453,3 @@ def read_hkd(file_name: str) -> dict:
         else:
             raise RuntimeError(['Error: HKD file code ' + str(code) + ' not suported'])
             
-class RpgBin:
-    def __init__(self, file_list):
-        self.header, self.raw_data = stack_files(file_list)
-        self.date = self._get_date()
-        self.raw_data['time'] = utils.epoch2unix(self.raw_data['time'],self.header['_time_ref'])
-        self.data = {}
-        self._init_data()
-        
-    def _init_data(self):
-        for key in self.raw_data:
-            self.data[key] = self.raw_data[key]
-        
-    def _get_date(self):
-        epoch = datetime.datetime(2001, 1, 1).timestamp()
-        time_median = float(np.ma.median(self.raw_data['time']))
-        time_median += epoch
-        return datetime.datetime.utcfromtimestamp(time_median).strftime('%Y %m %d').split()    
