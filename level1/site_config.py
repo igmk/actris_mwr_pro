@@ -4,7 +4,7 @@ def get_global_attributes(site: str,
                           data_type: str) -> dict: 
     """ This function initializes site specific global attributes of RPG MWR Level 1 data for NetCDF file writing.
     Args:
-        site: Folder containing one day of a RPG MWR binary file type.
+        site: Name of site.
         data_type: Data type of the netCDF file.
         
     Returns:
@@ -14,8 +14,8 @@ def get_global_attributes(site: str,
         RuntimeError: Specified site or data type is not supported.
     
     Example:
-        from level1.site_config import get_site_att
-        att = get_site_att('site_name','data_type')
+        from level1.site_config import get_global_attributes
+        att = get_global_attributes('site_name','data_type')
        
     """
 

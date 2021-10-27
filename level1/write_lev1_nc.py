@@ -59,6 +59,8 @@ def prepare_data(path_to_files: str,
     elif data_type == '1C01':
         rpg_bin = get_rpg_bin(path_to_files,'brt')
         rpg_bin.data['frequency'] = rpg_bin.header['_f']        
+        rpg_blb = get_rpg_bin(path_to_files,'blb')
+        _add_blb(rpg_bin,rpg_blb)          
         _append_hkd(path_to_files,rpg_bin,data_type)
         
         rpg_irt = get_rpg_bin(path_to_files,'irt')
@@ -117,15 +119,16 @@ def _add_blb(brt: dict,
     xx = 0
     Fill_Value_Float = -999.
     Fill_Value_Int = -99
+    integration_time = 15
 
-    time_add = np.ones( blb.header['n']*blb.header['_n_ang'], np.int32)*Fill_Value_Int
-    ele_add = np.ones( blb.header['n']*blb.header['_n_ang'], np.float32)*Fill_Value_Float
-    azi_add = np.ones( blb.header['n']*blb.header['_n_ang'], np.float32)*Fill_Value_Float
-    tb_add = np.ones( [blb.header['n']*blb.header['_n_ang'], blb.header['_n_f']], np.float32)*Fill_Value_Float
-    rain_add = np.ones( blb.header['n']*blb.header['_n_ang'], np.int32)*Fill_Value_Int
+    time_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.int32) * Fill_Value_Int
+    ele_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.float32) * Fill_Value_Float
+    azi_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.float32) * Fill_Value_Float
+    tb_add = np.ones( [blb.header['n'] * blb.header['_n_ang'], blb.header['_n_f']], np.float32) * Fill_Value_Float
+    rain_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.int32) * Fill_Value_Int
 
     for time in range(blb.header['n']):
-        time_add[xx:xx+7] = np.linspace(blb.data['time'][time]-90,blb.data['time'][time],7)       
+        time_add[xx:xx + blb.header['_n_ang']] = np.linspace(blb.data['time'][time] - ((blb.header['_n_ang'] - 1) * integration_time), blb.data['time'][time], blb.header['_n_ang'])       
         for ang in range(blb.header['_n_ang']):            
             tb_add[xx,:] = np.squeeze(blb.data['tb'][time, :, ang])   
             ele_add[xx] = blb.header['_ang'][ang]
@@ -133,15 +136,15 @@ def _add_blb(brt: dict,
             rain_add[xx] = blb.data['rf_mod'][time] & 1
             xx += 1
 
-    brt.data['time'] = np.concatenate((brt.data['time'],time_add))    
+    brt.data['time'] = np.concatenate((brt.data['time'], time_add))    
     ind = np.argsort(brt.data['time'])
     brt.data['time'] = brt.data['time'][ind]
-    brt.data['ele'] = np.concatenate((brt.data['ele'],ele_add))
+    brt.data['ele'] = np.concatenate((brt.data['ele'], ele_add))
     brt.data['ele'] = brt.data['ele'][ind]
-    brt.data['azi'] = np.concatenate((brt.data['azi'],azi_add))
+    brt.data['azi'] = np.concatenate((brt.data['azi'], azi_add))
     brt.data['azi'] = brt.data['azi'][ind]
-    brt.data['tb'] = np.concatenate((brt.data['tb'],tb_add))
+    brt.data['tb'] = np.concatenate((brt.data['tb'], tb_add))
     brt.data['tb'] = brt.data['tb'][ind,:]
-    brt.data['rain'] = np.concatenate((brt.data['rain'],rain_add))
+    brt.data['rain'] = np.concatenate((brt.data['rain'], rain_add))
     brt.data['rain'] = brt.data['rain'][ind]
-    brt.header['n'] = brt.header['n'] + blb.header['n']*blb.header['_n_ang']
+    brt.header['n'] = brt.header['n'] + blb.header['n'] * blb.header['_n_ang']
