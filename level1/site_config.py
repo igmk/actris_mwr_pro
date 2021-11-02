@@ -1,8 +1,8 @@
 from level1.global_nc import GLOBAL_ALL
 
-def get_global_attributes(site: str, 
-                          data_type: str) -> dict: 
-    """ This function initializes site specific global attributes of RPG MWR Level 1 data for NetCDF file writing.
+def get_site_specs(site: str, 
+                   data_type: str) -> dict: 
+    """ This function initializes site specific global attributes and parameters of RPG MWR Level 1 data for NetCDF file writing.
     Args:
         site: Name of site.
         data_type: Data type of the netCDF file.
@@ -15,14 +15,14 @@ def get_global_attributes(site: str,
     
     Example:
         from level1.site_config import get_global_attributes
-        att = get_global_attributes('site_name','data_type')
+        att, param = get_site_specs('site_name','data_type')
        
     """
 
-    specs = get_site_specs(site, data_type)
+    specs, params = site_specs(site, data_type)
     add_global_description(specs, GLOBAL_ALL)
     
-    return specs
+    return specs, params
             
 
 def add_global_description(site_specs: dict, 
@@ -38,11 +38,15 @@ def add_global_description(site_specs: dict,
             site_specs[key] = site_specs[key]+' ['+''.join(global_description[key])+']'
             
 
-def get_site_specs(site: str, 
+def site_specs(site: str, 
                    data_type: str) -> dict:
-    """Site specific global attributes"""
+    """Site specific global attributes and parameters"""
 
     if site == 'juelich':
+        
+        params = {
+            'scan_time' : 90.
+        }
 
         global_specs = {
         'conventions' : 'CF-1.8',
@@ -116,4 +120,4 @@ def get_site_specs(site: str,
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
 
-    return specs
+    return specs, params

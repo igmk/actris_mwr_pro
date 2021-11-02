@@ -1,7 +1,7 @@
 from level1.rpg_bin import get_rpg_bin
 from level1 import rpg_mwr
 from level1.meta_nc import get_data_attributes
-from level1.site_config import get_global_attributes
+from level1.site_config import get_site_specs
 import numpy as np
 from typing import Optional
 
@@ -23,61 +23,62 @@ def lev1_to_nc(site: str,
         >>> lev1_to_nc('site_name', '1B01', '/path/to/files/', 'rpg_mwr.nc')
     """
 
-    rpg_bin = prepare_data(path_to_files,data_type)
+    global_attributes, params = get_site_specs(site, data_type)    
+    rpg_bin = prepare_data(path_to_files, data_type, params)
     hatpro = rpg_mwr.Rpg(rpg_bin.data)
-    get_data_attributes(hatpro.data,data_type)    
-    global_attributes = get_global_attributes(site,data_type)
+    get_data_attributes(hatpro.data, data_type)    
     rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type)
     
     
 def prepare_data(path_to_files: str, 
-                  data_type: str) -> dict:    
+                 data_type: str,
+                 params: dict) -> dict:    
     """Load and prepare data for netCDF writing"""
     
     if data_type == '1B01':
-        rpg_bin = get_rpg_bin(path_to_files,'brt')
+        rpg_bin = get_rpg_bin(path_to_files, 'brt')
         rpg_bin.data['frequency'] = rpg_bin.header['_f']
-        rpg_blb = get_rpg_bin(path_to_files,'blb')
-        _add_blb(rpg_bin,rpg_blb)        
-        _append_hkd(path_to_files,rpg_bin,data_type)
+        rpg_blb = get_rpg_bin(path_to_files, 'blb')
+        _add_blb(rpg_bin, rpg_blb, params)        
+        _append_hkd(path_to_files, rpg_bin, data_type)
         
     elif data_type == '1B11':
-        rpg_bin = get_rpg_bin(path_to_files,'irt')
+        rpg_bin = get_rpg_bin(path_to_files, 'irt')
         rpg_bin.data['ir_wavelength'] = rpg_bin.header['_f']
-        _append_hkd(path_to_files,rpg_bin,data_type)    
+        _append_hkd(path_to_files, rpg_bin, data_type)    
 
     elif data_type == '1B21':
-        rpg_bin = get_rpg_bin(path_to_files,'met')
+        rpg_bin = get_rpg_bin(path_to_files, 'met')
         if (int(rpg_bin.header['_n_sen'],2) & 1) != 0:
             rpg_bin.data['wind_speed'] = rpg_bin.data['adds'][:,0] / 3.6
         if (int(rpg_bin.header['_n_sen'],2) & 2) != 0:
             rpg_bin.data['wind_direction'] = rpg_bin.data['adds'][:,1]
         if (int(rpg_bin.header['_n_sen'],2) & 4) != 0:
             rpg_bin.data['rain_rate'] = rpg_bin.data['adds'][:,2]            
-        _append_hkd(path_to_files,rpg_bin,data_type)
+        _append_hkd(path_to_files, rpg_bin, data_type)
         
     elif data_type == '1C01':
         rpg_bin = get_rpg_bin(path_to_files,'brt')
         rpg_bin.data['frequency'] = rpg_bin.header['_f']        
         rpg_blb = get_rpg_bin(path_to_files,'blb')
-        _add_blb(rpg_bin,rpg_blb)          
-        _append_hkd(path_to_files,rpg_bin,data_type)
+        _add_blb(rpg_bin, rpg_blb, params)          
+        _append_hkd(path_to_files, rpg_bin, data_type)
         
-        rpg_irt = get_rpg_bin(path_to_files,'irt')
+        rpg_irt = get_rpg_bin(path_to_files, 'irt')
         rpg_bin.data['ir_wavelength'] = rpg_irt.header['_f']
-        _add_interpol1(rpg_bin.data,rpg_irt.data['irt'],rpg_irt.data['time'],'irt')
+        _add_interpol1(rpg_bin.data, rpg_irt.data['irt'], rpg_irt.data['time'], 'irt')
         
         rpg_met = get_rpg_bin(path_to_files,'met')
-        _add_interpol1(rpg_bin.data,rpg_met.data['air_temperature'],rpg_met.data['time'],'air_temperature')
-        _add_interpol1(rpg_bin.data,rpg_met.data['relative_humidity'],rpg_met.data['time'],'relative_humidity')
-        _add_interpol1(rpg_bin.data,rpg_met.data['air_pressure'],rpg_met.data['time'],'air_pressure')
+        _add_interpol1(rpg_bin.data, rpg_met.data['air_temperature'], rpg_met.data['time'], 'air_temperature')
+        _add_interpol1(rpg_bin.data, rpg_met.data['relative_humidity'], rpg_met.data['time'], 'relative_humidity')
+        _add_interpol1(rpg_bin.data, rpg_met.data['air_pressure'], rpg_met.data['time'], 'air_pressure')
         if (int(rpg_met.header['_n_sen'],2) & 1) != 0:
-            _add_interpol1(rpg_bin.data,rpg_met.data['adds'][:,0],rpg_met.data['time'],'wind_speed')
+            _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,0], rpg_met.data['time'], 'wind_speed')
             rpg_bin.data['wind_speed'] = rpg_bin.data['wind_speed'] / 3.6
         if (int(rpg_met.header['_n_sen'],2) & 2) != 0:
-            _add_interpol1(rpg_bin.data,rpg_met.data['adds'][:,1],rpg_met.data['time'],'wind_direction')
+            _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,1], rpg_met.data['time'], 'wind_direction')
         if (int(rpg_met.header['_n_sen'],2) & 4) != 0:
-            _add_interpol1(rpg_bin.data,rpg_met.data['adds'][:,2],rpg_met.data['time'],'rain_rate')          
+            _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,2], rpg_met.data['time'], 'rain_rate')          
         
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
@@ -90,13 +91,13 @@ def _append_hkd(path_to_files: str,
                 data_type: str) -> None:
     """Append hkd data on same time grid"""
     
-    hkd = get_rpg_bin(path_to_files,'hkd')    
-    _add_interpol1(rpg_bin.data,hkd.data['station_latitude'],hkd.data['time'],'station_latitude')
-    _add_interpol1(rpg_bin.data,hkd.data['station_longitude'],hkd.data['time'],'station_longitude')   
+    hkd = get_rpg_bin(path_to_files, 'hkd')    
+    _add_interpol1(rpg_bin.data, hkd.data['station_latitude'], hkd.data['time'], 'station_latitude')
+    _add_interpol1(rpg_bin.data, hkd.data['station_longitude'], hkd.data['time'], 'station_longitude')   
     
     if data_type in ('1B01','1C01'):
-        _add_interpol1(rpg_bin.data,hkd.data['temp'][:,0:2],hkd.data['time'],'t_amb')
-        _add_interpol1(rpg_bin.data,hkd.data['temp'][:,2:4],hkd.data['time'],'t_rec')
+        _add_interpol1(rpg_bin.data, hkd.data['temp'][:,0:2], hkd.data['time'], 't_amb')
+        _add_interpol1(rpg_bin.data, hkd.data['temp'][:,2:4], hkd.data['time'], 't_rec')
         
         
 def _add_interpol1(data0: dict, 
@@ -104,22 +105,24 @@ def _add_interpol1(data0: dict,
                    time1: np.ndarray,
                    output_name: str) -> None:
     
+    Fill_Value_Float = -999.
+    
     if data1.ndim > 1:
-        data0[output_name] = np.ones([len(data0['time']), data1.shape[1]], np.float32)*-999.
+        data0[output_name] = np.ones([len(data0['time']), data1.shape[1]], np.float32) * Fill_Value_Float
         for ndim in range(data1.shape[1]):
-            data0[output_name][:,ndim] = np.interp(data0['time'],time1,data1[:,ndim])
+            data0[output_name][:,ndim] = np.interp(data0['time'], time1, data1[:,ndim])
     else:
-        data0[output_name] = np.interp(data0['time'],time1,data1)
+        data0[output_name] = np.interp(data0['time'], time1, data1)
         
         
 def _add_blb(brt: dict,
-             blb: dict) -> None:
+             blb: dict,
+             params: dict) -> None:
     "Add boundary-layer scans using a linear time axis"
     
     xx = 0
     Fill_Value_Float = -999.
     Fill_Value_Int = -99
-    integration_time = 15
 
     time_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.int32) * Fill_Value_Int
     ele_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.float32) * Fill_Value_Float
@@ -128,7 +131,7 @@ def _add_blb(brt: dict,
     rain_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.int32) * Fill_Value_Int
 
     for time in range(blb.header['n']):
-        time_add[xx:xx + blb.header['_n_ang']] = np.linspace(blb.data['time'][time] - ((blb.header['_n_ang'] - 1) * integration_time), blb.data['time'][time], blb.header['_n_ang'])       
+        time_add[xx:xx + blb.header['_n_ang']] = np.linspace(blb.data['time'][time] - params['scan_time'], blb.data['time'][time], blb.header['_n_ang'])       
         for ang in range(blb.header['_n_ang']):            
             tb_add[xx,:] = np.squeeze(blb.data['tb'][time, :, ang])   
             ele_add[xx] = blb.header['_ang'][ang]
