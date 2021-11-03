@@ -1,4 +1,5 @@
 from level1.global_nc import GLOBAL_ALL
+import numpy as np
 
 def get_site_specs(site: str, 
                    data_type: str) -> dict: 
@@ -45,7 +46,12 @@ def site_specs(site: str,
     if site == 'juelich':
         
         params = {
-            'scan_time' : 90.
+            'station_altitude': 108.,
+            'station_longitude': 6.413536,
+            'station_latitude': 50.908547,
+            'scan_time' : 90.,
+            'bandwidth': np.array([230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 600, 1000, 2000]),
+            'sideband_count': 1,
         }
 
         global_specs = {
@@ -58,9 +64,9 @@ def site_specs(site: str,
         'references' : '',
         'site_location' : 'Juelich, Germany',
         'instrument_id' : '',
-        'wigos_station_id' : '',
-        'principal_investigator' : 'IGMK',
-        'instrument_manufacturer' : 'RPG',
+        'wigos_station_id' : '0-276-0-10508',
+        'principal_investigator' : 'Institute for Geophysics and Meteorology (IGMK)',
+        'instrument_manufacturer' : 'Radiometer Physics (RPG)',
         'instrument_model' : 'RPG-HATPRO',
         'instrument_generation' : 'G5',
         'instrument_hw_id' : '',

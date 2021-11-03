@@ -38,6 +38,8 @@ def prepare_data(path_to_files: str,
     if data_type == '1B01':
         rpg_bin = get_rpg_bin(path_to_files, 'brt')
         rpg_bin.data['frequency'] = rpg_bin.header['_f']
+        rpg_bin.data['bandwidth'] = params['bandwidth']
+        rpg_bin.data['sideband_count'] = params['sideband_count']
         rpg_blb = get_rpg_bin(path_to_files, 'blb')
         _add_blb(rpg_bin, rpg_blb, params)        
         
@@ -56,7 +58,9 @@ def prepare_data(path_to_files: str,
         
     elif data_type == '1C01':
         rpg_bin = get_rpg_bin(path_to_files,'brt')
-        rpg_bin.data['frequency'] = rpg_bin.header['_f']        
+        rpg_bin.data['frequency'] = rpg_bin.header['_f']     
+        rpg_bin.data['bandwidth'] = params['bandwidth']
+        rpg_bin.data['sideband_count'] = params['sideband_count']
         rpg_blb = get_rpg_bin(path_to_files,'blb')
         _add_blb(rpg_bin, rpg_blb, params)          
         
@@ -79,7 +83,7 @@ def prepare_data(path_to_files: str,
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
         
-    _append_hkd(path_to_files, rpg_bin, data_type)
+    _append_hkd(path_to_files, rpg_bin, data_type, params)
     rpg_bin.data['station_altitude'] = np.ones(len(rpg_bin.data['time']), np.float32) * params['station_altitude']
         
     return rpg_bin
@@ -87,12 +91,23 @@ def prepare_data(path_to_files: str,
     
 def _append_hkd(path_to_files: str, 
                 rpg_bin: dict, 
-                data_type: str) -> None:
+                data_type: str,
+                params: dict) -> None:
     """Append hkd data on same time grid"""
     
-    hkd = get_rpg_bin(path_to_files, 'hkd')    
-    _add_interpol1(rpg_bin.data, hkd.data['station_latitude'], hkd.data['time'], 'station_latitude')
-    _add_interpol1(rpg_bin.data, hkd.data['station_longitude'], hkd.data['time'], 'station_longitude')   
+    Fill_Value_Float = -999.
+    hkd = get_rpg_bin(path_to_files, 'hkd')
+    
+    if params['station_latitude'] != Fill_Value_Float:
+        _add_interpol1(rpg_bin.data, np.ones(len(hkd.data['time'])) * params['station_latitude'], hkd.data['time'], 'station_latitude')
+                       
+    else:
+        _add_interpol1(rpg_bin.data, hkd.data['station_latitude'], hkd.data['time'], 'station_latitude')
+                       
+    if params['station_longitude'] != Fill_Value_Float:            
+        _add_interpol1(rpg_bin.data, np.ones(len(hkd.data['time'])) * params['station_longitude'], hkd.data['time'], 'station_longitude')        
+    else:        
+        _add_interpol1(rpg_bin.data, hkd.data['station_longitude'], hkd.data['time'], 'station_longitude')   
     
     if data_type in ('1B01','1C01'):
         _add_interpol1(rpg_bin.data, hkd.data['temp'][:,0:2], hkd.data['time'], 't_amb')
