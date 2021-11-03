@@ -158,7 +158,7 @@ def _get_dimensions(nc: netCDF4.Dataset,
 
 def _write_vars2nc(nc: netCDF4.Dataset, 
                    cloudnet_variables: dict) -> None:
-    """Iterates over Cloudnet instances and write to netCDF file."""
+    """Iterates over RPG instances and write to netCDF file."""
     
     for obj in cloudnet_variables.values():
         if obj.data_type == 'f4':

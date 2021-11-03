@@ -26,7 +26,7 @@ def lev1_to_nc(site: str,
     global_attributes, params = get_site_specs(site, data_type)    
     rpg_bin = prepare_data(path_to_files, data_type, params)
     hatpro = rpg_mwr.Rpg(rpg_bin.data)
-    get_data_attributes(hatpro.data, data_type)    
+    hatpro.data = get_data_attributes(hatpro.data, data_type)
     rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type)
     
     
@@ -40,12 +40,10 @@ def prepare_data(path_to_files: str,
         rpg_bin.data['frequency'] = rpg_bin.header['_f']
         rpg_blb = get_rpg_bin(path_to_files, 'blb')
         _add_blb(rpg_bin, rpg_blb, params)        
-        _append_hkd(path_to_files, rpg_bin, data_type)
         
     elif data_type == '1B11':
         rpg_bin = get_rpg_bin(path_to_files, 'irt')
         rpg_bin.data['ir_wavelength'] = rpg_bin.header['_f']
-        _append_hkd(path_to_files, rpg_bin, data_type)    
 
     elif data_type == '1B21':
         rpg_bin = get_rpg_bin(path_to_files, 'met')
@@ -55,14 +53,12 @@ def prepare_data(path_to_files: str,
             rpg_bin.data['wind_direction'] = rpg_bin.data['adds'][:,1]
         if (int(rpg_bin.header['_n_sen'],2) & 4) != 0:
             rpg_bin.data['rain_rate'] = rpg_bin.data['adds'][:,2]            
-        _append_hkd(path_to_files, rpg_bin, data_type)
         
     elif data_type == '1C01':
         rpg_bin = get_rpg_bin(path_to_files,'brt')
         rpg_bin.data['frequency'] = rpg_bin.header['_f']        
         rpg_blb = get_rpg_bin(path_to_files,'blb')
         _add_blb(rpg_bin, rpg_blb, params)          
-        _append_hkd(path_to_files, rpg_bin, data_type)
         
         rpg_irt = get_rpg_bin(path_to_files, 'irt')
         rpg_bin.data['ir_wavelength'] = rpg_irt.header['_f']
@@ -82,6 +78,9 @@ def prepare_data(path_to_files: str,
         
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
+        
+    _append_hkd(path_to_files, rpg_bin, data_type)
+    rpg_bin.data['station_altitude'] = np.ones(len(rpg_bin.data['time']), np.float32) * params['station_altitude']
         
     return rpg_bin
     
@@ -113,6 +112,7 @@ def _add_interpol1(data0: dict,
             data0[output_name][:,ndim] = np.interp(data0['time'], time1, data1[:,ndim])
     else:
         data0[output_name] = np.interp(data0['time'], time1, data1)
+        
         
         
 def _add_blb(brt: dict,

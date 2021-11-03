@@ -26,9 +26,14 @@ def get_data_attributes(rpg_variables: dict,
                 rpg_variables[key].set_attributes(attributes[key])
             else:
                 del rpg_variables[key]
+                
+        index_map = {v: i for i, v in enumerate(attributes)}
+        rpg_variables = dict(sorted(rpg_variables.items(), key=lambda pair: index_map[pair[0]]))
+        
+        return rpg_variables
+                
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
-    return rpg_variables
 
 
 FIELDS = (
