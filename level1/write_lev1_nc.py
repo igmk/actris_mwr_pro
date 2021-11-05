@@ -40,6 +40,7 @@ def prepare_data(path_to_files: str,
         rpg_bin.data['frequency'] = rpg_bin.header['_f']
         rpg_bin.data['bandwidth'] = params['bandwidth']
         rpg_bin.data['sideband_count'] = params['sideband_count']
+        rpg_bin.data['freq_shift'] = params['freq_shift']
         rpg_blb = get_rpg_bin(path_to_files, 'blb')
         _add_blb(rpg_bin, rpg_blb, params)        
         
@@ -61,6 +62,7 @@ def prepare_data(path_to_files: str,
         rpg_bin.data['frequency'] = rpg_bin.header['_f']     
         rpg_bin.data['bandwidth'] = params['bandwidth']
         rpg_bin.data['sideband_count'] = params['sideband_count']
+        rpg_bin.data['freq_shift'] = params['freq_shift']
         rpg_blb = get_rpg_bin(path_to_files,'blb')
         _add_blb(rpg_bin, rpg_blb, params)          
         
@@ -146,7 +148,9 @@ def _add_blb(brt: dict,
     rain_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.int32) * Fill_Value_Int
 
     for time in range(blb.header['n']):
-        time_add[xx:xx + blb.header['_n_ang']] = np.linspace(blb.data['time'][time] - params['scan_time'], blb.data['time'][time], blb.header['_n_ang'])       
+#         time_add[xx:xx + blb.header['_n_ang']] = np.linspace(blb.data['time'][time] - params['scan_time'], blb.data['time'][time], blb.header['_n_ang'])   
+        time_add[xx:xx + blb.header['_n_ang'] - 1] = np.linspace(blb.data['time'][time] - (params['scan_time'] + 1 - (params['scan_time'] / (blb.header['_n_ang'] - 1))), blb.data['time'][time] - 1, blb.header['_n_ang'] - 1)
+        time_add[xx + blb.header['_n_ang'] - 1 : xx + blb.header['_n_ang']] = blb.data['time'][time] 
         for ang in range(blb.header['_n_ang']):            
             tb_add[xx,:] = np.squeeze(blb.data['tb'][time, :, ang])   
             ele_add[xx] = blb.header['_ang'][ang]

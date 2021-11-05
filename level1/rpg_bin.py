@@ -452,4 +452,96 @@ def read_hkd(file_name: str) -> dict:
         
         else:
             raise RuntimeError(['Error: HKD file code ' + str(code) + ' not suported'])
+
             
+def read_spc(file_name: str) -> dict:    
+    """ This function reads RPG MWR .SPC binary files. """
+
+    angle_calc = 0 
+    """ Default is 0, 1 means calculate angles in old manner (for SPC files with file codes 666667) """
+
+    with open(file_name, "rb") as file :
+        
+        code = np.fromfile( file, np.int32, 1)
+        if code in (666667 , 667000):
+            
+            def _get_header():                
+                """ Read header info """
+                           
+                n = int(np.fromfile( file, np.uint32, 1))
+                time_ref = np.fromfile( file, np.uint32, 1)
+                n_f = int(np.fromfile( file, np.int32, 1))
+                f = np.fromfile( file, np.float32, n_f)
+                xmin = np.fromfile( file, np.float32, n_f)
+                xmax = np.fromfile( file, np.float32, n_f)
+                
+                header_names = ['_code', 'n', '_time_ref', '_n_f', '_f', '_xmin', '_xmax']                 
+                header_values = [code, n, time_ref, n_f, f, xmin, xmax]
+                header = dict(zip(header_names,header_values))
+                return header
+            
+            def _create_variables():                
+                """ Initialize data arrays """
+                
+                Fill_Value_Float = -999.
+                Fill_Value_Int = -99
+                vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                       'rain' : np.ones( header['n'], np.byte)*Fill_Value_Int,
+                       'tb' : np.ones( [header['n'], header['_n_f']], np.float32)*Fill_Value_Float,
+                       'ele' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                       'azi' : np.ones( header['n'], np.float32)*Fill_Value_Float}
+                return vrs
+            
+            def _angle_calc(ang, code):                
+                """ Convert angle """
+                
+                if code == 666667:
+                    if angle_calc == 1:
+                        """ Angle calculation until 24.10.2014 """
+                        sign = 1
+                        if ang < 0:
+                            sign = -1
+                        az = sign*((ang/100.).astype(np.int32))/10.
+                        el = ang - (sign*az*1000.)
+
+                    elif angle_calc == 0:
+                        els = ang-100.*((ang/100.).astype(np.int32))
+                        azs = (ang-els)/1000.
+                        if azs <= 360.:
+                            el = els
+                            az = azs
+                        elif azs > 1000.:
+                            az = azs - 1000.
+                            el = 100. + els
+                        else:
+                            raise RuntimeError(['Error: Inconsistency in angle calculation!'])
+
+                elif code == 667000:
+                    a_str = str(ang[0])
+                    el = float(a_str[0:-5])/100.
+                    az = float(a_str[-5:])/100.
+                return el, az
+            
+            def _get_data():
+                """ Loop over file to read data """
+                
+                data = _create_variables()
+                for sample in range(header['n']):  
+
+                    data['time'][sample] = np.fromfile( file, np.int32, 1)
+                    data['rain'][sample] = np.fromfile( file, np.byte, 1)
+                    data['tb'][sample,] = np.fromfile( file, np.float32, header['_n_f'])
+                    if code == 666667:
+                        ang = np.fromfile( file, np.float32, 1)
+                    elif code == 667000:
+                        ang = np.fromfile( file, np.int32, 1)
+                    data['ele'][sample], data['azi'][sample] = _angle_calc(ang,code)
+                file.close()
+                return data
+            
+            header = _get_header()                    
+            data = _get_data()   
+            return header, data
+                        
+        else:
+            raise RuntimeError(['Error: SPC file code ' + str(code) + ' not suported'])

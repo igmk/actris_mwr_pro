@@ -36,7 +36,7 @@ def add_global_description(site_specs: dict,
     
     for key in site_specs:
         if key in global_description:
-            site_specs[key] = site_specs[key]+' ['+''.join(global_description[key])+']'
+            site_specs[key] = site_specs[key]+'    ['+''.join(global_description[key])+']'
             
 
 def site_specs(site: str, 
@@ -47,11 +47,12 @@ def site_specs(site: str,
         
         params = {
             'station_altitude': 108.,
-            'station_longitude': 6.413536,
-            'station_latitude': 50.908547,
-            'scan_time' : 90.,
+            'station_longitude': 6.407,
+            'station_latitude': 50.906,
+            'scan_time' : 93.,
             'bandwidth': np.array([230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 600, 1000, 2000]),
             'sideband_count': 1,
+            'freq_shift' : np.array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
         }
 
         global_specs = {
