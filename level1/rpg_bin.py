@@ -349,8 +349,8 @@ def read_blb(file_name: str) -> dict:
                 if code == 567845847:
                     n_f = int(np.fromfile( file, np.int32, 1))
                 f = np.fromfile( file, np.float32, n_f)
-                n_ang = int(np.fromfile( file, np.int32, 1))+1
-                ang = np.append(np.fromfile( file, np.float32, n_ang-1),0)
+                n_ang = int(np.fromfile( file, np.int32, 1)) + 1
+                ang = np.append(np.fromfile( file, np.float32, n_ang-1), 0)
                 
                 header_names = ['_code','n','_xmin','_xmax','_time_ref','_n_f','_f','_n_ang','_ang']
                 header_values = [code, n, xmin, xmax, time_ref, n_f, f, n_ang, ang]
@@ -375,7 +375,7 @@ def read_blb(file_name: str) -> dict:
                     data['time'][sample] = np.fromfile( file, np.int32, 1)
                     data['rf_mod'][sample] = np.fromfile( file, np.byte, 1)
                     for freq in range(header['_n_f']):
-                        data['tb'][sample,freq,] = np.fromfile( file, np.float32, header['_n_ang'])   
+                        data['tb'][sample, freq, ] = np.fromfile( file, np.float32, header['_n_ang'])   
                 file.close()
                 return data
             

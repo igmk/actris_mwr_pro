@@ -49,9 +49,11 @@ def site_specs(site: str,
             'station_altitude': 108.,
             'station_longitude': 6.407,
             'station_latitude': 50.906,
-            'scan_time' : 93.,
+            'scan_time' : 100.,
+            'int_time': 1,
             'bandwidth': np.array([230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 600, 1000, 2000]),
             'sideband_count': 1,
+            'sideband_IF_separation': np.array([[0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]]),
             'freq_shift' : np.array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
         }
 

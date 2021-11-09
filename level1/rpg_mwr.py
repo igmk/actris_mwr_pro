@@ -97,13 +97,16 @@ class Rpg:
 def save_rpg(rpg: Rpg,
              output_file: str,
              att: dict,
-             data_type: str) -> Tuple[str, list]:
+             data_type: str,
+             params: dict) -> Tuple[str, list]:
     """Saves the RPG MWR file."""
     
     if data_type == '1B01':
         dims = {'time': len(rpg.data['time'][:]),
                 'frequency': len(rpg.data['tb'][:].T),
-                'n_receivers': len(rpg.data['t_rec'][:].T)}
+                'n_receivers': len(rpg.data['t_rec'][:].T),
+                'n_sidebands': params['sideband_count'],
+                'time_bnds': 2}
     elif data_type == '1B11':
         dims = {'time': len(rpg.data['time'][:]),
                 'ir_wavelength': len(rpg.data['irt'][:].T)}
@@ -113,7 +116,9 @@ def save_rpg(rpg: Rpg,
         dims = {'time': len(rpg.data['time'][:]),
                 'frequency': len(rpg.data['tb'][:].T),
                 'n_receivers': len(rpg.data['t_rec'][:].T),
-                'ir_wavelength': len(rpg.data['irt'][:].T)}
+                'ir_wavelength': len(rpg.data['irt'][:].T),
+                'n_sidebands': params['sideband_count'],
+                'time_bnds': 2}
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
 
@@ -136,10 +141,11 @@ def init_file(file_name: str,
     nc = netCDF4.Dataset(file_name, 'w', format='NETCDF4_CLASSIC')
     for key, dimension in dimensions.items():
         nc.createDimension(key, dimension)
+    nc.createDimension('time_bounds', dimensions['time_bnds'])
     _write_vars2nc(nc, rpg_arrays)
     _add_standard_global_attributes(nc, att_global)
     return nc
-    
+
     
 def _get_dimensions(nc: netCDF4.Dataset, 
                     data: np.ndarray) -> tuple:
