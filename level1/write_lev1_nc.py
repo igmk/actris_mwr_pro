@@ -2,6 +2,7 @@ from level1.rpg_bin import get_rpg_bin
 from level1 import rpg_mwr
 from level1.meta_nc import get_data_attributes
 from level1.site_config import get_site_specs
+from level1.quality_control import apply_qc
 import numpy as np
 from typing import Optional
 
@@ -29,6 +30,7 @@ def lev1_to_nc(site: str,
 
     global_attributes, params = get_site_specs(site, data_type)    
     rpg_bin = prepare_data(path_to_files, data_type, params)
+    apply_qc(rpg_bin.data, params)    
     hatpro = rpg_mwr.Rpg(rpg_bin.data)
     hatpro.data = get_data_attributes(hatpro.data, data_type)
     rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params)
@@ -95,16 +97,14 @@ def _append_hkd(path_to_files: str,
                 rpg_bin: dict, 
                 data_type: str,
                 params: dict) -> None:
-    """Append hkd data on same time grid"""
+    """Append hkd data on same time grid and add TB quality flags"""
     
     hkd = get_rpg_bin(path_to_files, 'hkd')
     
     if params['station_latitude'] != Fill_Value_Float:
-        _add_interpol1(rpg_bin.data, np.ones(len(hkd.data['time'])) * params['station_latitude'], hkd.data['time'], 'station_latitude')
-                       
+        _add_interpol1(rpg_bin.data, np.ones(len(hkd.data['time'])) * params['station_latitude'], hkd.data['time'], 'station_latitude')                       
     else:
-        _add_interpol1(rpg_bin.data, hkd.data['station_latitude'], hkd.data['time'], 'station_latitude')
-                       
+        _add_interpol1(rpg_bin.data, hkd.data['station_latitude'], hkd.data['time'], 'station_latitude')                       
     if params['station_longitude'] != Fill_Value_Float:            
         _add_interpol1(rpg_bin.data, np.ones(len(hkd.data['time'])) * params['station_longitude'], hkd.data['time'], 'station_longitude')        
     else:        
@@ -113,7 +113,21 @@ def _append_hkd(path_to_files: str,
     if data_type in ('1B01','1C01'):
         _add_interpol1(rpg_bin.data, hkd.data['temp'][:,0:2], hkd.data['time'], 't_amb')
         _add_interpol1(rpg_bin.data, hkd.data['temp'][:,2:4], hkd.data['time'], 't_rec')
-        
+    
+        rpg_bin.data['status'] = np.zeros([len(rpg_bin.data['time']), len(rpg_bin.data['tb'][:].T)], np.int32)                
+        for i_time, _ in enumerate(rpg_bin.data['time']):
+            ind = np.where((hkd.data['time'] >= rpg_bin.data['time'][i_time] - 900) & (hkd.data['time'] <= rpg_bin.data['time'][i_time] + 900))
+            status = hkd.data['status'][ind]
+            for bit in range(7):
+                if np.any((status & 2**bit) == 0):
+                    rpg_bin.data['status'][i_time, bit] = 1
+                if np.any((status & 2**bit + 8) == 0):
+                    rpg_bin.data['status'][i_time, bit + 7] = 1  
+            if np.any(((status & 2**25) == 1) | ((status & 2**29) == 1)):
+                rpg_bin.data['status'][i_time, 0:6] = 1
+            if np.any(((status & 2**27) == 1) | ((status & 2**29) == 1)):
+                rpg_bin.data['status'][i_time, 7:13] = 1              
+                
         
 def _add_interpol1(data0: dict, 
                    data1: np.ndarray, 
@@ -142,7 +156,7 @@ def _add_blb(brt: dict,
              blb: dict,
              hkd: dict,
              params: dict) -> None:
-    "Add boundary-layer scans using a linear time axis"
+    """Add boundary-layer scans using a linear time axis"""
     
     xx = 0
     time_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.int32) * Fill_Value_Int
@@ -153,16 +167,14 @@ def _add_blb(brt: dict,
     
     bl_mod = np.ones(len(hkd.data['time'])) * Fill_Value_Int
     for i in range(len(hkd.data['time'])):
-        x = bin(hkd.data['stat'][i])
+        x = bin(hkd.data['status'][i])
         bl_mod[i] = x[-19]
 
     for time in range(blb.header['n']):
-
-        ind_met = np.squeeze(np.where((hkd.data['time'] > blb.data['time'][time] - params['scan_time'] - 7) & (hkd.data['time'] <= blb.data['time'][time]) & (bl_mod == 0)))        
-        time_add[xx] = hkd.data['time'][ind_met[-1]]
         
-        ind_scan = np.squeeze(np.where((hkd.data['time'] > blb.data['time'][time] - params['scan_time'] - 7) & (hkd.data['time'] <= blb.data['time'][time]) & (bl_mod == 1)))        
-        time_add[xx + 1:xx + blb.header['_n_ang']] = np.linspace(hkd.data['time'][ind_scan[0]] + 8, hkd.data['time'][ind_scan[-1]], blb.header['_n_ang'] - 1)
+        ind_scan = np.squeeze(np.where((hkd.data['time'] > blb.data['time'][time] - params['scan_time']) & (hkd.data['time'] <= blb.data['time'][time]) & (bl_mod == 1)))        
+        time_add[xx] = hkd.data['time'][ind_scan[0]]-1        
+        time_add[xx + 1:xx + blb.header['_n_ang']] = np.linspace(hkd.data['time'][ind_scan[0]], hkd.data['time'][ind_scan[-1]], blb.header['_n_ang'] - 1)
 
         azi_add[xx:xx + blb.header['_n_ang']] = 0.
         rain_add[xx + blb.header['_n_ang'] - 1] = blb.data['rf_mod'][time] & 1

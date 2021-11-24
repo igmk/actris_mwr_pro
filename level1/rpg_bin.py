@@ -420,7 +420,7 @@ def read_hkd(file_name: str) -> dict:
                        'stab' : np.ones( [header['n'],2], np.float32)*Fill_Value_Float,           
                        'flash' : np.ones( header['n'], np.int32)*Fill_Value_Int,      
                        'qual' : np.ones( header['n'], np.int32)*Fill_Value_Int,          
-                       'stat' : np.ones( header['n'], np.int32)*Fill_Value_Int}
+                       'status' : np.ones( header['n'], np.int32)*Fill_Value_Int}
                 return vrs
 
             def _get_data():
@@ -442,7 +442,7 @@ def read_hkd(file_name: str) -> dict:
                     if (header['_sel'] & 16):
                         data['qual'][sample] = np.fromfile( file, np.int32, count=1)
                     if (header['_sel'] & 32):
-                        data['stat'][sample] = np.fromfile( file, np.int32, count=1)
+                        data['status'][sample] = np.fromfile( file, np.int32, count=1)
                 file.close()
                 return data
             
