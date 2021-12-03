@@ -3,9 +3,6 @@ from utils import setbit
 import datetime
 import ephem
 
-# import pdb
-# pdb.set_trace()
-
 Fill_Value_Float = -999.
     
 def apply_qc(data: dict, 

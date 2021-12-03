@@ -1,7 +1,7 @@
 from level1.rpg_bin import get_rpg_bin
-from level1 import rpg_mwr
-from level1.meta_nc import get_data_attributes
-from level1.site_config import get_site_specs
+import rpg_mwr
+from level1.lev1_meta_nc import get_data_attributes
+from site_config import get_site_specs
 from level1.quality_control import apply_qc
 import numpy as np
 from typing import Optional
@@ -20,7 +20,7 @@ def lev1_to_nc(site: str,
     Args:
         site: Name of site.
         data_type: Data type of the netCDF file.
-        path_to_lwp_files: Folder containing one day of RPG MWR binary files.
+        path_to_files: Folder containing one day of RPG MWR binary files.
         output_file: Output file name.
         
     Examples:
@@ -52,7 +52,9 @@ def prepare_data(path_to_files: str,
         
         rpg_blb = get_rpg_bin(path_to_files, 'blb')
         rpg_hkd = get_rpg_bin(path_to_files, 'hkd')
-        _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)    
+        _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)
+        if params['azi_cor'] != -999.:
+            _azi_correction(rpg_bin.data, params)
         
         if data_type == '1C01':
             rpg_irt = get_rpg_bin(path_to_files, 'irt')
@@ -97,7 +99,7 @@ def _append_hkd(path_to_files: str,
                 rpg_bin: dict, 
                 data_type: str,
                 params: dict) -> None:
-    """Append hkd data on same time grid and add TB quality flags"""
+    """Append hkd data on same time grid and perform TB sanity check"""
     
     hkd = get_rpg_bin(path_to_files, 'hkd')
     
@@ -114,6 +116,7 @@ def _append_hkd(path_to_files: str,
         _add_interpol1(rpg_bin.data, hkd.data['temp'][:,0:2], hkd.data['time'], 't_amb')
         _add_interpol1(rpg_bin.data, hkd.data['temp'][:,2:4], hkd.data['time'], 't_rec')
     
+        """check time intervals of +-15 min of .HKD data for sanity checks"""
         rpg_bin.data['status'] = np.zeros([len(rpg_bin.data['time']), len(rpg_bin.data['tb'][:].T)], np.int32)                
         for i_time, _ in enumerate(rpg_bin.data['time']):
             ind = np.where((hkd.data['time'] >= rpg_bin.data['time'][i_time] - 900) & (hkd.data['time'] <= rpg_bin.data['time'][i_time] + 900))
@@ -202,3 +205,14 @@ def _add_blb(brt: dict,
     brt.data['rain'] = np.concatenate((brt.data['rain'], rain_add))
     brt.data['rain'] = brt.data['rain'][ind]
     brt.header['n'] = brt.header['n'] + blb.header['n'] * blb.header['_n_ang']
+    
+    
+def _azi_correction(brt: dict,
+                  params: dict) -> None:
+    """Azimuth correction (transform to "geographical" coordinates)"""
+    
+    ind180 = np.where((brt['azi'][:] >= 0) & (brt['azi'][:] <= 180))
+    ind360 = np.where((brt['azi'][:] > 180) & (brt['azi'][:] <= 360))
+    brt['azi'][ind180] = params['azi_cor'] - brt['azi'][ind180]
+    brt['azi'][ind360] = 360. + params['azi_cor'] - brt['azi'][ind360]    
+    brt['azi'][brt['azi'][:] < 0] += 360.

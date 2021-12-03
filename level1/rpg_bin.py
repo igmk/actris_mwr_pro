@@ -5,7 +5,7 @@ import datetime
 import utils
 
 def get_rpg_bin(path_to_files: str,
-              extension: str) -> np.ndarray:    
+                extension: str) -> np.ndarray:    
     """ This function reads one day of a RPG MWR binary file type and concatenates the data. 
     Args:
         path_to_files: Folder containing one day of a RPG MWR binary file type.
@@ -23,12 +23,13 @@ def get_rpg_bin(path_to_files: str,
        
     """
     
-    file_list = get_file_list(path_to_files,extension)
+    file_list = get_file_list(path_to_files, extension)
     rpg_bin = RpgBin(file_list)
     return rpg_bin
     
     
-def get_file_list(path_to_files,extension):
+def get_file_list(path_to_files: str, 
+                  extension: str):
     
     f_list = sorted(glob.glob(path_to_files + '*.' + extension))
     if len(f_list) < 1:
