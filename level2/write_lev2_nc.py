@@ -5,9 +5,7 @@ import numpy as np
 import netCDF4 as nc
 from typing import Optional
 import glob
-import rpg_mwr
 from scipy.interpolate import interp1d
-import pdb
 
 Fill_Value_Float = -999.
 Fill_Value_Int = -99  
@@ -48,12 +46,11 @@ def get_products(lev1: dict,
     for ivars in lev1_vars:
         rpg_dat[ivars] = lev1.variables[ivars]
         
-    path_coeff = '/run/user/1000/gvfs/sftp:host=fouis.meteo.uni-koeln.de,user=tmarke/home/hatpro/mwr_pro_jue/mwr_pro/retrievals/'
-    
+            
     if data_type == '2I00':
         
-        offset_lwp, lin_lwp, quad_lwp, c_lwp = get_mvr_coeff(path_coeff + 'lwp_', lev1.variables['frequency'][:], params['algo_lwp'][:], data_type)
-        offset_iwv, lin_iwv, quad_iwv, c_iwv = get_mvr_coeff(path_coeff + 'iwv_', lev1.variables['frequency'][:], params['algo_iwv'][:], data_type)        
+        offset_lwp, lin_lwp, quad_lwp, c_lwp = get_mvr_coeff(params['path_coeff'] + 'lwp_', lev1.variables['frequency'][:], params['algo_lwp'][:], data_type)
+        offset_iwv, lin_iwv, quad_iwv, c_iwv = get_mvr_coeff(params['path_coeff'] + 'iwv_', lev1.variables['frequency'][:], params['algo_iwv'][:], data_type)        
 
         rpg_dat['Lwp'] = np.ones(len(lev1.variables['time'])) * Fill_Value_Float
         rpg_dat['Iwv'] = np.ones(len(lev1.variables['time'])) * Fill_Value_Float
@@ -146,10 +143,10 @@ def get_mvr_coeff(path: str,
         for i, file in enumerate(c_list):
             coeff = nc.Dataset(file)
             cf['ele'][i] = coeff.variables['elevation_predictand'][0]
-            _, freq_ind, _ = np.intersect1d(freq[:], coeff.variables['freq'][:], assume_unique = True, return_indices = True)
-            cf['freq'][freq_ind, i] = coeff.variables['freq'][freq_ind]
-            cf['coeff_lin'][freq_ind, i] = coeff.variables['coefficient_mvr'][freq_ind]
-            cf['coeff_quad'][freq_ind, i] = coeff.variables['coefficient_mvr'][freq_ind + len(freq_ind)]
+            _, freq_ind, freq_cf = np.intersect1d(freq[:], coeff.variables['freq'][:], assume_unique = True, return_indices = True)
+            cf['freq'][freq_ind, i] = coeff.variables['freq'][freq_cf]
+            cf['coeff_lin'][freq_ind, i] = coeff.variables['coefficient_mvr'][freq_cf]
+            cf['coeff_quad'][freq_ind, i] = coeff.variables['coefficient_mvr'][freq_cf + len(freq_cf)]
             cf['offset'][i] = coeff.variables['offset_mvr'][0]
             cf['err'][i] = coeff.variables['predictand_err'][0]
 
@@ -200,15 +197,14 @@ def get_mvr_coeff(path: str,
         
         
     else:
-        raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
-        
+        raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])        
 
     return f_offset, f_lin, f_quad, cf
 
 
 def abshum_to_rh(T: np.ndarray, 
                  q: np.ndarray) -> np.ndarray:
-    "calculate relative humidity from absolute humidity and temperature using analytical approximation of Clausius-Clapeyron equation"
+    "Calculate relative humidity from absolute humidity and temperature using analytical approximation of Clausius-Clapeyron equation"
     
     "specific gas constant for water vapor (J/kg K)"
     Rw = 462.
