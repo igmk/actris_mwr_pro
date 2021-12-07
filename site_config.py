@@ -108,8 +108,10 @@ def site_specs(site: str,
             
             # Retrieval coefficient files
             # Specify retrieval algorithm parameter files to be used in retrieving Level 2 products here.
-            'algo_lwp': ['lwp_deb_rt00_90'],
-            'algo_iwv': ['iwv_deb_rt00_90'],
+            'algo_lwp': ['deb_rt00_90'],
+            'algo_iwv': ['deb_rt00_90'],
+            'algo_tze': ['deb_rt00_90', 'deb_rt00_80', 'deb_rt00_75', 'deb_rt00_71', 'deb_rt00_61', 'deb_rt00_60', 'deb_rt00_52', 'deb_rt00_45', 'deb_rt00_42', 'deb_rt00_32', 'deb_rt00_30', 'deb_rt00_23'],
+            'algo_hze': ['deb_rt00_90', 'deb_rt00_80', 'deb_rt00_75', 'deb_rt00_71', 'deb_rt00_61', 'deb_rt00_60', 'deb_rt00_52', 'deb_rt00_45', 'deb_rt00_42', 'deb_rt00_32', 'deb_rt00_30', 'deb_rt00_23'],
         }
 
         global_specs = {
