@@ -107,7 +107,8 @@ def site_specs(site: str,
             'flags_active': [1,1,1,0,1,1,1,0],
             
             # Retrieval coefficient files
-            # Specify retrieval algorithm parameter files to be used in retrieving Level 2 products here.
+            # Specify retrieval algorithm parameter path and files to be used in retrieving Level 2 products here.
+            'path_coeff': '/home/hatpro/mwr_pro_jue/mwr_pro/retrievals/',
             'algo_lwp': ['deb_rt00_90'],
             'algo_iwv': ['deb_rt00_90'],
             'algo_tze': ['deb_rt00_90', 'deb_rt00_80', 'deb_rt00_75', 'deb_rt00_71', 'deb_rt00_61', 'deb_rt00_60', 'deb_rt00_52', 'deb_rt00_45', 'deb_rt00_42', 'deb_rt00_32', 'deb_rt00_30', 'deb_rt00_23'],
