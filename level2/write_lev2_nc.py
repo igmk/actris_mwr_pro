@@ -74,8 +74,8 @@ def get_products(lev1: dict,
                 
     elif data_type == '2P00':
                 
-        offset_tze, lin_tze, quad_tze, c_tze = get_mvr_coeff(path_coeff + 'tze_', lev1.variables['frequency'][:], params['algo_tze'][:], data_type)
-        offset_hze, lin_hze, quad_hze, c_hze = get_mvr_coeff(path_coeff + 'hze_', lev1.variables['frequency'][:], params['algo_hze'][:], data_type)
+        offset_tze, lin_tze, quad_tze, c_tze = get_mvr_coeff(params['path_coeff'] + 'tze_', lev1.variables['frequency'][:], params['algo_tze'][:], data_type)
+        offset_hze, lin_hze, quad_hze, c_hze = get_mvr_coeff(params['path_coeff'] + 'hze_', lev1.variables['frequency'][:], params['algo_hze'][:], data_type)
                         
         rpg_dat['altitude'] = c_tze['height_grid']    
         rpg_dat['temperature'] = np.ones([len(lev1.variables['time']), c_tze['n_height_grid']]) * Fill_Value_Float
