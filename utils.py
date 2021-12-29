@@ -6,7 +6,7 @@ import numpy.ma as ma
 import numpy as np
 
 
-def epoch2unix(epoch_time,time_ref):    
+def epoch2unix(epoch_time, time_ref):    
     """Converts seconds since (2001,1,1,0,0,0) to unix time in UTC.
     
     Args:
@@ -17,9 +17,9 @@ def epoch2unix(epoch_time,time_ref):
         
     """
 
-    delta = (datetime(2001,1,1,0,0,0)-datetime(1970,1,1,0,0,0)).total_seconds()
+    delta = (datetime(2001,1,1,0,0,0) - datetime(1970,1,1,0,0,0)).total_seconds()
     unix_time = epoch_time + int(delta)
-    if time_ref:
+    if time_ref == 0:
         for index in range(len(unix_time)):
             unix_time[index] = time.mktime(datetime.fromtimestamp(unix_time[index], tz=timezone.utc).timetuple())
     return unix_time

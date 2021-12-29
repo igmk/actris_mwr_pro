@@ -94,6 +94,27 @@ class Rpg:
             data[key] = RpgArray(self.raw_data[key], key)
         return data
     
+    def sort_timestamps(self):
+        time = self.data['time'].data[:]
+        n_time = len(time)
+        ind = time.argsort()
+        self.data['time'].data[:] = time[ind]
+        for key, array in self.data.items():
+            if not utils.isscalar(array.data) and array.data.ndim < 2 and len(array.data) == n_time:
+                self.data[key].data = array[ind]
+            elif not utils.isscalar(array.data) and array.data.ndim > 1 and len(array.data) == n_time:
+                self.data[key].data = array[ind, :]
+    
+    def remove_duplicate_timestamps(self):
+        time = self.data['time'].data[:]
+        n_time = len(time)
+        _, ind = np.unique(time, return_index=True)
+        for key, array in self.data.items():
+            if not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim < 2:
+                self.data[key].data = array.data[ind]    
+            elif not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim > 1:
+                self.data[key].data = array.data[ind, :]    
+    
     
 def save_rpg(rpg: Rpg,
              output_file: str,
