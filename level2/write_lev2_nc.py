@@ -130,6 +130,7 @@ def get_products(lev1: dict,
 
 def get_coeff_list(path_to_files: str, 
                    params: dict):
+    "Returns list of .nc coefficient file(s)"
     
     c_list = []
     for i, name in enumerate(params):        
@@ -264,6 +265,7 @@ def abshum_to_rh(T: np.ndarray,
 
 def min_run_length(series: pd.DataFrame, 
                   time_delta: np.int32) -> np.ndarray:
+    "Returns start and end of consecutive indicies of a certain length"
     
     terminal = pd.Series([0])
     diffs = pd.concat([terminal, series, terminal]).diff()
@@ -281,7 +283,7 @@ def get_lwp_offset(time: np.ndarray,
     "Correct Lwp using 2min standard deviation and IRT"
     
     cl = np.zeros(len(lwp_std))
-    ind, _ = np.where((lwp_std < .002) & (irt < 233.75))
+    ind, _ = np.where((lwp_std < .002) & (irt < 233.15))
     cl[ind] = 1
 
     mask = pd.DataFrame({'cl': cl}, index = pd.to_datetime(time[:], unit = 's'))
