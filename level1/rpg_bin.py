@@ -230,9 +230,9 @@ def read_met(file_name: str) -> dict:
                 for sample in range(header['n']): 
                     data['time'][sample] = np.fromfile( file, np.int32, 1)
                     data['rain'][sample] = np.fromfile( file, np.byte, 1)
-                    data['air_pressure'][sample] = np.fromfile( file, np.float32,1) * 100
+                    data['air_pressure'][sample] = np.fromfile( file, np.float32,1) * 100.
                     data['air_temperature'][sample] = np.fromfile( file, np.float32, 1)
-                    data['relative_humidity'][sample] = np.fromfile( file, np.float32, 1)
+                    data['relative_humidity'][sample] = np.fromfile( file, np.float32, 1) / 100.
                     for add in range(header['_n_sen'].count('1')):
                         data['adds'][sample,add] = np.fromfile( file, np.float32, 1)
                 file.close()

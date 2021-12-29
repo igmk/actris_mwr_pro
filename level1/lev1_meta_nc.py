@@ -146,6 +146,12 @@ ATTRIBUTES_1B01 = {
         definition=DEFINITIONS_1B01['quality_flag'],
         comment='Bit 4 and 8 are calculated centrally at the E-PROFILE processing hub',
     ),
+    'pointing_flag': MetaData(
+        long_name='Pointing Flag',
+        standard_name='pointing_flag',
+        units='1 (bit variable)',
+        comment='Flag indicating observation mode - single vs. multiple pointing',
+    ),
     't_amb': MetaData(
         long_name='Ambient target temperature',
         units='K',
@@ -387,6 +393,12 @@ ATTRIBUTES_1C01 = {
         definition=DEFINITIONS_1B01['quality_flag'],
         comment='Bit 4 and 8 are calculated centrally at the E-PROFILE processing hub',
     ),
+    'pointing_flag': MetaData(
+        long_name='Pointing Flag',
+        standard_name='pointing_flag',
+        units='1 (bit variable)',
+        comment='Flag indicating observation mode - single vs. multiple pointing',
+    ),    
     't_amb': MetaData(
         long_name='Ambient target temperature',
         units='K',

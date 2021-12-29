@@ -32,6 +32,8 @@ def lev1_to_nc(site: str,
     rpg_bin = prepare_data(path_to_files, data_type, params)
     apply_qc(rpg_bin.data, params)    
     hatpro = rpg_mwr.Rpg(rpg_bin.data)
+    hatpro.sort_timestamps()
+    hatpro.remove_duplicate_timestamps()
     hatpro.data = get_data_attributes(hatpro.data, data_type)
     rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params)
       
@@ -49,6 +51,7 @@ def prepare_data(path_to_files: str,
         rpg_bin.data['sideband_IF_separation'] = params['sideband_IF_separation']
         rpg_bin.data['freq_shift'] = params['freq_shift']
         rpg_bin.data['time_bounds'] = add_time_bounds(rpg_bin.data['time'], params['int_time'])
+        rpg_bin.data['pointing_flag'] = np.ones(len(rpg_bin.data['time']), np.int32)
         
         rpg_blb = get_rpg_bin(path_to_files, 'blb')
         rpg_hkd = get_rpg_bin(path_to_files, 'hkd')
@@ -204,6 +207,8 @@ def _add_blb(brt: dict,
     brt.data['tb'] = brt.data['tb'][ind,:]
     brt.data['rain'] = np.concatenate((brt.data['rain'], rain_add))
     brt.data['rain'] = brt.data['rain'][ind]
+    brt.data['pointing_flag'] = np.concatenate((brt.data['pointing_flag'], np.zeros(len(time_add), np.int32)))
+    brt.data['pointing_flag'] = brt.data['pointing_flag'][ind]
     brt.header['n'] = brt.header['n'] + blb.header['n'] * blb.header['_n_ang']
     
     
