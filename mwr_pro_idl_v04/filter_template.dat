@@ -1,0 +1,24 @@
+#This file contains manually set quality control flags for MWR data.
+#Faulty data times can be manually set and will be flagged in quicklooks and final netcdf products.
+#Possible reasons: disturbances on radome, radio-frequency interference, mis-calibration, ...
+#Note: TBs and products will still be available during the specified times.
+#1st column contains date of faulty data following format specification
+#2cnd column contains number of faulty intervals on one day
+#3rd and 4th column: start time and end time in decimal(!) hours - note, e.g. 19:30=19.50
+#5th column: set to 1 if Band1 channels are subject to error
+#6th column: set to 1 if Band2 (if existing) channels are subject to error
+#7th column: set to 1 if Band3 (if existing) channels are subject to error
+#The second to last line must always contain the string "date of last change"
+#The last row must contain the actual date of last change.
+#You must adhere to formats given in the example below!
+#BEGIN OF EXAMPLE
+yymmdd nn hh.hh hh.hh 1 2 3
+110117  1 19.00 21.00 1 0 0
+110118  2 10.00 11.00 1 0 0
+          12.50 14.50 1 0 0
+date of last change
+110131
+#END OF EXAMPLE
+start in THIS row!
+date of last change
+999999
