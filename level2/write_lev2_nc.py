@@ -74,9 +74,7 @@ def get_products(lev1: dict,
             else:
                 rpg_dat[ivars] = lev1.variables[ivars][index]
                 
-        lwp = pd.DataFrame({'Lwp': rpg_dat['Lwp'][:]}, index = pd.to_datetime(rpg_dat['time'][:], unit = 's'))
-        lwp_std = lwp.rolling('2min', min_periods = 30, center = True, closed = 'both').std()
-        lwp_offset = get_lwp_offset(rpg_dat['time'], rpg_dat['Lwp'], lwp_std, lev1.variables['irt'][index])
+        lwp_offset = get_lwp_offset(rpg_dat['time'], rpg_dat['Lwp'], lev1.variables['irt'][index, 0].data)
         rpg_dat['Lwp'] = rpg_dat['Lwp'] - lwp_offset
         
                 
@@ -278,25 +276,33 @@ def min_run_length(series: pd.DataFrame,
     
 def get_lwp_offset(time: np.ndarray, 
                    lwp: np.ndarray,
-                   lwp_std: np.ndarray, 
                    irt: np.ndarray) -> np.ndarray:
     "Correct Lwp using 2min standard deviation and IRT"
-    
+
+    lwp_df = pd.DataFrame({'Lwp': lwp}, index = pd.to_datetime(time, unit = 's'))
+    lwp_std = lwp_df.rolling('2min', min_periods = 30, center = True, closed = 'both').std()    
+
     cl = np.zeros(len(lwp_std))
-    ind, _ = np.where((lwp_std < .002) & (irt < 233.15))
+    ind = np.where((lwp_std['Lwp'].values < .002) | (irt[:] < 233.15))
     cl[ind] = 1
+    mask = pd.DataFrame({'cl': cl}, index = pd.to_datetime(time, unit = 's'))
 
-    mask = pd.DataFrame({'cl': cl}, index = pd.to_datetime(time[:], unit = 's'))
+    cc = mask.rolling('20min', min_periods = 1, center = True, closed = 'both').sum()
+    cl = np.ones(len(lwp_std))
+    ind = np.where(cc['cl'].values < 1000)
+    cl[ind] = 0
+    mask = pd.DataFrame({'cl': cl}, index = pd.to_datetime(time, unit = 's'))
 
-    indicies = min_run_length(mask['cl'], 300)
+    indicies = min_run_length(mask['cl'], 1)
 
-    lwp_ts = []
-    time_ts = []
-    for ii in range(len(indicies)):
-        rm = pd.DataFrame({'rm': lwp[indicies[ii][0]:indicies[ii][1]]}, index = pd.to_datetime(time[indicies[ii][0]:indicies[ii][1]], unit = 's'))
-        lwp_ts = np.append(lwp_ts, rm.rolling('20min', min_periods = 1, center = True, closed = 'both').mean())
-        time_ts = np.append(time_ts, time[indicies[ii][0]:indicies[ii][1]])
-
-    lwp_offset = np.interp(time[:], time_ts, lwp_ts)
+    if len(indicies) > 0
+        lwp_ts = []
+        time_ts = []
+        for ii in range(len(indicies)):
+            lwp_ts = np.append(lwp_ts, np.ones(indicies[ii][1]-indicies[ii][0])*np.mean(lwp[indicies[ii][0]:indicies[ii][1]]))
+            time_ts = np.append(time_ts, np.ones(indicies[ii][1]-indicies[ii][0])*np.mean(time[indicies[ii][0]:indicies[ii][1]]))
+        lwp_offset = np.interp(time, time_ts, lwp_ts)
+    else:
+        lwp_offset = np.zeros(len(time))
     
     return lwp_offset
