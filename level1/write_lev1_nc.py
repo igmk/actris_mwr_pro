@@ -62,7 +62,7 @@ def prepare_data(path_to_files: str,
         if data_type == '1C01':
             rpg_irt = get_rpg_bin(path_to_files, 'irt')
             rpg_bin.data['ir_wavelength'] = rpg_irt.header['_f']
-            _add_interpol1(rpg_bin.data, rpg_irt.data['irt'], rpg_irt.data['time'], 'irt')
+            _add_interpol1(rpg_bin.data, rpg_irt.data['irt'] + 273.15, rpg_irt.data['time'], 'irt')
 
             rpg_met = get_rpg_bin(path_to_files,'met')
             _add_interpol1(rpg_bin.data, rpg_met.data['air_temperature'], rpg_met.data['time'], 'air_temperature')
@@ -178,19 +178,20 @@ def _add_blb(brt: dict,
 
     for time in range(blb.header['n']):
         
-        ind_scan = np.squeeze(np.where((hkd.data['time'] > blb.data['time'][time] - params['scan_time']) & (hkd.data['time'] <= blb.data['time'][time]) & (bl_mod == 1)))        
-        time_add[xx] = hkd.data['time'][ind_scan[0]]-1        
-        time_add[xx + 1:xx + blb.header['_n_ang']] = np.linspace(hkd.data['time'][ind_scan[0]], hkd.data['time'][ind_scan[-1]], blb.header['_n_ang'] - 1)
+        ind_scan = np.squeeze(np.where((hkd.data['time'] > blb.data['time'][time] - params['scan_time']) & (hkd.data['time'] <= blb.data['time'][time]) & (bl_mod == 1)))  
+        if len(ind_scan) > 0:
+            time_add[xx] = hkd.data['time'][ind_scan[0]]-1        
+            time_add[xx + 1:xx + blb.header['_n_ang']] = np.linspace(hkd.data['time'][ind_scan[0]], hkd.data['time'][ind_scan[-1]], blb.header['_n_ang'] - 1)
 
-        azi_add[xx:xx + blb.header['_n_ang']] = 0.
-        rain_add[xx + blb.header['_n_ang'] - 1] = blb.data['rf_mod'][time] & 1
-        tb_add[xx, :] = np.squeeze(blb.data['tb'][time, :, blb.header['_n_ang'] - 1]) 
-        ele_add[xx] = blb.header['_ang'][-1]
-        xx += 1
-        for ang in range(blb.header['_n_ang'] - 1):              
-            tb_add[xx, :] = np.squeeze(blb.data['tb'][time, :, ang])
-            ele_add[xx] = blb.header['_ang'][ang]
+            azi_add[xx:xx + blb.header['_n_ang']] = 0.
+            rain_add[xx + blb.header['_n_ang'] - 1] = blb.data['rf_mod'][time] & 1
+            tb_add[xx, :] = np.squeeze(blb.data['tb'][time, :, blb.header['_n_ang'] - 1]) 
+            ele_add[xx] = blb.header['_ang'][-1]
             xx += 1
+            for ang in range(blb.header['_n_ang'] - 1):              
+                tb_add[xx, :] = np.squeeze(blb.data['tb'][time, :, ang])
+                ele_add[xx] = blb.header['_ang'][ang]
+                xx += 1
 
     bnd_add = add_time_bounds(time_add, params['scan_time'] / blb.header['_n_ang'] - 1)
     
