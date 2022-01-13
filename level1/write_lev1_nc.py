@@ -1,10 +1,10 @@
 from level1.rpg_bin import get_rpg_bin
 import rpg_mwr
 from level1.lev1_meta_nc import get_data_attributes
-from site_config import get_site_specs
 from level1.quality_control import apply_qc
 import numpy as np
 from typing import Optional
+import importlib
 
 Fill_Value_Float = -999.
 Fill_Value_Int = -99  
@@ -28,7 +28,8 @@ def lev1_to_nc(site: str,
         >>> lev1_to_nc('site_name', '1B01', '/path/to/files/', 'rpg_mwr.nc')
     """
 
-    global_attributes, params = get_site_specs(site, data_type)    
+    module = importlib.import_module(f"site_config." + site)
+    global_attributes, params = getattr(module, f"get_site_specs")(data_type) 
     rpg_bin = prepare_data(path_to_files, data_type, params)
     apply_qc(rpg_bin.data, params)    
     hatpro = rpg_mwr.Rpg(rpg_bin.data)
@@ -179,7 +180,8 @@ def _add_blb(brt: dict,
     for time in range(blb.header['n']):
         
         ind_scan = np.squeeze(np.where((hkd.data['time'] > blb.data['time'][time] - params['scan_time']) & (hkd.data['time'] <= blb.data['time'][time]) & (bl_mod == 1)))  
-        if len(ind_scan) > 0:
+
+        if type(ind_scan) == list:
             time_add[xx] = hkd.data['time'][ind_scan[0]]-1        
             time_add[xx + 1:xx + blb.header['_n_ang']] = np.linspace(hkd.data['time'][ind_scan[0]], hkd.data['time'][ind_scan[-1]], blb.header['_n_ang'] - 1)
 
