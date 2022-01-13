@@ -79,6 +79,7 @@ def get_products(lev1: dict,
                 
         lwp_offset = get_lwp_offset(rpg_dat['time'], rpg_dat['Lwp'], lev1.variables['irt'][index, 0].data)
         rpg_dat['Lwp'] = rpg_dat['Lwp'] - lwp_offset
+        rpg_dat['Lwp_off'] = lwp_offset
         
                 
     elif data_type == '2P00':
@@ -234,7 +235,6 @@ def get_mvr_coeff(path: str,
     return f_offset, f_lin, f_quad, cf, e_ran, e_sys
 
 
-
 def abshum_to_rh(T: np.ndarray, 
                  q: np.ndarray,
                  dT: np.ndarray,
@@ -274,22 +274,20 @@ def get_lwp_offset(time: np.ndarray,
     lwp_mx = lwp_std.resample("20min").max()
     loffset = '10min'
     lwp_mx.index = lwp_mx.index + to_offset(loffset)
-    lwp_mx = df_interp(lwp_mx, lwp_df.index)
+    lwp_mx = df_interp(lwp_mx, lwp_df.index)  
 
     irt_df = pd.DataFrame({'Irt': irt[:]}, index = pd.to_datetime(time, unit = 's'))
     irt_mn = irt_df.resample("2min").mean()
     irt_mx = irt_mn.resample("20min").max()
-    loffset = '10min'
     irt_mx.index = irt_mx.index + to_offset(loffset)
-    irt_mx = df_interp(irt_mx, irt_df.index)    
+    irt_mx = df_interp(irt_mx, irt_df.index)  
     
     cld = np.ones(len(lwp))
-    cld[(irt_mx['Irt'].values > 233.15) & (lwp_mx['Lwp'].values > .002)] = 0
+    cld[(irt_mx['Irt'] > 233.15) & (lwp_mx['Lwp'] > .002) | np.isnan(irt_mx['Irt']) | np.isnan(lwp_mx['Lwp'])] = 0
     lwp_n = np.copy(lwp)
     lwp_n[cld == 0] = np.nan
     lwp_df = pd.DataFrame({'Lwp': lwp_n}, index = pd.to_datetime(time, unit = 's'))
     lwp_mn = lwp_df.resample("20min").mean()
-    loffset = '10min'
     lwp_mn.index = lwp_mn.index + to_offset(loffset)
     lwp_mn = df_interp(lwp_mn, lwp_df.index)
     lwp_mn = lwp_mn.interpolate(method = 'linear')
