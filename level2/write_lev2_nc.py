@@ -79,7 +79,6 @@ def get_products(lev1: dict,
                 
         lwp_offset = get_lwp_offset(rpg_dat['time'], rpg_dat['Lwp'], lev1.variables['irt'][index, 0].data)
         rpg_dat['Lwp'] = rpg_dat['Lwp'] - lwp_offset
-        rpg_dat['Lwp_off'] = lwp_offset
         
                 
     elif data_type == '2P00':
