@@ -1,13 +1,14 @@
 import rpg_mwr
 from level2.lev2_meta_nc import get_data_attributes
-from site_config import get_site_specs
 import numpy as np
 import netCDF4 as nc
-from typing import Optional
 import glob
 from scipy.interpolate import interp1d
 import numpy.ma as ma
 import pandas as pd
+import importlib
+from pandas.tseries.frequencies import to_offset
+from utils import df_interp
 
 Fill_Value_Float = -999.
 Fill_Value_Int = -99  
@@ -30,8 +31,9 @@ def lev2_to_nc(site: str,
         >>> lev2_to_nc('site_name', '2P00', '/path/to/file/', 'lev2_data.nc')
     """
     
-    lev1 = nc.Dataset(path_to_file)
-    global_attributes, params = get_site_specs(site, data_type) 
+    module = importlib.import_module(f"site_config." + site)
+    global_attributes, params = getattr(module, f"get_site_specs")(data_type)
+    lev1 = nc.Dataset(path_to_file)  
     rpg_dat = get_products(lev1, data_type, params)
     hatpro = rpg_mwr.Rpg(rpg_dat)
     hatpro.data = get_data_attributes(hatpro.data, data_type)
@@ -52,6 +54,7 @@ def get_products(lev1: dict,
         offset_iwv, lin_iwv, quad_iwv, c_iwv, ran_iwv, sys_iwv = get_mvr_coeff(params['path_coeff'] + 'iwv_', lev1.variables['frequency'][:], params['algo_iwv'][:], data_type)  
             
         index = np.where((np.abs(lev1.variables['ele'][:] - c_lwp['ele']) < .6) & (lev1.variables['pointing_flag'][:] == 1) & (np.sum(lev1.variables['quality_flag'], axis = 1) == 0) & (np.abs((lev1.variables['ele'][:]) - c_iwv['ele']) < .6))
+        
         index = index[0][:]
         
         offset = offset_lwp(lev1.variables['ele'][index].data)
@@ -259,19 +262,6 @@ def abshum_to_rh(T: np.ndarray,
     drh = np.sqrt((drh_dq * dq)**2 + (drh_dT * dT)**2)
     
     return rh, drh
-
-
-def min_run_length(series: pd.DataFrame, 
-                  time_delta: np.int32) -> np.ndarray:
-    "Returns start and end of consecutive indicies of a certain length"
-    
-    terminal = pd.Series([0])
-    diffs = pd.concat([terminal, series, terminal]).diff()
-    starts = np.where(diffs == 1)
-    ends = np.where(diffs == -1)
-    series['tvalue'] = series.index
-    return [(s, e - 1) for s, e in zip(starts[0], ends[0])
-            if (series['tvalue'][np.min((e,len(series)-2))] - series['tvalue'][s]).total_seconds() >= time_delta]
     
     
 def get_lwp_offset(time: np.ndarray, 
@@ -280,29 +270,31 @@ def get_lwp_offset(time: np.ndarray,
     "Correct Lwp using 2min standard deviation and IRT"
 
     lwp_df = pd.DataFrame({'Lwp': lwp}, index = pd.to_datetime(time, unit = 's'))
-    lwp_std = lwp_df.rolling('2min', min_periods = 30, center = True, closed = 'both').std()    
+    lwp_std = lwp_df.resample("2min").std()
+    lwp_mx = lwp_std.resample("20min").max()
+    loffset = '10min'
+    lwp_mx.index = lwp_mx.index + to_offset(loffset)
+    lwp_mx = df_interp(lwp_mx, lwp_df.index)
 
-    cl = np.zeros(len(lwp_std))
-    ind = np.where((lwp_std['Lwp'].values < .002) | (irt[:] < 233.15))
-    cl[ind] = 1
-    mask = pd.DataFrame({'cl': cl}, index = pd.to_datetime(time, unit = 's'))
-
-    cc = mask.rolling('20min', min_periods = 1, center = True, closed = 'both').sum()
-    cl = np.ones(len(lwp_std))
-    ind = np.where(cc['cl'].values < 1000)
-    cl[ind] = 0
-    mask = pd.DataFrame({'cl': cl}, index = pd.to_datetime(time, unit = 's'))
-
-    indicies = min_run_length(mask['cl'], 1)
-
-    if len(indicies) > 0
-        lwp_ts = []
-        time_ts = []
-        for ii in range(len(indicies)):
-            lwp_ts = np.append(lwp_ts, np.ones(indicies[ii][1]-indicies[ii][0])*np.mean(lwp[indicies[ii][0]:indicies[ii][1]]))
-            time_ts = np.append(time_ts, np.ones(indicies[ii][1]-indicies[ii][0])*np.mean(time[indicies[ii][0]:indicies[ii][1]]))
-        lwp_offset = np.interp(time, time_ts, lwp_ts)
-    else:
-        lwp_offset = np.zeros(len(time))
+    irt_df = pd.DataFrame({'Irt': irt[:]}, index = pd.to_datetime(time, unit = 's'))
+    irt_mn = irt_df.resample("2min").mean()
+    irt_mx = irt_mn.resample("20min").max()
+    loffset = '10min'
+    irt_mx.index = irt_mx.index + to_offset(loffset)
+    irt_mx = df_interp(irt_mx, irt_df.index)    
+    
+    cld = np.ones(len(lwp))
+    cld[(irt_mx['Irt'].values > 233.15) & (lwp_mx['Lwp'].values > .002)] = 0
+    lwp_n = np.copy(lwp)
+    lwp_n[cld == 0] = np.nan
+    lwp_df = pd.DataFrame({'Lwp': lwp_n}, index = pd.to_datetime(time, unit = 's'))
+    lwp_mn = lwp_df.resample("20min").mean()
+    loffset = '10min'
+    lwp_mn.index = lwp_mn.index + to_offset(loffset)
+    lwp_mn = df_interp(lwp_mn, lwp_df.index)
+    lwp_mn = lwp_mn.interpolate(method = 'linear')
+    lwp_mn = lwp_mn.fillna(method = 'bfill')
+    lwp_offset = lwp_mn['Lwp'].values
+    lwp_offset[np.isnan(lwp_offset)] = 0
     
     return lwp_offset
