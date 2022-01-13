@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import time
 import numpy.ma as ma
 import numpy as np
+import pandas as pd
 
 
 def epoch2unix(epoch_time, time_ref):    
@@ -69,3 +70,15 @@ def setbit(array: np.ndarray,
     mask = 1 << nth_bit
     array |= mask
     return array
+
+
+def df_interp(df, new_index):
+    """Return a new DataFrame with all columns values interpolated
+    to the new_index values."""
+    df_out = pd.DataFrame(index=new_index)
+    df_out.index.name = df.index.name
+
+    for colname, col in df.iteritems():
+        df_out[colname] = np.interp(new_index, df.index, col)
+
+    return df_out
