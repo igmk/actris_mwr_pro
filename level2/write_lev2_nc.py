@@ -1,17 +1,18 @@
-import rpg_mwr
+from site_config.read_specs import get_site_specs
 from level2.lev2_meta_nc import get_data_attributes
+import rpg_mwr
 import numpy as np
 import netCDF4 as nc
 import glob
 from scipy.interpolate import interp1d
 import numpy.ma as ma
 import pandas as pd
-import importlib
-from pandas.tseries.frequencies import to_offset
 from utils import df_interp
+from typing import Optional
 
 Fill_Value_Float = -999.
 Fill_Value_Int = -99  
+
 
 def lev2_to_nc(site: str,
                data_type: str,
@@ -31,102 +32,145 @@ def lev2_to_nc(site: str,
         >>> lev2_to_nc('site_name', '2P00', '/path/to/file/', 'lev2_data.nc')
     """
     
-    module = importlib.import_module(f"site_config." + site)
-    global_attributes, params = getattr(module, f"get_site_specs")(data_type)
+    global_attributes, params = get_site_specs(site, data_type)
     lev1 = nc.Dataset(path_to_file)  
-    rpg_dat = get_products(lev1, data_type, params)
+    rpg_dat, att = get_products(lev1, data_type, params, global_attributes)
     hatpro = rpg_mwr.Rpg(rpg_dat)
     hatpro.data = get_data_attributes(hatpro.data, data_type)
-    rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params)
+    rpg_mwr.save_rpg(hatpro, output_file, att, data_type, params)
     
     
 def get_products(lev1: dict, 
                  data_type: str, 
-                 params: dict) -> dict:
+                 params: dict, 
+                 glob_att: dict) -> dict:
     "Derive specified Level 2 products"
     
     rpg_dat = dict()
     lev1_vars = ['time', 'time_bounds', 'station_latitude', 'station_longitude', 'azi', 'ele']    
+    
             
-    if data_type == '2I00':
+    if data_type == '2I06':
         
-        offset_lwp, lin_lwp, quad_lwp, c_lwp, ran_lwp, sys_lwp = get_mvr_coeff(params['path_coeff'] + 'lwp_', lev1.variables['frequency'][:], params['algo_lwp'][:], data_type)
-        offset_iwv, lin_iwv, quad_iwv, c_iwv, ran_iwv, sys_iwv = get_mvr_coeff(params['path_coeff'] + 'iwv_', lev1.variables['frequency'][:], params['algo_iwv'][:], data_type)  
-            
-        index = np.where((np.abs(lev1.variables['ele'][:] - c_lwp['ele']) < .6) & (lev1.variables['pointing_flag'][:] == 1) & (np.sum(lev1.variables['quality_flag'], axis = 1) == 0) & (np.abs((lev1.variables['ele'][:]) - c_iwv['ele']) < .6))
-        
+        offset_lwp, lin_lwp, quad_lwp, c_lwp, ran_lwp, sys_lwp, att = get_mvr_coeff(params['path_coeff'] + 'lwp_', lev1.variables['frequency'][:], params['algo_lwp'][:], data_type, glob_att)
+
+        index = np.where((np.abs(lev1.variables['ele'][:] - c_lwp['ele']) < .6) & (lev1.variables['pointing_flag'][:] == 1) & np.logical_or(np.equal(np.sum(lev1.variables['quality_flag'], axis = 1), 0), np.equal(np.sum(lev1.variables['quality_flag'], axis = 1), 32)))
         index = index[0][:]
-        
-        offset = offset_lwp(lev1.variables['ele'][index].data)
-        coeff_lin = lin_lwp(lev1.variables['ele'][index].data)
-        coeff_quad = quad_lwp(lev1.variables['ele'][index].data)        
-        rpg_dat['Lwp'] = offset + np.sum(coeff_lin.T * lev1.variables['tb'][index, :], axis = 1) + np.sum(coeff_quad.T * lev1.variables['tb'][index, :] **2, axis = 1)
-        rpg_dat['Lwp_random_error'] = ran_lwp(lev1.variables['ele'][index].data)
-        rpg_dat['Lwp_systematic_error'] = sys_lwp(lev1.variables['ele'][index].data)       
-        
-        offset = offset_iwv(lev1.variables['ele'][index].data)
-        coeff_lin = lin_iwv(lev1.variables['ele'][index].data)
-        coeff_quad = quad_iwv(lev1.variables['ele'][index].data)        
-        rpg_dat['Iwv'] = offset + np.sum(coeff_lin.T * lev1.variables['tb'][index, :], axis = 1) + np.sum(coeff_quad.T * lev1.variables['tb'][index, :] **2, axis = 1)
-        rpg_dat['Iwv_random_error'] = ran_iwv(lev1.variables['ele'][index].data)
-        rpg_dat['Iwv_systematic_error'] = sys_iwv(lev1.variables['ele'][index].data)   
-        
-        for ivars in lev1_vars:
-            if lev1.variables[ivars].ndim > 1:
-                rpg_dat[ivars] = lev1.variables[ivars][index, :] 
-            else:
-                rpg_dat[ivars] = lev1.variables[ivars][index]
-                
-        lwp_offset = get_lwp_offset(rpg_dat['time'], rpg_dat['Lwp'], lev1.variables['irt'][index, 0].data)
-        rpg_dat['Lwp'] = rpg_dat['Lwp'] - lwp_offset
-        
-                
-    elif data_type == '2P00':
-                
-        offset_tze, lin_tze, quad_tze, c_tze, ran_tze, sys_tze = get_mvr_coeff(params['path_coeff'] + 'tze_', lev1.variables['frequency'][:], params['algo_tze'][:], data_type)
-        offset_hze, lin_hze, quad_hze, c_hze, ran_hze, sys_hze = get_mvr_coeff(params['path_coeff'] + 'hze_', lev1.variables['frequency'][:], params['algo_hze'][:], data_type)
+        if any(index):
+            offset = offset_lwp(lev1.variables['ele'][index].data)
+            coeff_lin = lin_lwp(lev1.variables['ele'][index].data)
+            coeff_quad = quad_lwp(lev1.variables['ele'][index].data)        
+            rpg_dat['Lwp'] = offset + np.sum(coeff_lin.T * lev1.variables['tb'][index, :], axis = 1) + np.sum(coeff_quad.T * lev1.variables['tb'][index, :] **2, axis = 1)
+            rpg_dat['Lwp_random_error'] = ran_lwp(lev1.variables['ele'][index].data)
+            rpg_dat['Lwp_systematic_error'] = sys_lwp(lev1.variables['ele'][index].data)         
 
-        index = np.where(np.any(np.abs((np.ones((len(lev1.variables['ele'][:]), len(c_tze['ele']))) * c_tze['ele']) - np.transpose(np.ones((len(c_tze['ele']), len(lev1.variables['ele'][:]))) * lev1.variables['ele'][:])) < .6, axis = 1) & np.any(np.abs((np.ones((len(lev1.variables['ele'][:]), len(c_hze['ele']))) * c_hze['ele']) - np.transpose(np.ones((len(c_hze['ele']), len(lev1.variables['ele'][:]))) * lev1.variables['ele'][:])) < .6, axis = 1) & (np.sum(lev1.variables['quality_flag'], axis = 1) == 0))
+            lwp_offset = get_lwp_offset(lev1.variables['time'][index], rpg_dat['Lwp'], lev1, index)
+            rpg_dat['Lwp'] = rpg_dat['Lwp'] - lwp_offset
+            rpg_dat['Lwp_off'] = lwp_offset
+        
+        
+    elif data_type == '2I07':
+        
+        offset_iwv, lin_iwv, quad_iwv, c_iwv, ran_iwv, sys_iwv, att = get_mvr_coeff(params['path_coeff'] + 'iwv_', lev1.variables['frequency'][:], params['algo_iwv'][:], data_type, glob_att)
+        
+        index = np.where((lev1.variables['pointing_flag'][:] == 1) & np.logical_or(np.equal(np.sum(lev1.variables['quality_flag'], axis = 1), 0), np.equal(np.sum(lev1.variables['quality_flag'], axis = 1), 32)) & (np.abs((lev1.variables['ele'][:]) - c_iwv['ele']) < .6))
         index = index[0][:]
-                             
-        rpg_dat['altitude'] = c_tze['height_grid']            
-        rpg_dat['temperature'] = np.ones((len(index), c_tze['n_height_grid'])) * Fill_Value_Float
-        rpg_dat['water_vapor_vmr'] = np.ones((len(index), c_tze['n_height_grid'])) * Fill_Value_Float      
-            
-        tze_offset = offset_tze(lev1.variables['ele'][index].data)
-        tze_coeff_lin = lin_tze(lev1.variables['ele'][index].data)
-        tze_coeff_quad = quad_tze(lev1.variables['ele'][index].data) 
-        hze_offset = offset_hze(lev1.variables['ele'][index].data)
-        hze_coeff_lin = lin_hze(lev1.variables['ele'][index].data)
-        hze_coeff_quad = quad_hze(lev1.variables['ele'][index].data)         
-        
-        for ialt, _ in enumerate(c_tze['height_grid']):
+        if any(index):
+            offset = offset_iwv(lev1.variables['ele'][index].data)
+            coeff_lin = lin_iwv(lev1.variables['ele'][index].data)
+            coeff_quad = quad_iwv(lev1.variables['ele'][index].data)        
+            rpg_dat['Iwv'] = offset + np.sum(coeff_lin.T * lev1.variables['tb'][index, :], axis = 1) + np.sum(coeff_quad.T * lev1.variables['tb'][index, :] **2, axis = 1)
+            rpg_dat['Iwv_random_error'] = ran_iwv(lev1.variables['ele'][index].data)
+            rpg_dat['Iwv_systematic_error'] = sys_iwv(lev1.variables['ele'][index].data)          
+                
+                
+    elif data_type == '2P02':
+                
+        offset_tze, lin_tze, quad_tze, c_tze, ran_tze, sys_tze, att = get_mvr_coeff(params['path_coeff'] + 'tze_', lev1.variables['frequency'][:], params['algo_tze'][:], data_type, glob_att)
 
-            rpg_dat['temperature'][:, ialt] = tze_offset[ialt, :].T + np.sum(tze_coeff_lin[ialt, :, :].T * lev1.variables['tb'][index, :], axis = 1) + np.sum(tze_coeff_quad[ialt, :, :].T * lev1.variables['tb'][index, :] **2, axis = 1)
-            rpg_dat['water_vapor_vmr'][:, ialt] = hze_offset[ialt, :].T + np.sum(hze_coeff_lin[ialt, :, :].T * lev1.variables['tb'][index, :], axis = 1) + np.sum(hze_coeff_quad[ialt, :, :].T * lev1.variables['tb'][index, :] **2, axis = 1)    
-        
-        rpg_dat['temperature_random_error'] = ran_tze(lev1.variables['ele'][index].data).T
-        rpg_dat['temperature_systematic_error'] = sys_tze(lev1.variables['ele'][index].data).T    
-        rpg_dat['water_vapor_vmr_random_error'] = ran_hze(lev1.variables['ele'][index].data).T
-        rpg_dat['water_vapor_vmr_systematic_error'] = sys_hze(lev1.variables['ele'][index].data).T     
-        rpg_dat['relative_humidity'], rpg_dat['relative_humidity_random_error'] = abshum_to_rh(rpg_dat['temperature'], rpg_dat['water_vapor_vmr'], rpg_dat['temperature_random_error'], rpg_dat['water_vapor_vmr_random_error'])
-        rpg_dat['relative_humidity'], rpg_dat['relative_humidity_systematic_error'] = abshum_to_rh(rpg_dat['temperature'], rpg_dat['water_vapor_vmr'], rpg_dat['temperature_systematic_error'], rpg_dat['water_vapor_vmr_systematic_error'])          
-        
-        for ivars in lev1_vars:
-            if lev1.variables[ivars].ndim > 1:
-                rpg_dat[ivars] = lev1.variables[ivars][index, :] 
-            else:
-                rpg_dat[ivars] = lev1.variables[ivars][index] 
+        index = np.where(np.any(np.abs((np.ones((len(lev1.variables['ele'][:]), len(c_tze['ele']))) * c_tze['ele']) - np.transpose(np.ones((len(c_tze['ele']), len(lev1.variables['ele'][:]))) * lev1.variables['ele'][:])) < .6, axis = 1) & (lev1.variables['pointing_flag'][:] == 0) & np.logical_or(np.equal(np.sum(lev1.variables['quality_flag'], axis = 1), 0), np.equal(np.sum(lev1.variables['quality_flag'], axis = 1), 32)))
+        index = index[0][:]
+        if any(index):                     
+            rpg_dat['altitude'] = c_tze['height_grid']            
+            rpg_dat['temperature'] = np.ones((len(index), c_tze['n_height_grid'])) * Fill_Value_Float
+
+            tze_offset = offset_tze(lev1.variables['ele'][index].data)
+            tze_coeff_lin = lin_tze(lev1.variables['ele'][index].data)
+            tze_coeff_quad = quad_tze(lev1.variables['ele'][index].data)        
+
+            for ialt, _ in enumerate(c_tze['height_grid']):
+
+                rpg_dat['temperature'][:, ialt] = tze_offset[ialt, :].T + np.sum(tze_coeff_lin[ialt, :, :].T * lev1.variables['tb'][index, :], axis = 1) + np.sum(tze_coeff_quad[ialt, :, :].T * lev1.variables['tb'][index, :] **2, axis = 1) 
+
+            rpg_dat['temperature_random_error'] = ran_tze(lev1.variables['ele'][index].data).T
+            rpg_dat['temperature_systematic_error'] = sys_tze(lev1.variables['ele'][index].data).T            
                 
 
-#     elif data_type == '2S00':
+    elif data_type == '2P03':
+                
+        offset_hze, lin_hze, quad_hze, c_hze, ran_hze, sys_hze, att = get_mvr_coeff(params['path_coeff'] + 'hze_', lev1.variables['frequency'][:], params['algo_hze'][:], data_type, glob_att)
+
+        index = np.where(np.any(np.abs((np.ones((len(lev1.variables['ele'][:]), len(c_hze['ele']))) * c_hze['ele']) - np.transpose(np.ones((len(c_hze['ele']), len(lev1.variables['ele'][:]))) * lev1.variables['ele'][:])) < .6, axis = 1) & np.logical_or(np.equal(np.sum(lev1.variables['quality_flag'], axis = 1), 0), np.equal(np.sum(lev1.variables['quality_flag'], axis = 1), 32)))
+        index = index[0][:]
+        if any(index):                     
+            rpg_dat['altitude'] = c_hze['height_grid']            
+            rpg_dat['water_vapor_vmr'] = np.ones((len(index), c_hze['n_height_grid'])) * Fill_Value_Float      
+
+            hze_offset = offset_hze(lev1.variables['ele'][index].data)
+            hze_coeff_lin = lin_hze(lev1.variables['ele'][index].data)
+            hze_coeff_quad = quad_hze(lev1.variables['ele'][index].data)         
+
+            for ialt, _ in enumerate(c_hze['height_grid']):
+
+                rpg_dat['water_vapor_vmr'][:, ialt] = hze_offset[ialt, :].T + np.sum(hze_coeff_lin[ialt, :, :].T * lev1.variables['tb'][index, :], axis = 1) + np.sum(hze_coeff_quad[ialt, :, :].T * lev1.variables['tb'][index, :] **2, axis = 1)    
+
+            rpg_dat['water_vapor_vmr_random_error'] = ran_hze(lev1.variables['ele'][index].data).T
+            rpg_dat['water_vapor_vmr_systematic_error'] = sys_hze(lev1.variables['ele'][index].data).T       
+             
+                
+    elif data_type == '2P04':
         
-        
+        offset_tze, lin_tze, quad_tze, c_tze, ran_tze, sys_tze, att = get_mvr_coeff(params['path_coeff'] + 'tze_', lev1.variables['frequency'][:], params['algo_tze'][:], data_type, glob_att)
+        offset_hze, lin_hze, quad_hze, c_hze, ran_hze, sys_hze, att = get_mvr_coeff(params['path_coeff'] + 'hze_', lev1.variables['frequency'][:], params['algo_hze'][:], data_type, glob_att)
+
+        index = np.where(np.any(np.abs((np.ones((len(lev1.variables['ele'][:]), len(c_tze['ele']))) * c_tze['ele']) - np.transpose(np.ones((len(c_tze['ele']), len(lev1.variables['ele'][:]))) * lev1.variables['ele'][:])) < .6, axis = 1) & (lev1.variables['pointing_flag'][:] == 0) & np.logical_or(np.equal(np.sum(lev1.variables['quality_flag'], axis = 1), 0), np.equal(np.sum(lev1.variables['quality_flag'], axis = 1), 32)) & np.any(np.abs((np.ones((len(lev1.variables['ele'][:]), len(c_hze['ele']))) * c_hze['ele']) - np.transpose(np.ones((len(c_hze['ele']), len(lev1.variables['ele'][:]))) * lev1.variables['ele'][:])) < .6, axis = 1))
+        index = index[0][:]
+        if any(index):                     
+            rpg_dat['altitude'] = c_tze['height_grid']            
+            rpg_dat['temperature'] = np.ones((len(index), c_tze['n_height_grid'])) * Fill_Value_Float
+            rpg_dat['water_vapor_vmr'] = np.ones((len(index), c_hze['n_height_grid'])) * Fill_Value_Float      
+
+            tze_offset = offset_tze(lev1.variables['ele'][index].data)
+            tze_coeff_lin = lin_tze(lev1.variables['ele'][index].data)
+            tze_coeff_quad = quad_tze(lev1.variables['ele'][index].data)   
+            hze_offset = offset_hze(lev1.variables['ele'][index].data)
+            hze_coeff_lin = lin_hze(lev1.variables['ele'][index].data)
+            hze_coeff_quad = quad_hze(lev1.variables['ele'][index].data)   
+
+            for ialt, _ in enumerate(c_tze['height_grid']):
+
+                rpg_dat['temperature'][:, ialt] = tze_offset[ialt, :].T + np.sum(tze_coeff_lin[ialt, :, :].T * lev1.variables['tb'][index, :], axis = 1) + np.sum(tze_coeff_quad[ialt, :, :].T * lev1.variables['tb'][index, :] **2, axis = 1) 
+                rpg_dat['water_vapor_vmr'][:, ialt] = hze_offset[ialt, :].T + np.sum(hze_coeff_lin[ialt, :, :].T * lev1.variables['tb'][index, :], axis = 1) + np.sum(hze_coeff_quad[ialt, :, :].T * lev1.variables['tb'][index, :] **2, axis = 1)   
+
+            rpg_dat['temperature_random_error'] = ran_tze(lev1.variables['ele'][index].data).T
+            rpg_dat['temperature_systematic_error'] = sys_tze(lev1.variables['ele'][index].data).T               
+            rpg_dat['water_vapor_vmr_random_error'] = ran_hze(lev1.variables['ele'][index].data).T
+            rpg_dat['water_vapor_vmr_systematic_error'] = sys_hze(lev1.variables['ele'][index].data).T           
+
+            rpg_dat['relative_humidity'], rpg_dat['relative_humidity_random_error'] = abshum_to_rh(rpg_dat['temperature'], rpg_dat['water_vapor_vmr'], rpg_dat['temperature_random_error'], rpg_dat['water_vapor_vmr_random_error'])
+            rpg_dat['relative_humidity'], rpg_dat['relative_humidity_systematic_error'] = abshum_to_rh(rpg_dat['temperature'], rpg_dat['water_vapor_vmr'], rpg_dat['temperature_systematic_error'], rpg_dat['water_vapor_vmr_systematic_error'])             
+                
+                
     else:
-        raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
+        raise RuntimeError(['Data type '+ data_type +' not supported for file writing.']) 
         
-            
-    return rpg_dat
+    for ivars in lev1_vars:
+        if lev1.variables[ivars].ndim > 1:
+            rpg_dat[ivars] = lev1.variables[ivars][index, :] 
+        else:
+            rpg_dat[ivars] = lev1.variables[ivars][index]           
+                    
+    return rpg_dat, att
 
 
 def get_coeff_list(path_to_files: str, 
@@ -144,13 +188,14 @@ def get_coeff_list(path_to_files: str,
 def get_mvr_coeff(path: str,
                   freq: np.ndarray,
                   params: dict, 
-                  data_type: str):
+                  data_type: str, 
+                  glob_att: dict):
     "Extract retrieval coefficients for given file(s) and perform elevation angle interpolation"
 
     c_list = get_coeff_list(path, params)
     cf = dict()
     
-    if data_type == '2I00':    
+    if data_type in ('2I06', '2I07'):    
         
         cf['ele'] = np.ones(len(c_list)) * Fill_Value_Float    
         cf['freq'] = np.ones([len(freq), len(c_list)]) * Fill_Value_Float
@@ -188,7 +233,7 @@ def get_mvr_coeff(path: str,
             e_sys = interp1d([cf['ele'][0] - .6, cf['ele'][0] + .6], [cf['err_sys'][0], cf['err_sys'][0]])
             
             
-    elif data_type == '2P00':
+    elif data_type in ('2P02', '2P03', '2P04'):
         
         coeff = nc.Dataset(c_list[0])
         n_height_grid = len(coeff.variables['height_grid'])  
@@ -229,9 +274,15 @@ def get_mvr_coeff(path: str,
         
         
     else:
-        raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])        
+        raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
 
-    return f_offset, f_lin, f_quad, cf, e_ran, e_sys
+    glob_att['retrieval_type'] = coeff.regression_type
+    glob_att['retrieval_elevation_angles'] = str(cf['ele'] )
+    glob_att['retrieval_frequencies'] = str(coeff['freq'][:].data)
+    glob_att['retrieval_auxiliary_input'] = coeff.surface_mode
+    glob_att['retrieval_description'] = coeff.retrieval_version
+
+    return f_offset, f_lin, f_quad, cf, e_ran, e_sys, glob_att
 
 
 def abshum_to_rh(T: np.ndarray, 
@@ -265,29 +316,26 @@ def abshum_to_rh(T: np.ndarray,
     
 def get_lwp_offset(time: np.ndarray, 
                    lwp: np.ndarray,
-                   irt: np.ndarray) -> np.ndarray:
-    "Correct Lwp using 2min standard deviation and IRT"
-
-    lwp_df = pd.DataFrame({'Lwp': lwp}, index = pd.to_datetime(time, unit = 's'))
-    lwp_std = lwp_df.resample("2min").std()
-    lwp_mx = lwp_std.resample("20min").max()
-    loffset = '10min'
-    lwp_mx.index = lwp_mx.index + to_offset(loffset)
-    lwp_mx = df_interp(lwp_mx, lwp_df.index)  
-
-    irt_df = pd.DataFrame({'Irt': irt[:]}, index = pd.to_datetime(time, unit = 's'))
-    irt_mn = irt_df.resample("2min").mean()
-    irt_mx = irt_mn.resample("20min").max()
-    irt_mx.index = irt_mx.index + to_offset(loffset)
-    irt_mx = df_interp(irt_mx, irt_df.index)  
+                   lev1: dict,
+                   index: np.ndarray) -> np.ndarray:
+    "Correct Lwp offset using 2min standard deviation and IRT"
     
-    cld = np.ones(len(lwp))
-    cld[(irt_mx['Irt'] > 233.15) & (lwp_mx['Lwp'] > .002) | np.isnan(irt_mx['Irt']) | np.isnan(lwp_mx['Lwp'])] = 0
+    lwp_df = pd.DataFrame({'Lwp': lwp}, index = pd.to_datetime(time, unit = 's'))
+    lwp_std = lwp_df.resample("2min", origin = 'start', closed = 'left', offset = '1min', label = 'left').std()
+    lwp_mx = lwp_std.resample("20min", origin = 'start', closed = 'left', offset = '10min', label = 'left').max()
+    lwp_mx = df_interp(lwp_mx, lwp_df.index)   
+    
     lwp_n = np.copy(lwp)
-    lwp_n[cld == 0] = np.nan
+    if 'Irt' in lev1.variables:
+        irt = lev1.variables['irt'][index, 0].data
+        irt_df = pd.DataFrame({'Irt': irt[:]}, index = pd.to_datetime(time, unit = 's'))
+        irt_mx = irt_df.resample("20min", origin = 'start', closed = 'left', offset = '10min', label = 'left').max()
+        irt_mx = df_interp(irt_mx, irt_df.index) 
+        lwp_n[(irt_mx['Irt'] > 233.15) & (lwp_mx['Lwp'] > .002) | np.isnan(irt_mx['Irt']) | np.isnan(lwp_mx['Lwp'])] = np.nan
+    else:
+        lwp_n[(lwp_mx['Lwp'] > .002) | np.isnan(lwp_mx['Lwp'])] = np.nan
     lwp_df = pd.DataFrame({'Lwp': lwp_n}, index = pd.to_datetime(time, unit = 's'))
-    lwp_mn = lwp_df.resample("20min").mean()
-    lwp_mn.index = lwp_mn.index + to_offset(loffset)
+    lwp_mn = lwp_df.resample("20min", origin = 'start', closed = 'left', offset = '10min', label = 'left').mean()
     lwp_mn = df_interp(lwp_mn, lwp_df.index)
     lwp_mn = lwp_mn.interpolate(method = 'linear')
     lwp_mn = lwp_mn.fillna(method = 'bfill')

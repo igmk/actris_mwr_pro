@@ -4,6 +4,8 @@ import numpy.ma as ma
 import netCDF4
 from level1.lev1_meta_nc import MetaData
 import utils
+import datetime
+
 
 class RpgArray:
     """Stores netCDF4 variables, numpy arrays and scalars as RpgArrays.
@@ -85,6 +87,7 @@ class Rpg:
     
     def __init__(self, raw_data: dict):
         self.raw_data = raw_data
+        self.date = self._get_date()
         self.data = {}
         self.data = self._init_data()
 
@@ -94,11 +97,33 @@ class Rpg:
             data[key] = RpgArray(self.raw_data[key], key)
         return data
     
+    def _get_date(self):
+        epoch = datetime.datetime(1970, 1, 1).timestamp()
+        time_median = float(np.ma.median(self.raw_data['time']))
+        time_median += epoch
+        return datetime.datetime.utcfromtimestamp(time_median).strftime('%Y-%m-%d')     
+    
+    def find_valid_date(self):
+        time = self.data['time'].data[:]
+        n_time = len(time)
+        date_f = np.zeros(n_time, np.int32)
+        for i, t in enumerate(time):
+            date_str = '-'.join(utils.seconds2date(t)[:3])
+            if date_str == self.date:
+                date_f[i] = 1          
+        ind = np.squeeze(np.where(date_f == 1))
+        if len(ind) < 1:
+            raise RuntimeError(['Error: no valid data for date: ' + self.date])
+        for key, array in self.data.items():
+            if not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim < 2:
+                self.data[key].data = array.data[ind]    
+            elif not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim > 1:
+                self.data[key].data = array.data[ind, :]     
+    
     def sort_timestamps(self):
         time = self.data['time'].data[:]
         n_time = len(time)
         ind = time.argsort()
-        self.data['time'].data[:] = time[ind]
         for key, array in self.data.items():
             if not utils.isscalar(array.data) and array.data.ndim < 2 and len(array.data) == n_time:
                 self.data[key].data = array[ind]
@@ -113,8 +138,8 @@ class Rpg:
             if not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim < 2:
                 self.data[key].data = array.data[ind]    
             elif not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim > 1:
-                self.data[key].data = array.data[ind, :]    
-    
+                self.data[key].data = array.data[ind, :]               
+                
     
 def save_rpg(rpg: Rpg,
              output_file: str,
@@ -135,23 +160,30 @@ def save_rpg(rpg: Rpg,
     elif data_type == '1B21':
         dims = {'time': len(rpg.data['time'][:])}        
     elif data_type == '1C01':
-        dims = {'time': len(rpg.data['time'][:]),
-                'frequency': len(rpg.data['tb'][:].T),
-                'n_receivers': len(rpg.data['t_rec'][:].T),
-                'ir_wavelength': len(rpg.data['irt'][:].T),
-                'n_sidebands': params['sideband_count'],
-                'time_bnds': 2}
-    elif data_type == '2P00':
+        if 'irt' in rpg.data:
+            dims = {'time': len(rpg.data['time'][:]),
+                    'frequency': len(rpg.data['tb'][:].T),
+                    'n_receivers': len(rpg.data['t_rec'][:].T),
+                    'ir_wavelength': len(rpg.data['irt'][:].T),
+                    'n_sidebands': params['sideband_count'],
+                    'time_bnds': 2}
+        else:
+            dims = {'time': len(rpg.data['time'][:]),
+                    'frequency': len(rpg.data['tb'][:].T),
+                    'n_receivers': len(rpg.data['t_rec'][:].T),
+                    'n_sidebands': params['sideband_count'],
+                    'time_bnds': 2}
+    elif data_type in ('2P02', '2P03', '2P04'):
         dims = {'time': len(rpg.data['time'][:]),
                'time_bnds': 2,
                'altitude' : len(rpg.data['altitude'][:])}
-    elif data_type == '2I00':
+    elif data_type in ('2I06', '2I07'):
         dims = {'time': len(rpg.data['time'][:]),
                'time_bnds': 2}
-    elif data_type == '2S00':
-        dims = {'time': len(rpg.data['time'][:]),
-               'time_bnds': 2,
-               'n_freq_spectrum' : len(rpg.data['spectrum'][:])}
+    # elif data_type == '2S00':
+    #     dims = {'time': len(rpg.data['time'][:]),
+    #            'time_bnds': 2,
+    #            'n_freq_spectrum' : len(rpg.data['spectrum'][:])}
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
 
@@ -197,17 +229,12 @@ def _get_dimensions(nc: netCDF4.Dataset,
 def _write_vars2nc(nc: netCDF4.Dataset, 
                    cloudnet_variables: dict) -> None:
     """Iterates over RPG instances and write to netCDF file."""
-    
+
     for obj in cloudnet_variables.values():
         if obj.data_type == 'f4':
             fill_value = -999.
         else:
             fill_value = -99
-            
-        # if ma.isMaskedArray(obj.data):
-        #     fill_value = netCDF4.default_fillvals[obj.data_type]
-        # else:
-        #     fill_value = False
 
         size = obj.dimensions or _get_dimensions(nc, obj.data)
         if obj.name == 'time_bounds':

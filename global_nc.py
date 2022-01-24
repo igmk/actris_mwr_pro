@@ -71,9 +71,9 @@ GLOBAL_ALL = {
         description='Instrument calibration status',
     ),
     'date_of_last_absolute_calibration': SiteConfig(
-        description='Time of last (automatic or manual) absolute calibration; LN2 or sky tipping',
+        description='Time of last (automatic or manual) absolute calibration; LN2 or sky tipping as YYYYMMDD',
     ),
-    'date_of_last_covariance_matrix': SiteConfig(
+    'date_of_last_covariance_matrix as YYYYMMDD': SiteConfig(
         description='Time of last covariance update',
     ),
     'type_of_automatic_calibrations_performed': SiteConfig(

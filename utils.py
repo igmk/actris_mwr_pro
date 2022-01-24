@@ -2,12 +2,15 @@
 
 from datetime import datetime, timezone
 import time
+import pytz
 import numpy.ma as ma
 import numpy as np
 import pandas as pd
+from typing import Optional, Tuple
 
 
-def epoch2unix(epoch_time, time_ref):    
+def epoch2unix(epoch_time, time_ref, 
+                 epoch: Optional[tuple] = (2001, 1, 1)):    
     """Converts seconds since (2001,1,1,0,0,0) to unix time in UTC.
     
     Args:
@@ -18,7 +21,7 @@ def epoch2unix(epoch_time, time_ref):
         
     """
 
-    delta = (datetime(2001,1,1,0,0,0) - datetime(1970,1,1,0,0,0)).total_seconds()
+    delta = (datetime(*epoch) - datetime(1970,1,1,0,0,0)).total_seconds()
     unix_time = epoch_time + int(delta)
     if time_ref == 0:
         for index in range(len(unix_time)):
@@ -75,6 +78,7 @@ def setbit(array: np.ndarray,
 def df_interp(df, new_index):
     """Return a new DataFrame with all columns values interpolated
     to the new_index values."""
+    
     df_out = pd.DataFrame(index=new_index)
     df_out.index.name = df.index.name
 
@@ -82,3 +86,18 @@ def df_interp(df, new_index):
         df_out[colname] = np.interp(new_index, df.index, col)
 
     return df_out
+
+
+def seconds2date(time_in_seconds: float, 
+                 epoch: Optional[tuple] = (1970, 1, 1)) -> list:
+    """Converts seconds since some epoch to datetime (UTC).
+    Args:
+        time_in_seconds: Seconds since some epoch.
+        epoch: Epoch, default is (1970, 1, 1) (UTC).
+    Returns:
+        [year, month, day, hours, minutes, seconds] formatted as '05' etc (UTC).
+    """
+    
+    epoch_in_seconds = datetime.timestamp(datetime(*epoch, tzinfo=pytz.utc))
+    timestamp = time_in_seconds + epoch_in_seconds
+    return datetime.utcfromtimestamp(timestamp).strftime('%Y %m %d %H %M %S').split()

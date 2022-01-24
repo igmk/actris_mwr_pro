@@ -1,41 +1,26 @@
 """ This module contains all functions to read in RPG MWR binary files """
 import numpy as np
-import glob
 import datetime
 import utils
 
-def get_rpg_bin(path_to_files: str,
-                extension: str) -> np.ndarray:    
+
+def get_rpg_bin(file_list: list) -> np.ndarray:    
     """ This function reads one day of a RPG MWR binary file type and concatenates the data. 
     Args:
-        path_to_files: Folder containing one day of a RPG MWR binary file type.
-        extension: File extension defining the binary file type. 
+        file_list: List of files for one day of a RPG MWR binary file type.
         
     Returns:
         Data array
-      
-    Raises:
-        RuntimeError: Failed to read or process RPG MWR binary files.
     
     Example:
         >>> from level1.rpg_mwr import get_rpg_bin
-        >>> get_rpg_bin('/path/to/files/','brt') 
+        >>> get_rpg_bin('file_list') 
        
     """
     
-    file_list = get_file_list(path_to_files, extension)
     rpg_bin = RpgBin(file_list)
     return rpg_bin
     
-    
-def get_file_list(path_to_files: str, 
-                  extension: str):
-    
-    f_list = sorted(glob.glob(path_to_files + '*.' + extension))
-    if len(f_list) < 1:
-        raise RuntimeError(['Error: no binary files with extension ' + extension +' found in directory ' + path_to_files])
-    return f_list
-
 
 def stack_files(file_list):    
     """ This function calls extension specific reader and stacks data and header. """
@@ -61,8 +46,8 @@ def stack_files(file_list):
     for file in file_list:
         
         header_tmp, data_tmp = eval(reader_name + '(file)')
-        _stack_header(header_tmp,header,np.add)        
-        _stack_data(data_tmp,data,np.concatenate)
+        _stack_header(header_tmp, header, np.add)        
+        _stack_data(data_tmp,data, np.concatenate)
 
     return header, data
 
@@ -70,8 +55,8 @@ def stack_files(file_list):
 class RpgBin:
     def __init__(self, file_list):
         self.header, self.raw_data = stack_files(file_list)
+        self.raw_data['time'] = utils.epoch2unix(self.raw_data['time'], self.header['_time_ref'])
         self.date = self._get_date()
-        self.raw_data['time'] = utils.epoch2unix(self.raw_data['time'],self.header['_time_ref'])
         self.data = {}
         self._init_data()
         
@@ -80,7 +65,7 @@ class RpgBin:
             self.data[key] = self.raw_data[key]
         
     def _get_date(self):
-        epoch = datetime.datetime(2001, 1, 1).timestamp()
+        epoch = datetime.datetime(1970, 1, 1).timestamp()
         time_median = float(np.ma.median(self.raw_data['time']))
         time_median += epoch
         return datetime.datetime.utcfromtimestamp(time_median).strftime('%Y %m %d').split()    
