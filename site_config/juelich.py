@@ -17,10 +17,10 @@ params = {
     # integration time of measurements in seconds
     'int_time': 1, 
 
-    # Bandwidth of the central frequency in GHz (center frequency of single of upper side-band)
+    # bandwidth of the central frequency in GHz (center frequency of single of upper side-band)
     'bandwidth': np.array([230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 600, 1000, 2000]),
 
-    # Single, double, or double-double sideband (1, 2, 4 are possible values)
+    # single, double, or double-double sideband (1, 2, 4 are possible values)
     'sideband_count': 1,
 
     # 56.xx +/- X +/- Y
@@ -60,15 +60,23 @@ params = {
     # Bit 6: Rain flag\n'
     # Bit 7: Solar flag\n'
     # Bit 8: TB offset threshold'
-    'flags_active': [1,1,1,0,1,1,1,0],
+    'flags_active': [1, 1, 1, 1, 1, 1, 1, 0],
 
-    # Retrieval coefficient files
-    # Specify retrieval algorithm parameter path and files to be used in retrieving Level 2 products here.,
+    # retrieval coefficient files
+    # specify retrieval coefficient path and files to be used in retrieving Level 2 products here
     'path_coeff': '/home/hatpro/mwr_pro_jue/mwr_pro/retrievals/',
     'algo_lwp': ['deb_rt00_90'],
     'algo_iwv': ['deb_rt00_90'],
-    'algo_tze': ['deb_rt00_90', 'deb_rt00_80', 'deb_rt00_75', 'deb_rt00_71', 'deb_rt00_61', 'deb_rt00_60', 'deb_rt00_52', 'deb_rt00_45', 'deb_rt00_42', 'deb_rt00_32', 'deb_rt00_30', 'deb_rt00_23'],
+    'algo_tel': ['deb_rt00'],
     'algo_hze': ['deb_rt00_90', 'deb_rt00_80', 'deb_rt00_75', 'deb_rt00_71', 'deb_rt00_61', 'deb_rt00_60', 'deb_rt00_52', 'deb_rt00_45', 'deb_rt00_42', 'deb_rt00_32', 'deb_rt00_30', 'deb_rt00_23'],
+    
+    # spectral consistency coefficient files
+    # specify spectral consistency coefficient path and files to be used in Level 1 quality control here
+    'path_spec': '/home/hatpro/idl/tbx_ret/',
+    'algo_spec': ['tbx_deb_rt00_90'],
+    'threshold_spec': np.array([2., 1., 1., 1., 1., 1., 2., 3., 3.5, 4., 2.5, 1., 1.5, 1.]),
+    'factor_spec': np.array([.5, 1., 1., 1., 1., 1., 1., 1.5, 1.5, 1., 1., 1., 1., 1.]),
+    
 }
 
 global_specs = {
