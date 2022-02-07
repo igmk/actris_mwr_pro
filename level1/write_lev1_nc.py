@@ -32,15 +32,13 @@ def lev1_to_nc(site: str,
     """
 
 
-    global_attributes, params = get_site_specs(site, data_type)
     file_list_hkd = get_file_list(path_to_files, path_to_prev, 'hkd')
     if any(file_list_hkd):
+        global_attributes, params = get_site_specs(site, data_type)
         rpg_bin = prepare_data(path_to_files, path_to_prev, data_type, params)
         apply_qc(rpg_bin.data, params)    
         hatpro = rpg_mwr.Rpg(rpg_bin.data)
-        hatpro.sort_timestamps()
-        hatpro.remove_duplicate_timestamps()
-        hatpro.find_valid_date()
+        hatpro.find_valid_times()
         hatpro.data = get_data_attributes(hatpro.data, data_type)
         rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params)
     else:
@@ -205,25 +203,22 @@ def _add_blb(brt: dict,
     tb_add = np.ones( [blb.header['n'] * blb.header['_n_ang'], blb.header['_n_f']], np.float32) * Fill_Value_Float
     rain_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.int32) * Fill_Value_Int
     
-    bl_mod = np.ones(len(hkd.data['time'])) * Fill_Value_Int
-    for i in range(len(hkd.data['time'])):
-        x = bin(hkd.data['status'][i])
-        bl_mod[i] = x[-19]
+    bl_mod = np.ones(len(hkd.data['time']))*-99
+    mul_ang = np.where(hkd.data['status'][:] & (1<<18))
+    bl_mod[mul_ang] = 1
 
-    for time in range(blb.header['n']):
+    for time_ind, time_blb in enumerate(blb.data['time']):
         
-        ind_scan = np.squeeze(np.where((hkd.data['time'] > blb.data['time'][time] - params['scan_time']) & (hkd.data['time'] <= blb.data['time'][time]) & (bl_mod == 1)))  
+        ind_scan = np.squeeze(np.where((hkd.data['time'] >= time_blb - 1.5 * params['scan_time']) & (hkd.data['time'] <= time_blb) & (bl_mod == 1)))  
 
         if np.any(ind_scan):
-            time_add[xx] = hkd.data['time'][ind_scan[0]]
-            time_add[xx + 1:xx + blb.header['_n_ang']] = np.linspace(hkd.data['time'][ind_scan[0]] + 1, hkd.data['time'][ind_scan[-1]], blb.header['_n_ang'] - 1)
+            
+            time_add[xx:xx + blb.header['_n_ang'] - 1] = np.linspace(hkd.data['time'][ind_scan[0]], hkd.data['time'][ind_scan[-2]], blb.header['_n_ang'] - 1)
+            time_add[xx + blb.header['_n_ang'] - 1] = hkd.data['time'][ind_scan[-1]]
             azi_add[xx:xx + blb.header['_n_ang']] = 0.
-            rain_add[xx + blb.header['_n_ang'] - 1] = blb.data['rf_mod'][time] & 1
-            tb_add[xx, :] = np.squeeze(blb.data['tb'][time, :, blb.header['_n_ang'] - 1]) 
-            ele_add[xx] = blb.header['_ang'][-1]
-            xx += 1
-            for ang in range(blb.header['_n_ang'] - 1):              
-                tb_add[xx, :] = np.squeeze(blb.data['tb'][time, :, ang])
+            rain_add[xx:xx + blb.header['_n_ang']] = blb.data['rf_mod'][time_ind] & 1
+            for ang in range(blb.header['_n_ang']):              
+                tb_add[xx, :] = np.squeeze(blb.data['tb'][time_ind, :, ang])
                 ele_add[xx] = blb.header['_ang'][ang]
                 xx += 1
 
@@ -247,8 +242,8 @@ def _add_blb(brt: dict,
     brt.header['n'] = brt.header['n'] + blb.header['n'] * blb.header['_n_ang']
     
     
-def _azi_correction(brt: dict,
-                  params: dict) -> None:
+def _azi_correction(brt: dict, 
+                    params: dict) -> None:
     """Azimuth correction (transform to "geographical" coordinates)"""
     
     ind180 = np.where((brt['azi'][:] >= 0) & (brt['azi'][:] <= 180))

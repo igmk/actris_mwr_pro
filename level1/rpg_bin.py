@@ -94,7 +94,7 @@ def read_brt(file_name: str) -> dict:
                 
                 header_names = ['_code', 'n', '_time_ref', '_n_f', '_f', '_xmin', '_xmax']                 
                 header_values = [code, n, time_ref, n_f, f, xmin, xmax]
-                header = dict(zip(header_names,header_values))
+                header = dict(zip(header_names, header_values))
                 return header
             
             def _create_variables():                
@@ -191,7 +191,7 @@ def read_met(file_name: str) -> dict:
                 
                 header_names = ['_code','n', '_n_add', '_n_sen', '_xmin', '_xmax', '_time_ref']                
                 header_values = [code, n, n_add, n_sen, xmin, xmax, time_ref]
-                header = dict(zip(header_names,header_values))
+                header = dict(zip(header_names, header_values))
                 return header                
             
             def _create_variables():                
@@ -255,7 +255,7 @@ def read_irt(file_name: str) -> dict:
                     
                 header_names = ['_code','n','_xmin','_xmax','_time_ref','_n_f','_f']                    
                 header_values = [code, n, xmin, xmax, time_ref, n_f, f]
-                header = dict(zip(header_names,header_values))
+                header = dict(zip(header_names, header_values))
                 return header 
             
             def _create_variables():                
@@ -340,7 +340,7 @@ def read_blb(file_name: str) -> dict:
                 
                 header_names = ['_code','n','_xmin','_xmax','_time_ref','_n_f','_f','_n_ang','_ang']
                 header_values = [code, n, xmin, xmax, time_ref, n_f, f, n_ang, ang]
-                header = dict(zip(header_names,header_values))
+                header = dict(zip(header_names, header_values))
                 return header                 
 
             def _create_variables():                
@@ -463,7 +463,7 @@ def read_spc(file_name: str) -> dict:
                 
                 header_names = ['_code', 'n', '_time_ref', '_n_f', '_f', '_xmin', '_xmax']                 
                 header_values = [code, n, time_ref, n_f, f, xmin, xmax]
-                header = dict(zip(header_names,header_values))
+                header = dict(zip(header_names, header_values))
                 return header
             
             def _create_variables():                
