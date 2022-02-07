@@ -103,9 +103,24 @@ class Rpg:
         time_median += epoch
         return datetime.datetime.utcfromtimestamp(time_median).strftime('%Y-%m-%d')     
     
-    def find_valid_date(self):
+    def find_valid_times(self):
         time = self.data['time'].data[:]
         n_time = len(time)
+        # sort timestamps
+        ind = time.argsort()
+        for key, array in self.data.items():
+            if not utils.isscalar(array.data) and array.data.ndim < 2 and len(array.data) == n_time:
+                self.data[key].data = array[ind]
+            elif not utils.isscalar(array.data) and array.data.ndim > 1 and len(array.data) == n_time:
+                self.data[key].data = array[ind, :]    
+        # remove duplicate timestamps        
+        _, ind = np.unique(time, return_index=True)
+        for key, array in self.data.items():
+            if not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim < 2:
+                self.data[key].data = array.data[ind]    
+            elif not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim > 1:
+                self.data[key].data = array.data[ind, :] 
+        # find valid date        
         date_f = np.zeros(n_time, np.int32)
         for i, t in enumerate(time):
             date_str = '-'.join(utils.seconds2date(t)[:3])
@@ -118,27 +133,7 @@ class Rpg:
             if not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim < 2:
                 self.data[key].data = array.data[ind]    
             elif not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim > 1:
-                self.data[key].data = array.data[ind, :]     
-    
-    def sort_timestamps(self):
-        time = self.data['time'].data[:]
-        n_time = len(time)
-        ind = time.argsort()
-        for key, array in self.data.items():
-            if not utils.isscalar(array.data) and array.data.ndim < 2 and len(array.data) == n_time:
-                self.data[key].data = array[ind]
-            elif not utils.isscalar(array.data) and array.data.ndim > 1 and len(array.data) == n_time:
-                self.data[key].data = array[ind, :]
-    
-    def remove_duplicate_timestamps(self):
-        time = self.data['time'].data[:]
-        n_time = len(time)
-        _, ind = np.unique(time, return_index=True)
-        for key, array in self.data.items():
-            if not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim < 2:
-                self.data[key].data = array.data[ind]    
-            elif not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim > 1:
-                self.data[key].data = array.data[ind, :]               
+                self.data[key].data = array.data[ind, :]             
                 
     
 def save_rpg(rpg: Rpg,

@@ -7,6 +7,7 @@ import numpy.ma as ma
 import numpy as np
 import pandas as pd
 from typing import Optional, Tuple
+import glob
 
 
 def epoch2unix(epoch_time, time_ref, 
@@ -101,3 +102,15 @@ def seconds2date(time_in_seconds: float,
     epoch_in_seconds = datetime.timestamp(datetime(*epoch, tzinfo=pytz.utc))
     timestamp = time_in_seconds + epoch_in_seconds
     return datetime.utcfromtimestamp(timestamp).strftime('%Y %m %d %H %M %S').split()
+
+
+def get_coeff_list(path_to_files: str, 
+                   params: dict):
+    "Returns list of .nc coefficient file(s)"
+    
+    c_list = []
+    for i, name in enumerate(params):        
+        c_list = c_list + sorted(glob.glob((path_to_files + name) + '*.nc'))
+    if len(c_list) < 1:
+        raise RuntimeError(['Error: no coefficient files found in directory ' + path_to_files])
+    return c_list
