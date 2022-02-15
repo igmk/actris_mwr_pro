@@ -73,11 +73,11 @@ GLOBAL_ALL = {
     'date_of_last_absolute_calibration': SiteConfig(
         description='Time of last (automatic or manual) absolute calibration; LN2 or sky tipping as YYYYMMDD',
     ),
-    'date_of_last_covariance_matrix as YYYYMMDD': SiteConfig(
-        description='Time of last covariance update',
+    'date_of_last_covariance_matrix': SiteConfig(
+        description='Time of last covariance update as YYYYMMDD',
     ),
-    'type_of_automatic_calibrations_performed': SiteConfig(
-        description='Description of the type of automatic calibrations performed including information at calibration interval and respective integration time',
+    'type_of_automatic_calibrations': SiteConfig(
+        description='Type of automatic calibrations including information on calibration interval and respective integration time',
     ),
     'factory_history': SiteConfig(
         description='Logbook repair/replacement work performed',
@@ -90,6 +90,9 @@ GLOBAL_ALL = {
     ),
     'ir_instrument_fabrication_year': SiteConfig(
         description='Fabrication year of the infrared radiometer',
+    ),
+    'ir_accuracy': SiteConfig(
+        description='Total absolute calibration uncertainty of infrared brightness temperature, one standard deviation. Unit: K',    
     ),
     'met_instrument_manufacturer': SiteConfig(
         description='Manufacturer of the weather station',
@@ -117,20 +120,5 @@ GLOBAL_ALL = {
     ),
     'wind_speed_accuracy': SiteConfig(
         description='Wind speed accuracy. Unit: m/s.',
-    ),    
-    'retrieval_type': SiteConfig(
-        description='',
-    ),
-    'retrieval_elevation_angles': SiteConfig(
-        description='',
-    ),
-    'retrieval_frequencies': SiteConfig(
-        description='',
-    ),    
-    'retrieval_auxiliary_input': SiteConfig(
-        description='',
-    ),
-    'retrieval_description': SiteConfig(
-        description='',
-    ),    
+    ),      
 }

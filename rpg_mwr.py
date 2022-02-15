@@ -101,39 +101,44 @@ class Rpg:
         epoch = datetime.datetime(1970, 1, 1).timestamp()
         time_median = float(np.ma.median(self.raw_data['time']))
         time_median += epoch
-        return datetime.datetime.utcfromtimestamp(time_median).strftime('%Y-%m-%d')     
+        return datetime.datetime.utcfromtimestamp(time_median).strftime('%Y-%m-%d')      
     
     def find_valid_times(self):
+        # sort timestamps
         time = self.data['time'].data[:]
         n_time = len(time)
-        # sort timestamps
         ind = time.argsort()
-        for key, array in self.data.items():
-            if not utils.isscalar(array.data) and array.data.ndim < 2 and len(array.data) == n_time:
-                self.data[key].data = array[ind]
-            elif not utils.isscalar(array.data) and array.data.ndim > 1 and len(array.data) == n_time:
-                self.data[key].data = array[ind, :]    
-        # remove duplicate timestamps        
+        self._screen(ind)
+                
+        # remove duplicate timestamps
+        time = self.data['time'].data[:]
+        n_time = len(time)
         _, ind = np.unique(time, return_index=True)
-        for key, array in self.data.items():
-            if not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim < 2:
-                self.data[key].data = array.data[ind]    
-            elif not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim > 1:
-                self.data[key].data = array.data[ind, :] 
+        self._screen(ind)
+                
         # find valid date        
+        time = self.data['time'].data[:]
+        n_time = len(time)        
         date_f = np.zeros(n_time, np.int32)
         for i, t in enumerate(time):
             date_str = '-'.join(utils.seconds2date(t)[:3])
             if date_str == self.date:
                 date_f[i] = 1          
         ind = np.squeeze(np.where(date_f == 1))
+        self._screen(ind)
         if len(ind) < 1:
-            raise RuntimeError(['Error: no valid data for date: ' + self.date])
+            raise RuntimeError(['Error: no valid data for date: ' + self.date])        
+        
+    def _screen(self, ind: np.ndarray):
+        n_time = len(self.data['time'].data)
         for key, array in self.data.items():
-            if not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim < 2:
-                self.data[key].data = array.data[ind]    
-            elif not utils.isscalar(array.data) and len(array.data) == n_time and array.data.ndim > 1:
-                self.data[key].data = array.data[ind, :]             
+            data = array.data
+            if data.ndim > 0 and data.shape[0] == n_time:
+                if data.ndim == 1:
+                    screened_data = data[ind]
+                else:
+                    screened_data = data[ind, :]
+                self.data[key].data = screened_data           
                 
     
 def save_rpg(rpg: Rpg,
@@ -159,8 +164,8 @@ def save_rpg(rpg: Rpg,
             dims = {'time': len(rpg.data['time'][:]),
                     'frequency': len(rpg.data['tb'][:].T),
                     'n_receivers': len(rpg.data['t_rec'][:].T),
+                    'n_sidebands': params['sideband_count'],                    
                     'ir_wavelength': len(rpg.data['irt'][:].T),
-                    'n_sidebands': params['sideband_count'],
                     'time_bnds': 2}
         else:
             dims = {'time': len(rpg.data['time'][:]),
@@ -168,7 +173,7 @@ def save_rpg(rpg: Rpg,
                     'n_receivers': len(rpg.data['t_rec'][:].T),
                     'n_sidebands': params['sideband_count'],
                     'time_bnds': 2}
-    elif data_type in ('2P02', '2P03', '2P04'):
+    elif data_type in ('2P01', '2P02', '2P03', '2P04'):
         dims = {'time': len(rpg.data['time'][:]),
                'time_bnds': 2,
                'altitude' : len(rpg.data['altitude'][:])}

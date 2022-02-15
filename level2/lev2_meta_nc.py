@@ -19,7 +19,7 @@ def get_data_attributes(rpg_variables: dict,
         att = get_data_attributes('data','data_type')    
     """
     
-    if data_type in ('2P02', '2P03', '2P04', '2I06', '2I07'):
+    if data_type in ('2P01', '2P02', '2P03', '2P04', '2I06', '2I07'):
         
         attributes = dict(ATTRIBUTES_COM, **eval('ATTRIBUTES_'+ data_type))
         for key in list(rpg_variables):
@@ -86,6 +86,28 @@ ATTRIBUTES_COM = {
         units='degrees',
         comment='0=horizon, 90=zenith',
     ),
+}
+
+
+ATTRIBUTES_2P01 = {
+    'altitude': MetaData(
+        long_name='Altitude above sea level',
+        units='m',
+    ),
+    'temperature': MetaData(
+        long_name='Retrieved temperature profile',
+        units='K',
+    ),
+    'temperature_random_error': MetaData(
+        long_name='Random uncertainty of retrieved temperature profile',
+        units='K',
+        comment='specify here source of this variable',
+    ),
+    'temperature_systematic_error': MetaData(
+        long_name='Systematic uncertainty of retrieved temperature profile',
+        units='K',
+        comment='specify here source of this variable',
+    ),             
 }
 
 
@@ -170,8 +192,8 @@ ATTRIBUTES_2I06 = {
         units='mm',
         comment='specify here source of this variable',
     ),     
-    'Lwp_off': MetaData(
-        long_name='Systematic uncertainty of retrieved column-integrated liquid water path',
+    'Lwp_offset': MetaData(
+        long_name='Subtracted offset correction of retrieved column-integrated liquid water path',
         units='mm',
         comment='specify here source of this variable',
     ),      

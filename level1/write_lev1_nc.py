@@ -1,7 +1,8 @@
-from site_config.read_specs import get_site_specs
+from read_specs import get_site_specs
 from level1.rpg_bin import get_rpg_bin
 from level1.lev1_meta_nc import get_data_attributes
 from level1.quality_control import apply_qc
+from level1.met_quality_control import apply_met_qc
 import rpg_mwr
 import numpy as np
 from typing import Optional
@@ -36,7 +37,10 @@ def lev1_to_nc(site: str,
     if any(file_list_hkd):
         global_attributes, params = get_site_specs(site, data_type)
         rpg_bin = prepare_data(path_to_files, path_to_prev, data_type, params)
-        apply_qc(rpg_bin.data, params)    
+        if data_type in ('1B01', '1C01'):
+            apply_qc(site, rpg_bin.data, params)    
+        if data_type in ('1B21', '1C01'):
+            apply_met_qc(rpg_bin.data, params)
         hatpro = rpg_mwr.Rpg(rpg_bin.data)
         hatpro.find_valid_times()
         hatpro.data = get_data_attributes(hatpro.data, data_type)
@@ -72,7 +76,7 @@ def prepare_data(path_to_files: str,
             rpg_bin.data['sideband_IF_separation'] = params['sideband_IF_separation']
             rpg_bin.data['freq_shift'] = params['freq_shift']
             rpg_bin.data['time_bounds'] = add_time_bounds(rpg_bin.data['time'], params['int_time'])
-            rpg_bin.data['pointing_flag'] = np.ones(len(rpg_bin.data['time']), np.int32)
+            rpg_bin.data['pointing_flag'] = np.zeros(len(rpg_bin.data['time']), np.int32)
             
             file_list_blb = get_file_list(path_to_files, path_to_prev, 'blb')
             if any(file_list_blb):
@@ -108,11 +112,15 @@ def prepare_data(path_to_files: str,
             raise RuntimeError(['Error: no binary files with extension .brt found in directory ' + path_to_files])
         
     elif data_type == '1B11':
-        rpg_bin = get_rpg_bin(path_to_files, path_to_prev, 'irt')
+        file_list_irt = get_file_list(path_to_files, path_to_prev, 'irt') 
+        rpg_bin = get_rpg_bin(file_list_irt)
         rpg_bin.data['ir_wavelength'] = rpg_bin.header['_f']
+        # rpg_bin.data['ir_bandwidth'] = params['ir_bandwidth']
+        # rpg_bin.data['ir_beamwidth'] = params['ir_beamwidth']
 
     elif data_type == '1B21':
-        rpg_bin = get_rpg_bin(path_to_files, path_to_prev, 'met')
+        file_list_met = get_file_list(path_to_files, path_to_prev, 'met')
+        rpg_bin = get_rpg_bin(file_list_met)
         if (int(rpg_bin.header['_n_sen'],2) & 1) != 0:
             rpg_bin.data['wind_speed'] = rpg_bin.data['adds'][:,0] / 3.6
         if (int(rpg_bin.header['_n_sen'],2) & 2) != 0:
@@ -138,11 +146,11 @@ def _append_hkd(file_list_hkd: list,
     
     hkd = get_rpg_bin(file_list_hkd)
     
-    if params['station_latitude'] != Fill_Value_Float:
+    if all(hkd.data['station_latitude'] == Fill_Value_Float):
         _add_interpol1(rpg_bin.data, np.ones(len(hkd.data['time'])) * params['station_latitude'], hkd.data['time'], 'station_latitude')                       
     else:
         _add_interpol1(rpg_bin.data, hkd.data['station_latitude'], hkd.data['time'], 'station_latitude')                       
-    if params['station_longitude'] != Fill_Value_Float:            
+    if all(hkd.data['station_longitude'] == Fill_Value_Float):           
         _add_interpol1(rpg_bin.data, np.ones(len(hkd.data['time'])) * params['station_longitude'], hkd.data['time'], 'station_longitude')        
     else:        
         _add_interpol1(rpg_bin.data, hkd.data['station_longitude'], hkd.data['time'], 'station_longitude')   
@@ -237,7 +245,7 @@ def _add_blb(brt: dict,
     brt.data['tb'] = brt.data['tb'][ind,:]
     brt.data['rain'] = np.concatenate((brt.data['rain'], rain_add))
     brt.data['rain'] = brt.data['rain'][ind]
-    brt.data['pointing_flag'] = np.concatenate((brt.data['pointing_flag'], np.zeros(len(time_add), np.int32)))
+    brt.data['pointing_flag'] = np.concatenate((brt.data['pointing_flag'], np.ones(len(time_add), np.int32)))
     brt.data['pointing_flag'] = brt.data['pointing_flag'][ind]
     brt.header['n'] = brt.header['n'] + blb.header['n'] * blb.header['_n_ang']
     

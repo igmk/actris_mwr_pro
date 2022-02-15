@@ -104,13 +104,11 @@ def seconds2date(time_in_seconds: float,
     return datetime.utcfromtimestamp(timestamp).strftime('%Y %m %d %H %M %S').split()
 
 
-def get_coeff_list(path_to_files: str, 
-                   params: dict):
+def get_coeff_list(site: str,
+                   prefix: str):
     "Returns list of .nc coefficient file(s)"
     
-    c_list = []
-    for i, name in enumerate(params):        
-        c_list = c_list + sorted(glob.glob((path_to_files + name) + '*.nc'))
+    c_list = sorted(glob.glob('site_config/' + site + '/coefficients/' + prefix + '*.nc'))
     if len(c_list) < 1:
         raise RuntimeError(['Error: no coefficient files found in directory ' + path_to_files])
     return c_list

@@ -83,14 +83,25 @@ ATTRIBUTES_COM = {
 DEFINITIONS_1B01 = {
     'quality_flag':
         ('\n'
-         'Bit 1: Missing TB-value\n'
-         'Bit 2: TB threshold (lower range)\n'
-         'Bit 3: TB threshold (upper range)\n'
-         'Bit 4: Spectral consistency threshold\n'
-         'Bit 5: Receiver sanity\n'
-         'Bit 6: Rain flag\n'
-         'Bit 7: Solar flag\n'
-         'Bit 8: TB offset threshold')
+         'Bit 1: missing_tb\n'
+         'Bit 2: tb_below_threshold\n'
+         'Bit 3: tb_above_threshold\n'
+         'Bit 4: spectral_consistency_above_threshold\n'
+         'Bit 5: receiver_sanity_failed\n'
+         'Bit 6: rain_detected\n'
+         'Bit 7: sun_in_beam\n'
+         'Bit 8: tb_offset_above_threshold'),
+    
+    'quality_flag_status':
+        ('\n'
+         'Bit 1: missing_tb_not_checked\n'
+         'Bit 2: tb_lower_threshold_not_checked\n'
+         'Bit 3: tb_upper_threshold_not_checked\n'
+         'Bit 4: spectral_consistency_not_checked\n'
+         'Bit 5: receiver_sanity_not_checked\n'
+         'Bit 6: rain_not_checked\n'
+         'Bit 7: sun_in_beam_not_checked\n'
+         'Bit 8: tb_offset_not_checked')   
 }
 
 ATTRIBUTES_1B01 = {
@@ -121,8 +132,8 @@ ATTRIBUTES_1B01 = {
         units='GHz',
     ),
     'tb': MetaData(
-        long_name='Brightness temperatures',
-        standard_name='brightness_temperature',
+        long_name='Microwave brightness temperatures',
+        standard_name='microwave_brightness_temperature',
         units='K',
     ),
     'azi': MetaData(
@@ -145,27 +156,34 @@ ATTRIBUTES_1B01 = {
     'tb_cov': MetaData(
         long_name='Error covariance matrix of brightness temperature channels',
         units='K*K',
-        comment='specify here standardized method used to estimate the covariance matrix',
+        comment='the covariance matrix has been determined using the xxx method from observations at a blackbody target of temperature t_amb',
     ),
     'quality_flag': MetaData(
         long_name='Quality_flag',
         standard_name='quality_flag',
         units='1 (bit variable)',
         definition=DEFINITIONS_1B01['quality_flag'],
-        comment='Bit 4 and 8 are calculated centrally at the E-PROFILE processing hub',
+        comment='0 indicates data with good quality according to applied tests. The list of (not) applied tests is encoded in quality_flag_status',
     ),
+    'quality_flag_status': MetaData(
+        long_name='Quality_flag_status',
+        standard_name='quality_flag_status',
+        units='1 (bit variable)',
+        definition=DEFINITIONS_1B01['quality_flag_status'],
+        comment='0 indicates quality check has been applied.',
+    ),    
     'pointing_flag': MetaData(
         long_name='Pointing Flag',
         standard_name='pointing_flag',
         units='1 (bit variable)',
-        comment='Flag indicating observation mode - single vs. multiple pointing',
+        comment='Flag indicating a single pointing (starring) or multiple pointing (scanning) observation sequence',
     ),
     't_amb': MetaData(
         long_name='Ambient target temperature',
         units='K',
     ),
     't_rec': MetaData(
-        long_name='Receiver temperature',
+        long_name='Receiver physical temperature',
         units='K',
     ),
 }
@@ -191,25 +209,31 @@ ATTRIBUTES_1B11 = {
         long_name='Infrared brightness temperatures',
         units='K'
     ),
-    'irt_accuracy': MetaData(
-        long_name='Total absolute calibration uncertainty of infrared brightness temperature, one standard deviation',
-        units='K',
-        comment='pecify here source of this variable, e.g. literature value, specified by manufacturer, result of validation effort (updated irregularly).',
+    'irt_azi': MetaData(
+        long_name='Sensor azimuth angle',
+        standard_name='sensor_azimuth_angle',
+        units='degrees',
+        comment='0=North, 90=East, 180=South, 270=West',
     ),
+    'irt_ele': MetaData(
+        long_name='Sensor elevation angle',
+        standard_name='sensor_elevation_angle',
+        units='degrees',
+        comment='0=horizon, 90=zenith',
+    ),    
 }
 
 
 DEFINITIONS_1B21 = {
-    'met_valid_flag':
+    'met_quality_flag':
         ('\n'
-         'Bit 1: quality of air temperature data\n'
-         'Bit 2: quality of relative humidity data\n'
-         'Bit 3: quality of air pressure data\n'
-         'Bit 4: quality of rain rate data\n'
-         'Bit 5: quality of wind direction data\n'
-         'Bit 6: quality of wind speed data\n'
-         'Bit 7: not used\n'
-         'Bit 8: not used')
+         'Bit 1: low_quality_air_temperature\n'
+         'Bit 2: low_quality_relative_humidity\n'
+         'Bit 3: low_quality_air_pressure\n'
+         'Bit 4: low_quality_rain_rate\n'
+         'Bit 5: low_quality_wind_direction\n'
+         'Bit 6: low_quality_wind_speed'
+        )
 }
 
 ATTRIBUTES_1B21 = {
@@ -226,7 +250,7 @@ ATTRIBUTES_1B21 = {
     'air_pressure': MetaData(
         long_name='Air pressure',
         standard_name='air_pressure',
-        units='Pa',
+        units='hPa',
     ),
     'rain_rate': MetaData(
         long_name='Precipitation amount',
@@ -243,11 +267,11 @@ ATTRIBUTES_1B21 = {
         standard_name='wind_speed',
         units='m/s',
     ),     
-    'met_valid_flag': MetaData(
-        long_name='Meterological data validity flag',
-        standard_name='met_valid_flag',
+    'met_quality_flag': MetaData(
+        long_name='Meterological data quality flag',
+        standard_name='met_quality_flag',
         units='1 (bit variable)',
-        definition=DEFINITIONS_1B21['met_valid_flag'],
-        comment='bit variable: 0=invalid, 1=valid data',
+        definition=DEFINITIONS_1B21['met_quality_flag'],
+        comment='bit variable: 0=ok, 1=problem',
     ),    
 }
