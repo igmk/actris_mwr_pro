@@ -3,9 +3,9 @@ from level2.lev2_meta_nc import get_data_attributes
 from utils import df_interp, get_coeff_list
 import rpg_mwr
 import numpy as np
+from numpy import ma
 import netCDF4 as nc
 from scipy.interpolate import interp1d
-import numpy.ma as ma
 import pandas as pd
 from pandas.tseries.frequencies import to_offset
 
@@ -34,9 +34,10 @@ def lev2_to_nc(site: str,
     global_attributes, params = get_site_specs(site, data_type)
     lev1 = nc.Dataset(lev1_path)  
     rpg_dat, att = get_products(site, lev1, data_type, params, global_attributes)
+    lev1.close()
     hatpro = rpg_mwr.Rpg(rpg_dat)
     hatpro.data = get_data_attributes(hatpro.data, data_type)
-    rpg_mwr.save_rpg(hatpro, output_file, att, data_type, params)
+    rpg_mwr.save_rpg(hatpro, output_file, att, data_type, params, site)
     
     
 def get_products(site: str, 
@@ -55,7 +56,8 @@ def get_products(site: str,
         offset_lwp, lin_lwp, quad_lwp, c_lwp, ran_lwp, sys_lwp, att = get_mvr_coeff(site, 'lwp', lev1['frequency'][:], glob_att)
         
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], c_lwp['freq'][:, 0], assume_unique = False, return_indices = True)
-        index = np.squeeze(np.where((lev1['pointing_flag'][:] == 0) & np.logical_or(np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), 0), np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), len(freq_ind)*32)) & (np.abs((lev1['ele'][:]) - c_lwp['ele']) < .6)))
+        index = np.where((lev1['pointing_flag'][:] == 0) & (np.abs((lev1['ele'][:]) - c_lwp['ele']) < .6))[0]
+        flag = np.where(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1) > 0)[0]
 
         if any(index):
             offset = offset_lwp(lev1['ele'][index])
@@ -77,7 +79,8 @@ def get_products(site: str,
         offset_iwv, lin_iwv, quad_iwv, c_iwv, ran_iwv, sys_iwv, att = get_mvr_coeff(site, 'iwv', lev1['frequency'][:], glob_att)
         
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], c_iwv['freq'][:, 0], assume_unique = False, return_indices = True)
-        index = np.squeeze(np.where((lev1['pointing_flag'][:] == 0) & np.logical_or(np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), 0), np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), len(freq_ind)*32)) & (np.abs((lev1['ele'][:]) - c_iwv['ele']) < .6)))
+        index = np.where((lev1['pointing_flag'][:] == 0) & (np.abs((lev1['ele'][:]) - c_iwv['ele']) < .6))[0]
+        flag = np.where(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1) > 0)[0]
         
         if any(index):
             offset = offset_iwv(lev1['ele'][index])
@@ -95,11 +98,12 @@ def get_products(site: str,
         offset_tze, lin_tze, quad_tze, c_tze, ran_tze, sys_tze, att = get_mvr_coeff(site, 'tze', lev1['frequency'][:], glob_att)
 
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], c_tze['freq'][:, 0], assume_unique = False, return_indices = True)
-        index = np.squeeze(np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_tze['ele']))) * c_tze['ele']) - np.transpose(np.ones((len(c_tze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1) & np.logical_or(np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), 0), np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), len(freq_ind)*32))))
+        index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_tze['ele']))) * c_tze['ele']) - np.transpose(np.ones((len(c_tze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]
+        flag = np.where(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1) > 0)[0]
         
         if any(index):
             rpg_dat['altitude'] = c_tze['height_grid']            
-            rpg_dat['water_vapor_vmr'] = np.ones((len(index), c_tze['n_height_grid'])) * Fill_Value_Float      
+            rpg_dat['temperature'] = np.ones((len(index), c_tze['n_height_grid'])) * Fill_Value_Float      
 
             tze_offset = offset_tze(lev1['ele'][index])
             tze_coeff_lin = lin_tze(lev1['ele'][index])
@@ -107,7 +111,7 @@ def get_products(site: str,
 
             for ialt, _ in enumerate(c_tze['height_grid']):
 
-                rpg_dat['water_vapor_vmr'][:, ialt] = tze_offset[ialt, :].T + np.sum(tze_coeff_lin[ialt, :, :].T * lev1['tb'][index, :], axis = 1) + np.sum(tze_coeff_quad[ialt, :, :].T * lev1['tb'][index, :] **2, axis = 1)    
+                rpg_dat['temperature'][:, ialt] = tze_offset[ialt, :].T + np.sum(tze_coeff_lin[ialt, :, :].T * lev1['tb'][index, :], axis = 1) + np.sum(tze_coeff_quad[ialt, :, :].T * lev1['tb'][index, :] **2, axis = 1)    
 
             rpg_dat['temperature_random_error'] = ran_tze(lev1['ele'][index]).T
             rpg_dat['temperature_systematic_error'] = sys_tze(lev1['ele'][index]).T       
@@ -123,7 +127,7 @@ def get_products(site: str,
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], c_tel['freq'], assume_unique = False, return_indices = True)
         _, freq_bl, _ = np.intersect1d(c_tel['freq'], c_tel['freq_bl'], assume_unique = False, return_indices = True)
                     
-        ix0 = np.squeeze(np.where((lev1['ele'][:] > c_tel['ele'][0] - .6) & (lev1['ele'][:] < c_tel['ele'][0] + .6) & (lev1['pointing_flag'][:] == 1) & np.logical_or(np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), 0), np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), len(freq_ind)*32))))
+        ix0 = np.where((lev1['ele'][:] > c_tel['ele'][0] - .6) & (lev1['ele'][:] < c_tel['ele'][0] + .6) & (lev1['pointing_flag'][:] == 1))[0]
 
         if ix0.size > 1:
             ele = []
@@ -134,8 +138,9 @@ def get_products(site: str,
             ele = np.stack(ele) * np.ones((len(c_tel['ele']), len(lev1['ele'][ix0]))) 
             flag = np.stack(flag) * np.ones((len(c_tel['ele']), len(lev1['ele'][ix0]))) 
 
-            index = np.squeeze(np.where(np.any(np.abs((np.ones((len(lev1['ele'][ix0]), len(c_tel['ele']))) * c_tel['ele']) - np.transpose(ele)) < .6, axis = 1) & pd.DataFrame((flag == 0) | (flag == len(freq_ind)*32)).all()))
+            index = np.where(np.any(np.abs((np.ones((len(lev1['ele'][ix0]), len(c_tel['ele']))) * c_tel['ele']) - np.transpose(ele)) < .6, axis = 1))[0]
             index = ix0[index]
+            flag = np.where(pd.DataFrame((flag > 0)).all())[0]
 
             if any(index):
                 tb = np.ones((len(c_tel['freq']), len(c_tel['ele']), len(index))) * Fill_Value_Float            
@@ -167,7 +172,8 @@ def get_products(site: str,
         offset_hze, lin_hze, quad_hze, c_hze, ran_hze, sys_hze, att = get_mvr_coeff(site, 'hze', lev1['frequency'][:], glob_att)
 
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], c_hze['freq'][:, 0], assume_unique = False, return_indices = True)
-        index = np.squeeze(np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_hze['ele']))) * c_hze['ele']) - np.transpose(np.ones((len(c_hze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1) & np.logical_or(np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), 0), np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), len(freq_ind)*32))))
+        index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_hze['ele']))) * c_hze['ele']) - np.transpose(np.ones((len(c_hze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]
+        flag = np.where(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1) > 0)[0]
         
         if any(index):
             rpg_dat['altitude'] = c_hze['height_grid']            
@@ -193,8 +199,10 @@ def get_products(site: str,
         offset_tze, lin_tze, quad_tze, c_tze, ran_tze, sys_tze, att = get_mvr_coeff(site, 'tze', lev1['frequency'][:], glob_att)
         offset_hze, lin_hze, quad_hze, c_hze, ran_hze, sys_hze, att = get_mvr_coeff(site, 'hze', lev1['frequency'][:], glob_att)
 
-        _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], c_tze['freq'][:,0], assume_unique = False, return_indices = True)
-        index = np.squeeze(np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_tze['ele']))) * c_tze['ele']) - np.transpose(np.ones((len(c_tze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1) & (lev1['pointing_flag'][:] == 0) & np.logical_or(np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), 0), np.equal(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1), len(freq_ind)*32)) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_hze['ele']))) * c_hze['ele']) - np.transpose(np.ones((len(c_hze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1)))
+        _, freq_ind_tze, _ = np.intersect1d(lev1['frequency'][:], c_tze['freq'][:,0], assume_unique = False, return_indices = True)
+        _, freq_ind_hze, _ = np.intersect1d(lev1['frequency'][:], c_hze['freq'][:,0], assume_unique = False, return_indices = True)
+        index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_tze['ele']))) * c_tze['ele']) - np.transpose(np.ones((len(c_tze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_hze['ele']))) * c_hze['ele']) - np.transpose(np.ones((len(c_hze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]
+        flag = np.where((np.sum(lev1['quality_flag'][:, freq_ind_tze], axis = 1) > 0) | (np.sum(lev1['quality_flag'][:, freq_ind_hze], axis = 1) > 0))[0]
         
         if any(index):                     
             rpg_dat['altitude'] = c_tze['height_grid']            
@@ -219,19 +227,28 @@ def get_products(site: str,
             rpg_dat['water_vapor_vmr_systematic_error'] = sys_hze(lev1['ele'][index]).T           
 
             rpg_dat['relative_humidity'], rpg_dat['relative_humidity_random_error'] = abshum_to_rh(rpg_dat['temperature'], rpg_dat['water_vapor_vmr'], rpg_dat['temperature_random_error'], rpg_dat['water_vapor_vmr_random_error'])
-            rpg_dat['relative_humidity'], rpg_dat['relative_humidity_systematic_error'] = abshum_to_rh(rpg_dat['temperature'], rpg_dat['water_vapor_vmr'], rpg_dat['temperature_systematic_error'], rpg_dat['water_vapor_vmr_systematic_error'])             
+            _, rpg_dat['relative_humidity_systematic_error'] = abshum_to_rh(rpg_dat['temperature'], rpg_dat['water_vapor_vmr'], rpg_dat['temperature_systematic_error'], rpg_dat['water_vapor_vmr_systematic_error'])             
             
         else:
             raise RuntimeError(['No suitable data found for processing.'])                 
                 
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.']) 
-        
+    
+    "add level1 data"    
     for ivars in lev1_vars:
         if lev1[ivars].ndim > 1:
             rpg_dat[ivars] = lev1[ivars][index, :] 
         else:
-            rpg_dat[ivars] = lev1[ivars][index]           
+            rpg_dat[ivars] = lev1[ivars][index]  
+            
+    "mask flagged data"        
+    for ivars in rpg_dat:
+        if rpg_dat[ivars].ndim > 1:
+            rpg_dat[ivars][flag, :] = ma.masked
+        elif (rpg_dat[ivars].ndim == 1) & (len(rpg_dat[ivars]) == len(rpg_dat['time'])):
+            rpg_dat[ivars][flag] = ma.masked 
+          
                     
     return rpg_dat, att
 
@@ -280,8 +297,8 @@ def get_mvr_coeff(site: str,
             def f_offset(x): return cf['offset']
             def f_lin(x): return cf['coeff_lin']  
             def f_quad(x): return cf['coeff_quad']     
-            def e_ran(x): return cf['err_ran']
-            def e_sys(x): return cf['err_sys']    
+            def e_ran(x): return np.ones(len(x)) * cf['err_ran']
+            def e_sys(x): return np.ones(len(x)) * cf['err_sys']    
         
             
     elif prefix in ('tze', 'hze'):
@@ -300,6 +317,7 @@ def get_mvr_coeff(site: str,
         cf['n_height_grid'] = n_height_grid
         cf['height_grid'] = coeff['height_grid']
         
+        
         for i, file in enumerate(c_list):
             coeff = nc.Dataset(file)
             cf['ele'][i] = coeff['elevation_predictor'][i]
@@ -312,7 +330,7 @@ def get_mvr_coeff(site: str,
                 cf['err_ran'][:, i] = coeff['predictand_err'][:]  
                 cf['err_sys'][:, i] = coeff['predictand_err_sys'][:]  
             else:
-                raise RuntimeError(['Instrument and retrieval frequencies do not match.'])                 
+                raise RuntimeError(['Instrument and retrieval frequencies do not match.'])  
 
         f_offset = lambda x: np.transpose(np.array([cf['offset'][:, (np.abs(cf['ele']-v)).argmin()] for v in x]))
         f_lin = lambda x: np.transpose(np.array([cf['coeff_lin'][:, :, (np.abs(cf['ele']-v)).argmin()] for v in x]), (1, 2, 0))
@@ -335,8 +353,7 @@ def get_mvr_coeff(site: str,
             f_lin = coeff['coefficient_mvr'][:, :]
             f_quad = np.nan
             e_ran =  coeff['predictand_err'][:] 
-            e_sys = coeff['predictand_err_sys'][:]      
-            
+            e_sys = coeff['predictand_err_sys'][:]                  
         else:
             raise RuntimeError(['Instrument and retrieval frequencies do not match.'])  
             
@@ -418,7 +435,7 @@ def get_lwp_offset(time: np.ndarray,
     lwp_mn.index = lwp_mn.index + to_offset('10min')
     
     off = pd.read_csv('site_config/' + site + '/lwp_offset.csv', usecols = ['date', 'offset'])
-    ind = np.squeeze(np.where(lwp_mn['Lwp'].values > 0))
+    ind = np.where(lwp_mn['Lwp'].values > 0)[0]
     if ind.size > 1:
         off = off.append(pd.DataFrame({'date': time[ind[0]], 'offset': lwp_mn['Lwp'][ind[0]]}, index = {0}), ignore_index = True)
         off = off.append(pd.DataFrame({'date': time[ind[-1]], 'offset': lwp_mn['Lwp'][ind[-1]]}, index = {0}), ignore_index = True)
@@ -428,12 +445,12 @@ def get_lwp_offset(time: np.ndarray,
     off = off.drop_duplicates(subset=['date'])
     off.to_csv('site_config/' + site + '/lwp_offset.csv', index = False)
                 
-    off_ind = np.squeeze(np.where((off['date'].values < time[0]) & (time[0] - off['date'].values < 48.*3600.)))
+    off_ind = np.where((off['date'].values < time[0]) & (time[0] - off['date'].values < 48.*3600.))[0]
     if off_ind.size == 1:
         off_ind = np.array([int(off_ind), int(off_ind)])
     if (off_ind.size > 1) & (np.isnan(lwp_mn['Lwp'][0])):
         lwp_mn['Lwp'][0] = off['offset'][off_ind[-1]]
-    off_ind = np.squeeze(np.where((off['date'].values > time[-1]) & (off['date'].values - time[-1] < 48.*3600.)))
+    off_ind = np.where((off['date'].values > time[-1]) & (off['date'].values - time[-1] < 48.*3600.))[0]
     if off_ind.size == 1:
         off_ind = np.array([int(off_ind), int(off_ind)])
     if (off_ind.size > 1) & (np.isnan(lwp_mn['Lwp'][-1])):
