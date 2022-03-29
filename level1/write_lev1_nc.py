@@ -44,7 +44,7 @@ def lev1_to_nc(site: str,
         hatpro = rpg_mwr.Rpg(rpg_bin.data)
         hatpro.find_valid_times()
         hatpro.data = get_data_attributes(hatpro.data, data_type)
-        rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params)
+        rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params, site)
     else:
         raise RuntimeError(['Error: no binary files with extension .hkd found in directory ' + path_to_files])
     
@@ -93,6 +93,8 @@ def prepare_data(path_to_files: str,
                 if any(file_list_irt):                
                     rpg_irt = get_rpg_bin(file_list_irt)
                     rpg_bin.data['ir_wavelength'] = rpg_irt.header['_f']
+                    rpg_bin.data['ir_bandwidth'] = params['ir_bandwidth']
+                    rpg_bin.data['ir_beamwidth'] = params['ir_beamwidth']                    
                     _add_interpol1(rpg_bin.data, rpg_irt.data['irt'] + 273.15, rpg_irt.data['time'], 'irt')
 
                 file_list_met = get_file_list(path_to_files, path_to_prev, 'met')
@@ -115,8 +117,8 @@ def prepare_data(path_to_files: str,
         file_list_irt = get_file_list(path_to_files, path_to_prev, 'irt') 
         rpg_bin = get_rpg_bin(file_list_irt)
         rpg_bin.data['ir_wavelength'] = rpg_bin.header['_f']
-        # rpg_bin.data['ir_bandwidth'] = params['ir_bandwidth']
-        # rpg_bin.data['ir_beamwidth'] = params['ir_beamwidth']
+        rpg_bin.data['ir_bandwidth'] = params['ir_bandwidth']
+        rpg_bin.data['ir_beamwidth'] = params['ir_beamwidth']
 
     elif data_type == '1B21':
         file_list_met = get_file_list(path_to_files, path_to_prev, 'met')
@@ -217,7 +219,7 @@ def _add_blb(brt: dict,
 
     for time_ind, time_blb in enumerate(blb.data['time']):
         
-        ind_scan = np.squeeze(np.where((hkd.data['time'] >= time_blb - 1.5 * params['scan_time']) & (hkd.data['time'] <= time_blb) & (bl_mod == 1)))  
+        ind_scan = np.where((hkd.data['time'] >= time_blb - 1.5 * params['scan_time']) & (hkd.data['time'] <= time_blb) & (bl_mod == 1))[0]
 
         if np.any(ind_scan):
             
