@@ -18,13 +18,15 @@ params = {
     'int_time': 1, 
 
     # bandwidth of the central frequency in GHz (center frequency of single of upper side-band)
-    'bandwidth': np.array([230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 230, 600, 1000, 2000]),
+    'bandwidth': np.array([230, 230, 230, 230, 230, 230, 230, 
+                           230, 230, 230, 230, 600, 1000, 2000]),
 
     # single, double, or double-double sideband (1, 2, 4 are possible values)
     'sideband_count': 1,
 
     # 56.xx +/- X +/- Y
-    'sideband_IF_separation': np.array([[0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]]),
+    'sideband_IF_separation': np.array([[0.], [0.], [0.], [0.], [0.], [0.], [0.], 
+                                        [0.], [0.], [0.], [0.], [0.], [0.], [0.]]),
 
     # offset correction for TBs, i.e. adjustement of observation to nominal frequency:
     # Note: RPG offers a frequency shift within the radiometer software. 
@@ -34,10 +36,15 @@ params = {
     # If you have applied these frequency shifts, you may still give these to protocol so that they are contained in the resulting level1 netcdf files. 
     # The variable freq_shift specifies the frequency shifts applied [in MHz]. 
     # Set all to 0 if no frequency shifts were applied.
-    'freq_shift' : np.array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
+    'freq_shift' : np.array([0., 0., 0., 0., 0., 0., 0., 
+                             0., 0., 0., 0., 0., 0., 0.]),
 
     # [lower, upper] bound threshold of TB quality flags in K
     'TB_threshold': np.array([2.7, 330.]), 
+    
+    # IRT parameters
+    'ir_bandwith' : -999.,
+    'ir_beamwidth': -999.,
 
     # solar angle flagging:
     # saf parameter lets the user determine within what angular region (in deg) around the sun the MWR TBs and products are flagged, 
@@ -62,9 +69,10 @@ params = {
     # Bit 8: tb_offset_above_threshold
     'flag_status': [0, 0, 0, 0, 0, 0, 0, 1],
     
-    # factor for spectral consistency quality flag 
-    # multiplied by standard deviation of absolute difference of retrieved and observed brightness temperatures
-    'factor_spec': np.array([1./3., .75, .75, .75, .75, .75, .75, 4./3., 4./3., 1., 1., .75, .75, .75]),    
+    # threshold for spectral consistency quality flag 
+    # applied to standard deviation of absolute difference of retrieved and observed brightness temperatures
+    'th_std': np.array([.3, .2, .2, .2, .2, .2, .2, 
+                        .5, .5, .5, .5, .3, .3, .3]),     
     
     # thresholds for met quality flags
     'met_thresholds': np.array([[213.15, 333.15], # air_temperature [K]
