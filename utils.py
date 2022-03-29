@@ -3,11 +3,32 @@
 from datetime import datetime, timezone
 import time
 import pytz
-import numpy.ma as ma
+from numpy import ma
 import numpy as np
 import pandas as pd
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 import glob
+import netCDF4
+
+SECONDS_PER_MINUTE = 60
+SECONDS_PER_HOUR = 3600
+SECONDS_PER_DAY = 86400
+
+
+def seconds2hours(time_in_seconds: np.ndarray) -> np.ndarray:
+    """Converts seconds since some epoch to fraction hour.
+    Args:
+        time_in_seconds: 1-D array of seconds since some epoch that starts on midnight.
+    Returns:
+        Time as fraction hour.
+    Notes:
+        Excludes leap seconds.
+    """
+    seconds_since_midnight = np.mod(time_in_seconds, SECONDS_PER_DAY)
+    fraction_hour = seconds_since_midnight/SECONDS_PER_HOUR
+    if fraction_hour[-1] == 0:
+        fraction_hour[-1] = 24
+    return fraction_hour
 
 
 def epoch2unix(epoch_time, time_ref, 
@@ -48,6 +69,29 @@ def isscalar(array: any) -> bool:
     if not hasattr(arr, '__len__') or arr.shape == () or len(arr) == 1:
         return True
     return False
+
+
+def isbit(array: np.ndarray, nth_bit: int) -> np.ndarray:
+    """Tests if nth bit (0,1,2..) is set.
+    Args:
+        array: Integer array.
+        nth_bit: Investigated bit.
+    Returns:
+        Boolean array denoting values where nth_bit is set.
+    Raises:
+        ValueError: negative bit as input.
+    Examples:
+        >>> isbit(4, 1)
+            False
+        >>> isbit(4, 2)
+            True
+    See also:
+        utils.setbit()
+    """
+    if nth_bit < 0:
+        raise ValueError('Negative bit number')
+    mask = 1 << nth_bit
+    return array & mask > 0
 
 
 def setbit(array: np.ndarray, 
@@ -112,3 +156,58 @@ def get_coeff_list(site: str,
     if len(c_list) < 1:
         raise RuntimeError(['Error: no coefficient files found in directory ' + path_to_files])
     return c_list
+
+
+def read_nc_fields(nc_file: str, names: Union[str, list]) -> Union[ma.MaskedArray, list]:
+    """Reads selected variables from a netCDF file.
+    Args:
+        nc_file: netCDF file name.
+        names: Variables to be read, e.g. 'temperature' or ['ldr', 'lwp'].
+    Returns:
+        ndarray/list: Array in case of one variable passed as a string.
+        List of arrays otherwise.
+    """
+    names = [names] if isinstance(names, str) else names
+    nc = netCDF4.Dataset(nc_file)
+    data = [nc.variables[name][:] for name in names]
+    nc.close()
+    return data[0] if len(data) == 1 else data
+
+
+def convolve2DFFT(slab,kernel,max_missing=0.1,verbose=True):
+    '''2D convolution using fft.
+    <slab>: 2d array, with optional mask.
+    <kernel>: 2d array, convolution kernel.
+    <max_missing>: real, max tolerable percentage of missings within any
+                   convolution window.
+                   E.g. if <max_missing> is 0.5, when over 50% of values
+                   within a given element are missing, the center will be
+                   set as missing (<res>=0, <resmask>=1). If only 40% is
+                   missing, center value will be computed using the remaining
+                   60% data in the element.
+                   NOTE that out-of-bound grids are counted as missings, this
+                   is different from convolve2D(), where the number of valid
+                   values at edges drops as the kernel approaches the edge.
+    Return <result>: 2d convolution.
+    '''
+    from scipy import signal
+    assert np.ndim(slab)==2, "<slab> needs to be 2D."
+    assert np.ndim(kernel)==2, "<kernel> needs to be 2D."
+    assert kernel.shape[0]<=slab.shape[0], "<kernel> size needs to <= <slab> size."
+    assert kernel.shape[1]<=slab.shape[1], "<kernel> size needs to <= <slab> size."
+    #--------------Get mask for missings--------------
+    slab[slab == 0.] = np.nan
+    slabcount=1-np.isnan(slab)
+    # this is to set np.nan to a float, this won't affect the result as
+    # masked values are not used in convolution. Otherwise, nans will
+    # affect convolution in the same way as scipy.signal.convolve()
+    # and the result will contain nans.
+    slab=np.where(slabcount==1,slab,0)
+    kernelcount=np.where(kernel==0,0,1)
+    result=signal.fftconvolve(slab,kernel,mode='same')
+    result_mask=signal.fftconvolve(slabcount,kernelcount,mode='same')
+    valid_threshold=(1.-max_missing)*np.sum(kernelcount)
+    result/=np.sum(kernel)
+    result[(result_mask<valid_threshold)] = np.nan
+
+    return result
