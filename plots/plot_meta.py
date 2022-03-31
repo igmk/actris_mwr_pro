@@ -109,7 +109,7 @@ ATTRIBUTES = {
     ),     
     'water_vapor_vmr': PlotMeta(
         name='Retrieved water vapour profile',
-        cbar='viridis',
+        cbar='Spectral_r',
         clabel=_KGM3,
         plot_range=(0, .015),
         plot_type='mesh',

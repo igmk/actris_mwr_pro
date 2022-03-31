@@ -13,6 +13,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from utils import read_nc_fields, seconds2hours, convolve2DFFT, isbit
 from plots.plot_meta import ATTRIBUTES, _COLORS
 from scipy.signal import filtfilt, convolve2d
+from scipy.interpolate import interp2d
 from copy import copy
 from scipy.ndimage import convolve
 
@@ -230,7 +231,7 @@ def _pointing_filter(full_path: str, data_field: ndarray, ele_range: Tuple, stat
 
 def _initialize_figure(n_subplots: int, dpi) -> tuple:
     """Creates an empty figure according to the number of subplots."""
-    fig, axes = plt.subplots(n_subplots, figsize=(16, 4 + (n_subplots-1)*4.8), dpi=dpi)
+    fig, axes = plt.subplots(n_subplots, figsize=(16, 4 + (n_subplots-1)*4.8), dpi=dpi, facecolor='white')
     fig.subplots_adjust(left=0.06, right=0.73)
     if n_subplots == 1:
         axes = [axes]
@@ -323,6 +324,7 @@ def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y
     if name == 'relative_humidity':
         data[data > 1.] = ma.masked
         data*=100.
+        nlev = 11
 
     if variables.plot_type == 'bit':
         cmap = ListedColormap(variables.cbar)
@@ -332,10 +334,15 @@ def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y
         cmap = plt.get_cmap(variables.cbar, nlev)
 
     vmin, vmax = variables.plot_range
-    data, width = _calculate_rolling_mean(axes[0], data)
-    pl = ax.contourf(*axes, data.T, levels=np.linspace(vmin,vmax,nlev), cmap=cmap, extend=variables.cbar_ext)
-    cp = ax.contour(*axes, data.T, levels=np.linspace(vmin,vmax,nlev), colors='black', linewidths=.5)
-    plt.clabel(cp, fontsize=8, inline_spacing=10)
+    data, width = _calculate_rolling_mean(axes[0], data, win=.5)
+    f = interp2d(axes[0][~np.isnan(data[:,0])], axes[1], data[~np.isnan(data)])
+    data_new = f(*axes)
+    pl = ax.contourf(*axes, data_new, levels=np.linspace(vmin,vmax,nlev), cmap=cmap, extend=variables.cbar_ext)
+    cp = ax.contour(axes[0][700:-700], axes[1], data_new[:, 700:-700], levels=np.linspace(vmin,vmax,nlev), colors='black', linewidths=.0001)
+    cl = plt.clabel(cp, fontsize=8)
+    for l in cl:
+        l.set_va("bottom")
+    cp = ax.contour(*axes, data_new, levels=np.linspace(vmin,vmax,nlev), colors='black', linewidths=.8)
    
     if variables.plot_type != 'bit':
         colorbar = _init_colorbar(pl, ax)
@@ -350,7 +357,7 @@ def _plot_instrument_data(ax, data: ma.MaskedArray, name: str, product: Optional
     if product == 'int':
         _plot_int(ax, data, name, time)
     elif product == 'met':
-        _plot_met(ax, data, name, time)
+        _plot_met(ax, data, name, time, nc_file)
     elif product == 'tb':
         _plot_tb(ax, data, time, fig, nc_file, ele_range, pointing)
     elif product == 'irt':
@@ -381,9 +388,11 @@ def _plot_irt(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     variables = ATTRIBUTES[name]
     vmin, vmax = variables.plot_range
     ir_wavelength = read_nc_fields(nc_file, 'ir_wavelength')
+    # rolling_mean, width = _calculate_rolling_mean(time, data_in[:,0])
     
     ax.plot(time, data_in[:,0],'o', markersize=.75, fillstyle='full', color='sienna', label=str(ir_wavelength[0])+' µm')
     ax.plot(time, data_in[:,1],'o', markersize=.75, fillstyle='full', color=_COLORS['shockred'], label=str(ir_wavelength[1])+' µm')
+    # ax.plot(time[int(width / 2 - 1):int(-width / 2)], rolling_mean, color='red')
     ax.set_ylim((vmin, vmax))
     ax.legend(loc='upper right')
     _set_ax(ax, vmax, variables.ylabel, vmin)
@@ -461,18 +470,23 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         ax.text(.55,.9,str(tb_m[i])+' +/- '+str(tb_s[i])+' K', transform=ax.transAxes+trans, color=_COLORS['darkgray'], fontweight='bold')
 
     
-def _plot_met(ax, data_in: ndarray, name: str, time: ndarray):
+def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     ylabel = ATTRIBUTES[name].ylabel
     if name == 'relative_humidity':
         data_in*=100.
         ylabel = '%'
     data, time = _get_unmasked_values(data_in, time)
-    n = np.rint(np.nextafter((len(data) / 10000), (len(data) / 10000)+1))  
-    data = _filter_noise(data, int(n))
-    rolling_mean, width = _calculate_rolling_mean(time, data)
-    time = _nan_time_gaps(time)  
-
-    ax.plot(time[int(width / 2 - 1):int(-width / 2)],rolling_mean, 'o', fillstyle='full', color='blue', markersize=3)
+    if name == 'wind_direction':
+        spd = read_nc_fields(nc_file, 'wind_speed')
+        rolling_mean, width = _dir_avg(time, spd, data)
+    else:        
+        # data = _filter_noise(data)
+        rolling_mean, width = _calculate_rolling_mean(time, data)
+    time = _nan_time_gaps(time)
+    rolling_mean = np.interp(time, time[int(width / 2 - 1):int(-width / 2)], rolling_mean)
+    
+    ax.plot(time, data, '.', alpha=.8, color=_COLORS['darksky'], markersize=1)
+    ax.plot(time, rolling_mean, 'o', fillstyle='full', color='darkblue', markersize=3)
     vmin, vmax = ATTRIBUTES[name].plot_range    
     _set_ax(ax, vmax, ylabel, min_y=vmin)    
     ax.grid(True)
@@ -480,23 +494,47 @@ def _plot_met(ax, data_in: ndarray, name: str, time: ndarray):
 
 def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray):
     data, time = _get_unmasked_values(data_in, time)
+    # data = _filter_noise(data)
     rolling_mean, width = _calculate_rolling_mean(time, data)
     time = _nan_time_gaps(time)
-    n = np.rint(np.nextafter((len(data) / 10000), (len(data) / 10000)+1))    
-    data = _filter_noise(data, int(n))
+    rolling_mean = np.interp(time, time[int(width / 2 - 1):int(-width / 2)], rolling_mean)
     
     ax.plot(time, data, color='royalblue', lw=.5)
     ax.axhline(linewidth=0.8, color='k')
-    ax.plot(time[int(width / 2 - 1):int(-width / 2)], rolling_mean,
-            color='sienna', linewidth=2.0)
-    ax.plot(time[int(width / 2 - 1):int(-width / 2)], rolling_mean,
-            color='wheat', linewidth=0.6)
+    ax.plot(time, rolling_mean, color='sienna', linewidth=2.0)
+    ax.plot(time, rolling_mean, color='wheat', linewidth=0.6)
     vmin, vmax = ATTRIBUTES[name].plot_range    
     _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
+    
+    
+def _dir_avg(time: ndarray, 
+             spd: ndarray, 
+             drc: ndarray):
+    if (width % 2) != 0:
+        width = width + 1
+    seq = range(len(time))
+    dir_avg = []
+    for i in range(len(seq) - width + 1):
+        dir_avg.append(_windvec(spd[seq[i: i + width]], drc[seq[i: i + width]]))
+    return np.array(dir_avg), width
+
+
+def _windvec(spd: ndarray,
+             drc: ndarray):    
+    ve = -np.mean(spd * np.sin(np.deg2rad(drc)))
+    vn = -np.mean(spd * np.cos(np.deg2rad(drc)))
+    uv = np.sqrt(ve * ve + vn * vn)
+    vdir = np.rad2deg(np.arctan2(ve, vn))
+    if vdir < 180.0:
+        Dv = vdir + 180.0
+    elif vdir > 180.0:
+        Dv = vdir - 180
+    return Dv    
 
     
-def _filter_noise(data: ndarray, n: int) -> ndarray:
+def _filter_noise(data: ndarray) -> ndarray:
     """IIR filter"""
+    n = int(np.rint(np.nextafter((len(data) / 1000), (len(data) / 1000)+1)))
     if n <= 1:
         n = 2
     b = [1.0 / n] * n
@@ -535,7 +573,7 @@ def _nan_time_gaps(time: ndarray) -> ndarray:
     return time
 
 
-def _calculate_rolling_mean(time: ndarray, data: ndarray, win: float = .3) -> Tuple[ndarray, int]:
+def _calculate_rolling_mean(time: ndarray, data: ndarray, win: float = .5) -> Tuple[ndarray, int]:
     width = len(time[time <= time[0] + win])
     if (width % 2) != 0:
         width = width + 1
@@ -545,7 +583,7 @@ def _calculate_rolling_mean(time: ndarray, data: ndarray, win: float = .3) -> Tu
         rolling_mean = rolling_mean / np.sum(rolling_window)
     else:
         rolling_window = np.ones((1, width))*np.blackman(width)
-        rolling_mean = convolve2DFFT(data, rolling_window.T, max_missing=.005)
+        rolling_mean = convolve2DFFT(data, rolling_window.T, max_missing=.001)
     return rolling_mean, width
 
 
@@ -587,5 +625,3 @@ def _create_save_name(save_path: str, case_date: date, field_names: list, fix: s
     """Creates file name for saved images."""
     date_string = case_date.strftime("%Y%m%d")
     return f"{save_path}{date_string}_{'_'.join(field_names)}{fix}.png"
-
-
