@@ -445,18 +445,18 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
     quality_flag = read_nc_fields(nc_file, 'quality_flag')
     quality_flag = _elevation_filter(nc_file, quality_flag, ele_range)
     quality_flag = _pointing_filter(nc_file, quality_flag, ele_range, pointing)
-    tb_m = np.round(np.mean(data_in[np.where(quality_flag == 0)[0]],axis=0),2) #TB mean
-    tb_s = np.round(np.std(data_in[np.where(quality_flag == 0)[0]],axis=0),2) #TB std
+    tb_m = np.round(np.mean(data_in[np.where(quality_flag == 0)[0]], axis=0), 2) #TB mean
+    tb_s = np.round(np.std(data_in[np.where(quality_flag == 0)[0]], axis=0), 2) #TB std
 
     fig.clear()
     fig, axs = plt.subplots(7,2, figsize=(13, 16), facecolor='w', edgecolor='k', sharex=True, dpi=120)
-    fig.subplots_adjust(hspace=.038, wspace=.15)
+    fig.subplots_adjust(hspace=.035, wspace=.15)
     fig.text(.06, .5, 'Brightness Temperature [K]', va='center', rotation='vertical', fontsize=20)
     fig.text(.445, .1, 'flagged data', va='center', fontsize=20, color='r')
     axs[0,0].set_title('K-Band Channels', fontsize=15, color=_COLORS['darkgray'], loc='right')
     axs[0,1].set_title('V-Band Channels', fontsize=15, color=_COLORS['darkgray'], loc='right')
     trans = ScaledTranslation(10/72, -5/72, fig.dpi_scale_trans)
-
+    
     for i, ax in enumerate(axs.T.flatten()):
         ax.plot(time, np.ones(len(time))*tb_m[i],'--', color=_COLORS['darkgray'], linewidth=1)
         ax.plot(time, data_in[:,i],'ko', markersize=.75, fillstyle='full')
@@ -468,7 +468,44 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         _set_labels(fig, ax, nc_file)
         ax.text(.05,.9,str(frequency[i])+' GHz', transform=ax.transAxes + trans, color=_COLORS['darkgray'], fontweight='bold')
         ax.text(.55,.9,str(tb_m[i])+' +/- '+str(tb_s[i])+' K', transform=ax.transAxes+trans, color=_COLORS['darkgray'], fontweight='bold')
-
+        
+    axa = fig.add_subplot(121)
+    axa.set_position([.125, -.05, .72, .125])
+    axa.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+    axa.tick_params(axis='y', which='both', right=False, left=False, labelleft=False)
+    for pos in ['right','top','bottom','left']:
+        axa.spines[pos].set_visible(False)
+    axa.set_facecolor(_COLORS['lightgray'])
+    
+    axaK = fig.add_subplot(121)
+    axaK.set_position([.125, -.05, .36, .125])
+    axaK.plot(frequency, tb_m, 'o', color=_COLORS['darkgray'], markerfacecolor=_COLORS['darkgray'], markersize=4)
+    axaK.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle='', capsize=8, color=_COLORS['darkgray'])
+    axaK.set_xticks(frequency)
+    axaK.set_xticklabels(axaK.get_xticks(), rotation = 30)
+    axaK.set_xlim([22, 32])
+    axaK.set_ylim([0, 80])
+    axaK.tick_params(axis='both', labelsize=12)
+    axaK.set_facecolor(_COLORS['lightgray'])
+    
+    axaV = fig.add_subplot(122)
+    axaV.set_position([.54, -.05, .36, .125])
+    axaV.plot(frequency, tb_m, 'o', color=_COLORS['darkgray'], markerfacecolor=_COLORS['darkgray'], markersize=4)
+    axaV.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle='', capsize=8, color=_COLORS['darkgray'])
+    axaV.set_xticks(frequency)
+    axaV.set_xticklabels(axaV.get_xticks(), rotation = 30)    
+    axaV.set_xlim([51, 58.5])    
+    axaV.set_ylim([100, 300])
+    axaV.tick_params(axis='both', labelsize=12)
+    axaV.set_facecolor(_COLORS['lightgray'])
+    
+    axaK.spines['right'].set_visible(False)
+    axaV.spines['left'].set_visible(False)
+    axaV.yaxis.tick_right()    
+    axaK.set_ylabel('Brightness Temperature [K]', fontsize=12)
+    axaV.text(-.08, .9, 'TB daily means +/- standard deviation', fontsize=13, horizontalalignment='center', transform=axaV.transAxes, color=_COLORS['darkgray'], fontweight='bold')
+    axaV.text(-.08, -.35, 'Frequency [GHz]', fontsize=13, horizontalalignment='center', transform=axaV.transAxes)
+    
     
 def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     ylabel = ATTRIBUTES[name].ylabel
