@@ -5,6 +5,7 @@ import datetime
 import ephem
 import netCDF4 as nc
 from pandas.tseries.frequencies import to_offset
+
 Fill_Value_Float = -999.
    
 def apply_qc(site: str, 
@@ -30,6 +31,7 @@ def apply_qc(site: str,
 
     data['quality_flag'] = np.zeros(data['tb'].shape, dtype = np.int32)
     data['quality_flag_status'] = np.zeros(data['tb'].shape, dtype = np.int32)
+    data['tb'][data['tb'] == 0.] = Fill_Value_Float
     c_list = get_coeff_list(site, 'tbx')
     ind_bit6 = np.where(data['rain'] == 1)
     ind_bit7 = orbpos(data, params)
@@ -46,7 +48,7 @@ def apply_qc(site: str,
         """ Bit 2: TB threshold (lower range) """
         if params['flag_status'][1] == 1:
             data['quality_flag_status'][:, freq] = setbit(data['quality_flag_status'][:, freq], 1)
-        else:        
+        else:
             ind = np.where(data['tb'][:, freq] < params['TB_threshold'][0])
             data['quality_flag'][ind, freq] = setbit(data['quality_flag'][ind, freq], 1)  
         
@@ -97,30 +99,30 @@ def orbpos(data: dict,
     sun = dict()
     sun['azi'] = np.zeros(data['time'].shape) * Fill_Value_Float
     sun['ele'] = np.zeros(data['time'].shape) * Fill_Value_Float
-    moon = dict()
-    moon['azi'] = np.zeros(data['time'].shape) * Fill_Value_Float
-    moon['ele'] = np.zeros(data['time'].shape) * Fill_Value_Float
+    # moon = dict()
+    # moon['azi'] = np.zeros(data['time'].shape) * Fill_Value_Float
+    # moon['ele'] = np.zeros(data['time'].shape) * Fill_Value_Float
 
     sol = ephem.Sun()
-    lun = ephem.Moon()
-    location = ephem.Observer()
+    # lun = ephem.Moon()
+    obs_loc = ephem.Observer()
 
-    for ind, _ in enumerate(data['time']):
-       
-        location.lat = str(data['station_latitude'][ind])
-        location.lon = str(data['station_longitude'][ind])
-        location.date = datetime.datetime.fromtimestamp(data['time'][ind]).strftime('%Y/%m/%d %H:%M:%S')
-        sol.compute(location)
+    for ind, tim in enumerate(data['time']):
+        
+        obs_loc.lat, obs_loc.lon = str(data['station_latitude'][ind]), str(data['station_longitude'][ind])
+        obs_loc.elevation = data['station_altitude'][ind]
+        obs_loc.date = datetime.datetime.fromtimestamp(tim).strftime('%Y/%m/%d %H:%M:%S')
+        sol.compute(obs_loc)
         sun['ele'][ind] = np.rad2deg(sol.alt)
         sun['azi'][ind] = np.rad2deg(sol.az)            
-        lun.compute(location)
-        moon['ele'][ind] = np.rad2deg(lun.alt)
-        moon['azi'][ind] = np.rad2deg(lun.az)         
+        # lun.compute(obs_loc)
+        # moon['ele'][ind] = np.rad2deg(lun.alt)
+        # moon['azi'][ind] = np.rad2deg(lun.az)         
     
     sun['sunrise'] = data['time'][0]
     sun['sunset'] = data['time'][0] + 24. * 3600.
     i_sun = np.where(sun['ele'] > 0.)
-    
+
     if i_sun:
         sun['sunrise'] = data['time'][i_sun[0][0]]
         sun['sunset'] = data['time'][i_sun[-1][-1]]
