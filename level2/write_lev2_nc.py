@@ -57,7 +57,7 @@ def get_products(site: str,
         
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], c_lwp['freq'][:, 0], assume_unique = False, return_indices = True)
         index = np.where((lev1['pointing_flag'][:] == 0) & (np.abs((lev1['ele'][:]) - c_lwp['ele']) < .6))[0]
-        flag = np.where(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1) > 0)[0]
+        flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0]
 
         if any(index):
             offset = offset_lwp(lev1['ele'][index])
@@ -80,7 +80,7 @@ def get_products(site: str,
         
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], c_iwv['freq'][:, 0], assume_unique = False, return_indices = True)
         index = np.where((lev1['pointing_flag'][:] == 0) & (np.abs((lev1['ele'][:]) - c_iwv['ele']) < .6))[0]
-        flag = np.where(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1) > 0)[0]
+        flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0]
         
         if any(index):
             offset = offset_iwv(lev1['ele'][index])
@@ -99,7 +99,7 @@ def get_products(site: str,
 
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], c_tze['freq'][:, 0], assume_unique = False, return_indices = True)
         index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_tze['ele']))) * c_tze['ele']) - np.transpose(np.ones((len(c_tze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]
-        flag = np.where(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1) > 0)[0]
+        flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0]
         
         if any(index):
             rpg_dat['altitude'] = c_tze['height_grid']            
@@ -173,7 +173,7 @@ def get_products(site: str,
 
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], c_hze['freq'][:, 0], assume_unique = False, return_indices = True)
         index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_hze['ele']))) * c_hze['ele']) - np.transpose(np.ones((len(c_hze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]
-        flag = np.where(np.sum(lev1['quality_flag'][:, freq_ind], axis = 1) > 0)[0]
+        flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0]
         
         if any(index):
             rpg_dat['altitude'] = c_hze['height_grid']            
@@ -202,12 +202,16 @@ def get_products(site: str,
         _, freq_ind_tze, _ = np.intersect1d(lev1['frequency'][:], c_tze['freq'][:,0], assume_unique = False, return_indices = True)
         _, freq_ind_hze, _ = np.intersect1d(lev1['frequency'][:], c_hze['freq'][:,0], assume_unique = False, return_indices = True)
         index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_tze['ele']))) * c_tze['ele']) - np.transpose(np.ones((len(c_tze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(c_hze['ele']))) * c_hze['ele']) - np.transpose(np.ones((len(c_hze['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]
-        flag = np.where((np.sum(lev1['quality_flag'][:, freq_ind_tze], axis = 1) > 0) | (np.sum(lev1['quality_flag'][:, freq_ind_hze], axis = 1) > 0))[0]
+        flag = np.where((np.sum(lev1['quality_flag'][index, freq_ind_tze], axis = 1) > 0) | (np.sum(lev1['quality_flag'][index, freq_ind_hze], axis = 1) > 0))[0]
         
         if any(index):                     
             rpg_dat['altitude'] = c_tze['height_grid']            
             rpg_dat['temperature'] = np.ones((len(index), c_tze['n_height_grid'])) * Fill_Value_Float
-            rpg_dat['water_vapor_vmr'] = np.ones((len(index), c_hze['n_height_grid'])) * Fill_Value_Float      
+            rpg_dat['water_vapor_vmr'] = np.ones((len(index), c_hze['n_height_grid'])) * Fill_Value_Float
+            rpg_dat['relative_humidity'] = np.ones((len(index), c_hze['n_height_grid'])) * Fill_Value_Float   
+            rpg_dat['relative_humidity_random_error'] = np.ones((len(index), c_hze['n_height_grid'])) * Fill_Value_Float
+            rpg_dat['relative_humidity_systematic_error'] = np.ones((len(index), c_hze['n_height_grid'])) * Fill_Value_Float
+            
 
             tze_offset = offset_tze(lev1['ele'][index])
             tze_coeff_lin = lin_tze(lev1['ele'][index])
@@ -226,8 +230,9 @@ def get_products(site: str,
             rpg_dat['water_vapor_vmr_random_error'] = ran_hze(lev1['ele'][index]).T
             rpg_dat['water_vapor_vmr_systematic_error'] = sys_hze(lev1['ele'][index]).T           
 
-            rpg_dat['relative_humidity'], rpg_dat['relative_humidity_random_error'] = abshum_to_rh(rpg_dat['temperature'], rpg_dat['water_vapor_vmr'], rpg_dat['temperature_random_error'], rpg_dat['water_vapor_vmr_random_error'])
-            _, rpg_dat['relative_humidity_systematic_error'] = abshum_to_rh(rpg_dat['temperature'], rpg_dat['water_vapor_vmr'], rpg_dat['temperature_systematic_error'], rpg_dat['water_vapor_vmr_systematic_error'])             
+            proc_rh = np.where((np.sum(lev1['quality_flag'][index, freq_ind_tze], axis = 1) == 0) | (np.sum(lev1['quality_flag'][index, freq_ind_hze], axis = 1) == 0))[0]
+            rpg_dat['relative_humidity'][proc_rh, :], rpg_dat['relative_humidity_random_error'][proc_rh, :] = abshum_to_rh(rpg_dat['temperature'][proc_rh, :], rpg_dat['water_vapor_vmr'][proc_rh, :], rpg_dat['temperature_random_error'][proc_rh, :], rpg_dat['water_vapor_vmr_random_error'][proc_rh, :])
+            _, rpg_dat['relative_humidity_systematic_error'][proc_rh, :] = abshum_to_rh(rpg_dat['temperature'][proc_rh, :], rpg_dat['water_vapor_vmr'][proc_rh, :], rpg_dat['temperature_systematic_error'][proc_rh, :], rpg_dat['water_vapor_vmr_systematic_error'][proc_rh, :])             
             
         else:
             raise RuntimeError(['No suitable data found for processing.'])                 
@@ -248,7 +253,6 @@ def get_products(site: str,
             rpg_dat[ivars][flag, :] = ma.masked
         elif (rpg_dat[ivars].ndim == 1) & (len(rpg_dat[ivars]) == len(rpg_dat['time'])):
             rpg_dat[ivars][flag] = ma.masked 
-          
                     
     return rpg_dat, att
 
