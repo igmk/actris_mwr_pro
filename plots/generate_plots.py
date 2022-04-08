@@ -99,7 +99,6 @@ def generate_figure(nc_file: str,
             _plot_instrument_data(ax, field, name, source, time, fig, nc_file, ele_range, pointing)
         else:
             ax_value = _read_ax_values(nc_file)            
-            time, field = _mark_gaps(time, field, 20)
             ax_value = (time, ax_value[1])
             field, ax_value = _screen_high_altitudes(field, ax_value, max_y)
             _set_ax(ax, max_y)
@@ -118,7 +117,8 @@ def generate_figure(nc_file: str,
 
 def _mark_gaps(time: np.ndarray,
                data: ma.MaskedArray,
-               max_allowed_gap: float = 1) -> tuple:
+               max_allowed_gap: float = 1, 
+               mask_edge: int = 0) -> tuple:
 
     assert time[0] >= 0
     assert time[-1] <= 24
@@ -132,9 +132,11 @@ def _mark_gaps(time: np.ndarray,
     data_new = ma.copy(data)
     time_new = np.copy(time)
     gap_indices = np.where(np.diff(time) > max_gap)[0]
+    for ia in range(mask_edge):
+        gap_indices = np.unique(np.sort(np.append(gap_indices, [gap_indices-ia, gap_indices+ia])))
     temp_array = np.zeros((2, data.shape[1]))
     temp_mask = np.ones((2, data.shape[1]))
-    time_delta = 0.001
+    time_delta = 0.
     for ind in np.sort(gap_indices)[::-1]:
         ind += 1
         data_new = np.insert(data_new, ind, temp_array, axis=0)
@@ -321,8 +323,11 @@ def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y
     nlev = 16
     assert variables.plot_range is not None
     
+    if name == 'temperature':
+        nlev = 21
+    
     if name == 'relative_humidity':
-        data[data > 1.] = ma.masked
+        data[data > 1.] = 1.
         data*=100.
         nlev = 11
 
@@ -334,19 +339,27 @@ def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y
         cmap = plt.get_cmap(variables.cbar, nlev)
 
     vmin, vmax = variables.plot_range
-    data, width = _calculate_rolling_mean(axes[0], data, win=.5)
-    f = interp2d(axes[0][~np.isnan(data[:,0])], axes[1], data[~np.isnan(data)])
-    data_new = f(*axes)
-    pl = ax.contourf(*axes, data_new, levels=np.linspace(vmin,vmax,nlev), cmap=cmap, extend=variables.cbar_ext)
-    cp = ax.contour(axes[0][700:-700], axes[1], data_new[:, 700:-700], levels=np.linspace(vmin,vmax,nlev), colors='black', linewidths=.0001)
-    cl = plt.clabel(cp, fontsize=8)
-    for l in cl:
-        l.set_va("bottom")
-    cp = ax.contour(*axes, data_new, levels=np.linspace(vmin,vmax,nlev), colors='black', linewidths=.8)
+    if np.ma.median(np.diff(axes[0][:])) < 5/60:
+        data, width = _calculate_rolling_mean(axes[0], data, win=15/60)    
+        time, data = _mark_gaps(axes[0][:], data, 35, 20)
+    else:
+        time, data = _mark_gaps(axes[0][:], data, 35, 0)
+    pl = ax.contourf(time, axes[1], data.T, levels=np.linspace(vmin,vmax,nlev), cmap=cmap, extend=variables.cbar_ext)
+    ds = int(np.round(len(time)*.15))
+    cp = ax.contour(time[ds:len(time)-ds], axes[1], data[ds:len(time)-ds, :].T, levels=np.linspace(vmin,vmax,nlev), colors='black', linewidths=.0001)
+    cbl = plt.clabel(cp, fontsize=8)
+    ta = []
+    for l in cbl:
+        l.set_va('bottom')
+        l.set_weight('bold')
+        if float(l.get_text()) in ta:
+            l.set_visible(False)
+        ta = np.append(ta, [float(l.get_text())])
+    cp = ax.contour(time, axes[1], data.T, levels=np.linspace(vmin,vmax,nlev), colors='black', linewidths=.8)
    
     if variables.plot_type != 'bit':
         colorbar = _init_colorbar(pl, ax)
-        axlocator = colorbar.ax.yaxis.get_major_locator()
+        # locator = colorbar.ax.yaxis.get_major_locator()
         locator, formatter = colorbar._get_ticker_locator_formatter()
         locator.set_params(nbins=6)
         colorbar.update_ticks()
@@ -388,11 +401,10 @@ def _plot_irt(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     variables = ATTRIBUTES[name]
     vmin, vmax = variables.plot_range
     ir_wavelength = read_nc_fields(nc_file, 'ir_wavelength')
-    # rolling_mean, width = _calculate_rolling_mean(time, data_in[:,0])
-    
-    ax.plot(time, data_in[:,0],'o', markersize=.75, fillstyle='full', color='sienna', label=str(ir_wavelength[0])+' µm')
-    ax.plot(time, data_in[:,1],'o', markersize=.75, fillstyle='full', color=_COLORS['shockred'], label=str(ir_wavelength[1])+' µm')
-    # ax.plot(time[int(width / 2 - 1):int(-width / 2)], rolling_mean, color='red')
+    if not ma.all(ma.is_masked(data_in[:, 0])):
+        ax.plot(time, data_in[:,0],'o', markersize=.75, fillstyle='full', color='sienna', label=str(ir_wavelength[0])+' µm')
+    if not ma.all(ma.is_masked(data_in[:, 1])):    
+        ax.plot(time, data_in[:,1],'o', markersize=.75, fillstyle='full', color=_COLORS['shockred'], label=str(ir_wavelength[1])+' µm')
     ax.set_ylim((vmin, vmax))
     ax.legend(loc='upper right')
     _set_ax(ax, vmax, variables.ylabel, vmin)
@@ -409,9 +421,9 @@ def _plot_mqf(ax, data_in: ndarray, time: ndarray):
     
 def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
     fig.clear()
-    fig, axs = plt.subplots(3,1, figsize=(12.52, 16), dpi=120)        
+    fig, axs = plt.subplots(3,1, figsize=(12.52, 16), dpi=120, facecolor='w')        
     frequency = read_nc_fields(nc_file, 'frequency')
-    
+ 
     qf = _get_bit_data(data_in[:,0], [4,5,6])
     _plot_segment_data(axs[0], qf, 'quality_flag_0', (time, np.linspace(.5,2.5,3)))
     axs[0].set_yticks(np.arange(3))
@@ -445,9 +457,7 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
     quality_flag = read_nc_fields(nc_file, 'quality_flag')
     quality_flag = _elevation_filter(nc_file, quality_flag, ele_range)
     quality_flag = _pointing_filter(nc_file, quality_flag, ele_range, pointing)
-    tb_m = np.round(np.mean(data_in[np.where(quality_flag == 0)[0]], axis=0), 2) #TB mean
-    tb_s = np.round(np.std(data_in[np.where(quality_flag == 0)[0]], axis=0), 2) #TB std
-
+    
     fig.clear()
     fig, axs = plt.subplots(7,2, figsize=(13, 16), facecolor='w', edgecolor='k', sharex=True, dpi=120)
     fig.subplots_adjust(hspace=.035, wspace=.15)
@@ -456,19 +466,24 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
     axs[0,0].set_title('K-Band Channels', fontsize=15, color=_COLORS['darkgray'], loc='right')
     axs[0,1].set_title('V-Band Channels', fontsize=15, color=_COLORS['darkgray'], loc='right')
     trans = ScaledTranslation(10/72, -5/72, fig.dpi_scale_trans)
+    tb_m, tb_s = [], []
     
     for i, ax in enumerate(axs.T.flatten()):
-        ax.plot(time, np.ones(len(time))*tb_m[i],'--', color=_COLORS['darkgray'], linewidth=1)
+        tb_m = np.append(tb_m, [np.mean(data_in[np.where(quality_flag[:,i] == 0)[0], i])]) #TB mean
+        tb_s = np.append(tb_s, [np.std(data_in[np.where(quality_flag[:,i] == 0)[0], i])]) #TB std        
+        ax.plot(time, np.ones(len(time))*tb_m[i], '--', color=_COLORS['darkgray'], linewidth=1)
         ax.plot(time, data_in[:,i],'ko', markersize=.75, fillstyle='full')
         flag = np.where(quality_flag[:,i] > 0)[0]
+        no_flag = np.where(quality_flag[:,i] == 0)[0]
         ax.plot(time[flag], data_in[flag,i],'ro', markersize=.75, fillstyle='full')
         ax.set_facecolor(_COLORS['lightgray'])
-        dif = np.max(data_in[:,i]) - np.min(data_in[:,i])
-        _set_ax(ax, np.max(data_in[:,i])+.25*dif, '', np.max([0., np.min(data_in[:,i])-.25*dif]))
+        dif = np.max(data_in[no_flag,i]) - np.min(data_in[no_flag,i])
+        _set_ax(ax, np.max(data_in[no_flag,i])+.25*dif, '', np.max([0., np.min(data_in[no_flag,i])-.25*dif]))
         _set_labels(fig, ax, nc_file)
         ax.text(.05,.9,str(frequency[i])+' GHz', transform=ax.transAxes + trans, color=_COLORS['darkgray'], fontweight='bold')
-        ax.text(.55,.9,str(tb_m[i])+' +/- '+str(tb_s[i])+' K', transform=ax.transAxes+trans, color=_COLORS['darkgray'], fontweight='bold')
-        
+        ax.text(.55,.9,str(round(tb_m[i],2))+' +/- '+str(round(tb_s[i],2))+' K', transform=ax.transAxes+trans, color=_COLORS['darkgray'], fontweight='bold')
+
+    "TB mean"
     axa = fig.add_subplot(121)
     axa.set_position([.125, -.05, .72, .125])
     axa.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
@@ -479,29 +494,34 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
     
     axaK = fig.add_subplot(121)
     axaK.set_position([.125, -.05, .36, .125])
-    axaK.plot(frequency, tb_m, 'o', color=_COLORS['darkgray'], markerfacecolor=_COLORS['darkgray'], markersize=4)
-    axaK.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle='', capsize=8, color=_COLORS['darkgray'])
+    axaK.plot(frequency, tb_m, 'ko', markerfacecolor='k', markersize=4)
+    axaK.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle='', capsize=8, color='k')
     axaK.set_xticks(frequency)
     axaK.set_xticklabels(axaK.get_xticks(), rotation = 30)
     axaK.set_xlim([22, 32])
-    axaK.set_ylim([0, 80])
+    axaK.set_ylim([0, np.max(tb_m+tb_s)+30])
     axaK.tick_params(axis='both', labelsize=12)
     axaK.set_facecolor(_COLORS['lightgray'])
     
     axaV = fig.add_subplot(122)
     axaV.set_position([.54, -.05, .36, .125])
-    axaV.plot(frequency, tb_m, 'o', color=_COLORS['darkgray'], markerfacecolor=_COLORS['darkgray'], markersize=4)
-    axaV.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle='', capsize=8, color=_COLORS['darkgray'])
+    axaV.plot(frequency, tb_m, 'ko', markerfacecolor='k', markersize=4)
+    axaV.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle='', capsize=8, color='k')
     axaV.set_xticks(frequency)
     axaV.set_xticklabels(axaV.get_xticks(), rotation = 30)    
     axaV.set_xlim([51, 58.5])    
-    axaV.set_ylim([100, 300])
+    axaV.set_ylim([0, np.max(tb_m+tb_s)+30])
     axaV.tick_params(axis='both', labelsize=12)
     axaV.set_facecolor(_COLORS['lightgray'])
     
     axaK.spines['right'].set_visible(False)
     axaV.spines['left'].set_visible(False)
     axaV.yaxis.tick_right()    
+    d = .015
+    axaK.plot((1-d,1+d), (-d,+d), transform=axaK.transAxes, color='k', clip_on=False)
+    axaK.plot((1-d,1+d),(1-d,1+d), transform=axaK.transAxes, color='k', clip_on=False)
+    axaV.plot((-d,+d), (1-d,1+d), transform=axaV.transAxes, color='k', clip_on=False)
+    axaV.plot((-d,+d), (-d,+d), transform=axaV.transAxes, color='k', clip_on=False)    
     axaK.set_ylabel('Brightness Temperature [K]', fontsize=12)
     axaV.text(-.08, .9, 'TB daily means +/- standard deviation', fontsize=13, horizontalalignment='center', transform=axaV.transAxes, color=_COLORS['darkgray'], fontweight='bold')
     axaV.text(-.08, -.35, 'Frequency [GHz]', fontsize=13, horizontalalignment='center', transform=axaV.transAxes)
@@ -517,7 +537,6 @@ def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
         spd = read_nc_fields(nc_file, 'wind_speed')
         rolling_mean, width = _dir_avg(time, spd, data)
     else:        
-        # data = _filter_noise(data)
         rolling_mean, width = _calculate_rolling_mean(time, data)
     time = _nan_time_gaps(time)
     rolling_mean = np.interp(time, time[int(width / 2 - 1):int(-width / 2)], rolling_mean)
@@ -546,7 +565,9 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray):
     
 def _dir_avg(time: ndarray, 
              spd: ndarray, 
-             drc: ndarray):
+             drc: ndarray,
+             win: float=.5):
+    width = len(time[time <= time[0] + win])
     if (width % 2) != 0:
         width = width + 1
     seq = range(len(time))
@@ -620,7 +641,7 @@ def _calculate_rolling_mean(time: ndarray, data: ndarray, win: float = .5) -> Tu
         rolling_mean = rolling_mean / np.sum(rolling_window)
     else:
         rolling_window = np.ones((1, width))*np.blackman(width)
-        rolling_mean = convolve2DFFT(data, rolling_window.T, max_missing=.001)
+        rolling_mean = convolve2DFFT(data, rolling_window.T, max_missing=.1)
     return rolling_mean, width
 
 
