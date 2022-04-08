@@ -92,10 +92,13 @@ def prepare_data(path_to_files: str,
                 file_list_irt = get_file_list(path_to_files, path_to_prev, 'irt')
                 if any(file_list_irt):                
                     rpg_irt = get_rpg_bin(file_list_irt)
+                    rpg_irt.data['irt'][rpg_irt.data['irt'] < 150.] = Fill_Value_Float
                     rpg_bin.data['ir_wavelength'] = rpg_irt.header['_f']
                     rpg_bin.data['ir_bandwidth'] = params['ir_bandwidth']
                     rpg_bin.data['ir_beamwidth'] = params['ir_beamwidth']                    
-                    _add_interpol1(rpg_bin.data, rpg_irt.data['irt'] + 273.15, rpg_irt.data['time'], 'irt')
+                    _add_interpol1(rpg_bin.data, rpg_irt.data['irt'], rpg_irt.data['time'], 'irt')
+                    _add_interpol1(rpg_bin.data, rpg_irt.data['irt_ele'], rpg_irt.data['time'], 'irt_ele')
+                    _add_interpol1(rpg_bin.data, rpg_irt.data['irt_azi'], rpg_irt.data['time'], 'irt_azi')
 
                 file_list_met = get_file_list(path_to_files, path_to_prev, 'met')
                 if any(file_list_met):                    
@@ -151,11 +154,13 @@ def _append_hkd(file_list_hkd: list,
     if all(hkd.data['station_latitude'] == Fill_Value_Float):
         _add_interpol1(rpg_bin.data, np.ones(len(hkd.data['time'])) * params['station_latitude'], hkd.data['time'], 'station_latitude')                       
     else:
-        _add_interpol1(rpg_bin.data, hkd.data['station_latitude'], hkd.data['time'], 'station_latitude')                       
+        idx = np.where(hkd.data['station_latitude'] != Fill_Value_Float)[0]
+        _add_interpol1(rpg_bin.data, hkd.data['station_latitude'][idx], hkd.data['time'][idx], 'station_latitude')                       
     if all(hkd.data['station_longitude'] == Fill_Value_Float):           
         _add_interpol1(rpg_bin.data, np.ones(len(hkd.data['time'])) * params['station_longitude'], hkd.data['time'], 'station_longitude')        
-    else:        
-        _add_interpol1(rpg_bin.data, hkd.data['station_longitude'], hkd.data['time'], 'station_longitude')   
+    else:
+        idx = np.where(hkd.data['station_longitude'] != Fill_Value_Float)[0]
+        _add_interpol1(rpg_bin.data, hkd.data['station_longitude'][idx], hkd.data['time'][idx], 'station_longitude')   
     
     if data_type in ('1B01','1C01'):
         _add_interpol1(rpg_bin.data, hkd.data['temp'][:,0:2], hkd.data['time'], 't_amb')
