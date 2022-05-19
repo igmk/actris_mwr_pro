@@ -68,7 +68,7 @@ GLOBAL_ALL = {
         description='Data license',
     ),
     'instrument_calibration_status': SiteConfig(
-        description='Instrument calibration status',
+        description='Status of instrument absolute calibration',
     ),
     'date_of_last_absolute_calibration': SiteConfig(
         description='Time of last (automatic or manual) absolute calibration; LN2 or sky tipping as YYYYMMDD',
@@ -79,7 +79,7 @@ GLOBAL_ALL = {
     'type_of_automatic_calibrations': SiteConfig(
         description='Type of automatic calibrations including information on calibration interval and respective integration time',
     ),
-    'factory_history': SiteConfig(
+    'instrument_history': SiteConfig(
         description='Logbook repair/replacement work performed',
     ),
     'ir_instrument_manufacturer': SiteConfig(
@@ -94,6 +94,9 @@ GLOBAL_ALL = {
     'ir_accuracy': SiteConfig(
         description='Total absolute calibration uncertainty of infrared brightness temperature, one standard deviation. Unit: K',    
     ),
+    'ir_instrument_history': SiteConfig(
+        description='Logbook repair/replacement work performed',
+    ),
     'met_instrument_manufacturer': SiteConfig(
         description='Manufacturer of the weather station',
     ),
@@ -103,6 +106,9 @@ GLOBAL_ALL = {
     'met_instrument_fabrication_year': SiteConfig(
         description='Fabrication year of the weather station',
     ),
+    'met_instrument_history': SiteConfig(
+        description='Logbook repair/replacement work performed',
+    ),    
     'air_temperature_accuracy': SiteConfig(
         description='Air temperature accuracy. Unit: K.',
     ),
@@ -110,7 +116,7 @@ GLOBAL_ALL = {
         description='Relative humidity accuracy. Unit: 1.',
     ),
     'air_pressure_accuracy': SiteConfig(
-        description='Air pressure accuracy. Unit: Pa.',
+        description='Air pressure accuracy. Unit: hPa.',
     ),
     'rain_rate_accuracy': SiteConfig(
         description='Rain rate accuracy. Unit: mm/h.',

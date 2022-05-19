@@ -9,6 +9,7 @@ import pandas as pd
 from typing import Optional, Tuple, Union
 import glob
 import netCDF4
+from scipy import signal
 
 SECONDS_PER_MINUTE = 60
 SECONDS_PER_HOUR = 3600
@@ -154,8 +155,21 @@ def get_coeff_list(site: str,
     
     c_list = sorted(glob.glob('site_config/' + site + '/coefficients/' + prefix + '*.nc'))
     if len(c_list) < 1:
-        raise RuntimeError(['Error: no coefficient files found in directory ' + path_to_files])
+        raise RuntimeError(['Error: no coefficient files found in directory ' + 'site_config/' + site + '/coefficients/'])
     return c_list
+
+
+def read_nc_field_name(nc_file: str, name: str) -> str:
+    """Reads selected variable name from a netCDF file.
+    Args:
+        nc_file: netCDF file name.
+        name: Variable to be read, e.g. 'temperature'.
+    Returns:
+        str
+    """
+    with netCDF4.Dataset(nc_file) as nc:
+        long_name = nc.variables[name].getncattr('long_name')
+    return long_name    
 
 
 def read_nc_fields(nc_file: str, names: Union[str, list]) -> Union[ma.MaskedArray, list]:
@@ -168,14 +182,13 @@ def read_nc_fields(nc_file: str, names: Union[str, list]) -> Union[ma.MaskedArra
         List of arrays otherwise.
     """
     names = [names] if isinstance(names, str) else names
-    nc = netCDF4.Dataset(nc_file)
-    data = [nc.variables[name][:] for name in names]
-    nc.close()
+    with netCDF4.Dataset(nc_file) as nc:
+        data = [nc.variables[name][:] for name in names]
     return data[0] if len(data) == 1 else data
 
 
 def convolve2DFFT(slab,kernel,max_missing=0.1,verbose=True):
-    '''2D convolution using fft.
+    """2D convolution using fft.
     <slab>: 2d array, with optional mask.
     <kernel>: 2d array, convolution kernel.
     <max_missing>: real, max tolerable percentage of missings within any
@@ -189,8 +202,7 @@ def convolve2DFFT(slab,kernel,max_missing=0.1,verbose=True):
                    is different from convolve2D(), where the number of valid
                    values at edges drops as the kernel approaches the edge.
     Return <result>: 2d convolution.
-    '''
-    from scipy import signal
+    """
     assert np.ndim(slab)==2, "<slab> needs to be 2D."
     assert np.ndim(kernel)==2, "<kernel> needs to be 2D."
     assert kernel.shape[0]<=slab.shape[0], "<kernel> size needs to <= <slab> size."

@@ -2,7 +2,7 @@
 import numpy as np
 import datetime
 import utils
-
+import logging
 
 def get_rpg_bin(file_list: list) -> np.ndarray:    
     """ This function reads one day of a RPG MWR binary file type and concatenates the data. 
@@ -44,8 +44,11 @@ def stack_files(file_list):
     header = {}
     
     for file in file_list:
-        
-        header_tmp, data_tmp = eval(reader_name + '(file)')
+        try:
+            header_tmp, data_tmp = eval(reader_name + '(file)')
+        except (TypeError, ValueError) as err:
+            logging.warning(err)
+            continue            
         _stack_header(header_tmp, header, np.add)        
         _stack_data(data_tmp,data, np.concatenate)
 
@@ -296,7 +299,7 @@ def read_irt(file_name: str) -> dict:
                 for sample in range(header['n']): 
                     data['time'][sample] = np.fromfile( file, np.int32, 1)
                     data['rain'][sample] = np.fromfile( file, np.byte, 1)
-                    data['irt'][sample,] = np.fromfile( file, np.float32, header['_n_f'])
+                    data['irt'][sample,] = np.fromfile( file, np.float32, header['_n_f']) + 273.15
                     if code == 671112496:
                         ang = np.fromfile( file, np.float32, 1)
                     elif code == 671112000:

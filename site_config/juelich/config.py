@@ -18,8 +18,8 @@ params = {
     'int_time': 1, 
 
     # bandwidth of the central frequency in GHz (center frequency of single of upper side-band)
-    'bandwidth': np.array([230, 230, 230, 230, 230, 230, 230, 
-                           230, 230, 230, 230, 600, 1000, 2000]),
+    'bandwidth': np.array([230., 230., 230., 230., 230., 230., 230., 
+                           230., 230., 230., 230., 600., 1000., 2000.]),
 
     # single, double, or double-double sideband (1, 2, 4 are possible values)
     'sideband_count': 1,
@@ -27,6 +27,9 @@ params = {
     # 56.xx +/- X +/- Y
     'sideband_IF_separation': np.array([[0.], [0.], [0.], [0.], [0.], [0.], [0.], 
                                         [0.], [0.], [0.], [0.], [0.], [0.], [0.]]),
+    
+    # Beam width (3 dB) of the microwave radiometer
+    'beam_width': -999.,
 
     # offset correction for TBs, i.e. adjustement of observation to nominal frequency:
     # Note: RPG offers a frequency shift within the radiometer software. 
@@ -43,7 +46,7 @@ params = {
     'TB_threshold': np.array([2.7, 330.]), 
     
     # IRT parameters
-    'ir_bandwith' : -999.,
+    'ir_bandwidth' : -999.,
     'ir_beamwidth': -999.,
 
     # solar angle flagging:
@@ -69,10 +72,12 @@ params = {
     # Bit 8: tb_offset_above_threshold
     'flag_status': [0, 0, 0, 0, 0, 0, 0, 1],
     
-    # threshold for spectral consistency quality flag 
-    # applied to standard deviation of absolute difference of retrieved and observed brightness temperatures
-    'th_std': np.array([.3, .2, .2, .2, .2, .2, .2, 
-                        .5, .5, .5, .5, .3, .3, .3]),     
+    # factor for spectral consistency quality flag 
+    # multiplied with channel TB retrieval error
+    # compared to absolute difference of retrieved and observed brightness temperatures
+    # (subtracting a 5min mean for noise reduction)
+    'tbx_f': np.array([2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 
+                        3.5, 3.5, 3.5, 3.5, 3.5, 3.5, 3.5]),     
     
     # thresholds for met quality flags
     'met_thresholds': np.array([[213.15, 333.15], # air_temperature [K]
@@ -89,7 +94,7 @@ global_specs = {
     'conventions' : 'CF-1.8',
     
     # A succinct description of what is in the dataset, composed of instrument type and site name
-    'title' : 'Juelich RPG HATPRO G5',
+    'title' : 'HATPRO G5 MWR at Juelich, Germany',
     
     # Versioning of the datasets (containing date and software version)
     'history' : '',
@@ -109,7 +114,7 @@ global_specs = {
     # Name of measurement station
     'site_location' : 'Juelich, Germany',
     
-    # E-PROFILE instrument identifier
+    # E-PROFILE instrument identifier. “A” if there is only one instrument on the station. Additional instruments are identified with the letters B, C, etc.
     'instrument_id' : '',
     
     # WIGOS Station identifier acording to WIGOS convention
@@ -122,7 +127,7 @@ global_specs = {
     'instrument_manufacturer' : 'Radiometer Physics (RPG)',
     
     # Instrument model
-    'instrument_model' : 'RPG-HATPRO',
+    'instrument_model' : 'HATPRO',
     
     # Instrument generation
     'instrument_generation' : 'G5',
@@ -142,7 +147,7 @@ global_specs = {
     # Data license
     'license' : '',
     
-    # Instrument calibration status
+    # Status of instrument absolute calibration
     'instrument_calibration_status' : '',
     
     # Time of last (automatic or manual) absolute calibration; LN2 or sky tipping as YYYYMMDD
@@ -155,7 +160,7 @@ global_specs = {
     'type_of_automatic_calibrations' : '',
     
     # Logbook repair/replacement work performed
-    'factory_history' : '',
+    'instrument_history' : '',
     
     # Manufacturer of the infrared radiometer
     'ir_instrument_manufacturer' : '',
@@ -169,6 +174,9 @@ global_specs = {
     # Total absolute calibration uncertainty of infrared brightness temperature, one standard deviation. Unit: K
     'ir_accuracy' : '',    
     
+    # Logbook repair/replacement work performed
+    'ir_instrument_history' : '',    
+    
     # Manufacturer of the weather station
     'met_instrument_manufacturer' : '',
     
@@ -178,13 +186,16 @@ global_specs = {
     # Fabrication year of the weather station
     'met_instrument_fabrication_year' : '',     
     
+    # Logbook repair/replacement work performed
+    'met_instrument_history' : '',      
+    
     # Air temperature accuracy. Unit: K.
     'air_temperature_accuracy' : '',
     
     # Relative humidity accuracy. Unit: 1.
     'relative_humidity_accuracy' : '',
     
-    # Air pressure accuracy. Unit: Pa.
+    # Air pressure accuracy. Unit: hPa.
     'air_pressure_accuracy' : '',
     
     # Rain rate accuracy. Unit: mm/h.

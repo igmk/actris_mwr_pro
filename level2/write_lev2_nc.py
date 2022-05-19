@@ -32,9 +32,8 @@ def lev2_to_nc(site: str,
     """
     
     global_attributes, params = get_site_specs(site, data_type)
-    lev1 = nc.Dataset(lev1_path)  
-    rpg_dat, att = get_products(site, lev1, data_type, params, global_attributes)
-    lev1.close()
+    with nc.Dataset(lev1_path) as lev1:
+        rpg_dat, att = get_products(site, lev1, data_type, params, global_attributes)
     hatpro = rpg_mwr.Rpg(rpg_dat)
     hatpro.data = get_data_attributes(hatpro.data, data_type)
     rpg_mwr.save_rpg(hatpro, output_file, att, data_type, params, site)
@@ -48,7 +47,7 @@ def get_products(site: str,
     "Derive specified Level 2 products"
     
     rpg_dat = dict()
-    lev1_vars = ['time', 'time_bounds', 'station_latitude', 'station_longitude', 'azi', 'ele']    
+    lev1_vars = ['time', 'time_bnds', 'station_latitude', 'station_longitude', 'azi', 'ele']    
     
             
     if data_type == '2I06':
@@ -67,9 +66,13 @@ def get_products(site: str,
             rpg_dat['Lwp_random_error'] = ran_lwp(lev1['ele'][index])
             rpg_dat['Lwp_systematic_error'] = sys_lwp(lev1['ele'][index])         
 
-            lwp_offset = get_lwp_offset(lev1['time'][index], rpg_dat['Lwp'], lev1, index, site)
-            rpg_dat['Lwp'] = rpg_dat['Lwp'] - lwp_offset
-            rpg_dat['Lwp_offset'] = lwp_offset
+            freq_31 = np.where(lev1['frequency'][:] == 31.4)[0]
+            if len(freq_31) == 1:
+                lwp_offset = get_lwp_offset(lev1['time'][index], np.copy(rpg_dat['Lwp']), np.squeeze(lev1['tb'][index, freq_31]), lev1, index, site)
+                rpg_dat['Lwp'] = rpg_dat['Lwp'] - lwp_offset
+                rpg_dat['Lwp_offset'] = lwp_offset
+            else:
+                rpg_dat['Lwp_offset'] = np.ones(len(index)) * Fill_Value_Float
         else:
             raise RuntimeError(['No suitable data found for processing.'])             
         
@@ -406,35 +409,35 @@ def abshum_to_rh(T: np.ndarray,
     return rh, drh
     
     
-def get_lwp_offset(time: np.ndarray, 
+def get_lwp_offset(time: np.ndarray,
                    lwp: np.ndarray,
+                   tb: np.ndarray,
                    lev1: dict,
                    index: np.ndarray, 
                    site: str) -> np.ndarray:
     "Correct Lwp offset using 2min standard deviation and IRT"
     
-    lwp_df = pd.DataFrame({'Lwp': lwp}, index = pd.to_datetime(time, unit = 's'))
-    lwp_cc = lwp_df.resample("2min", origin = 'start', closed = 'left', label = 'left').count()
-    lwp_cc.index = lwp_cc.index + to_offset('1min')
-    lwp_std = lwp_df.resample("2min", origin = 'start', closed = 'left', label = 'left').std()
-    lwp_std.index = lwp_std.index + to_offset('1min')
-    lwp_std[lwp_cc['Lwp'] < 30] = np.nan    
-    lwp_mx = lwp_std.resample("20min", origin = 'start', closed = 'left', label = 'left').max()
-    lwp_mx.index = lwp_mx.index + to_offset('10min')
-    lwp_mx = df_interp(lwp_mx, lwp_df.index)   
+    tb_df = pd.DataFrame({'Tb': tb}, index = pd.to_datetime(time, unit = 's'))
+    tb_cc = tb_df.resample("2min", origin = 'start', closed = 'left', label = 'left').count()
+    tb_cc.index = tb_cc.index + to_offset('1min')
+    tb_std = tb_df.resample("2min", origin = 'start', closed = 'left', label = 'left').std()
+    tb_std.index = tb_std.index + to_offset('1min')
+    tb_std[tb_cc['Tb'] < 30] = np.nan    
+    tb_mx = tb_std.resample("20min", origin = 'start', closed = 'left', label = 'left').max()
+    tb_mx.index = tb_mx.index + to_offset('10min')
+    tb_mx = df_interp(tb_mx, tb_df.index)   
     
-    lwp_n = np.copy(lwp)
     if 'irt' in lev1.variables:
         irt = lev1['irt'][index, 0]
         irt_df = pd.DataFrame({'Irt': irt[:]}, index = pd.to_datetime(time, unit = 's'))
         irt_mx = irt_df.resample("20min", origin = 'start', closed = 'left', label = 'left').max()
         irt_mx.index = irt_mx.index + to_offset('10min')
         irt_mx = df_interp(irt_mx, irt_df.index) 
-        lwp_n[(irt_mx['Irt'] > 233.15) & (lwp_mx['Lwp'] > .002) | np.isnan(irt_mx['Irt']) | np.isnan(lwp_mx['Lwp'])] = np.nan
+        lwp[(irt_mx['Irt'] > 233.15) & (tb_mx['Tb'] > .5) | np.isnan(irt_mx['Irt']) | np.isnan(tb_mx['Tb'])] = np.nan
     else:
-        lwp_n[(lwp_mx['Lwp'] > .002) | np.isnan(lwp_mx['Lwp'])] = np.nan
+        lwp[(tb_mx['Tb'] > .5) | np.isnan(tb_mx['Tb'])] = np.nan
         
-    lwp_df = pd.DataFrame({'Lwp': lwp_n}, index = pd.to_datetime(time, unit = 's'))
+    lwp_df = pd.DataFrame({'Lwp': lwp}, index = pd.to_datetime(time, unit = 's'))
     lwp_mn = lwp_df.resample("20min", origin = 'start', closed = 'left', label = 'left').mean()
     lwp_mn.index = lwp_mn.index + to_offset('10min')
     

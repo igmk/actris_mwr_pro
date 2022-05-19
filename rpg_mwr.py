@@ -1,11 +1,11 @@
 from typing import Optional, Union, Tuple
 import numpy as np
-import numpy.ma as ma
+from numpy import ma
 import netCDF4
 from level1.lev1_meta_nc import MetaData
-import utils
+import utils, version
 import datetime
-
+import pdb
 
 class RpgArray:
     """Stores netCDF4 variables, numpy arrays and scalars as RpgArrays.
@@ -124,7 +124,7 @@ class Rpg:
             date_str = '-'.join(utils.seconds2date(t)[:3])
             if date_str == self.date:
                 date_f[i] = 1          
-        ind = np.squeeze(np.where(date_f == 1))
+        ind = np.where(date_f == 1)[0]
         self._screen(ind)
         if len(ind) < 1:
             raise RuntimeError(['Error: no valid data for date: ' + self.date])        
@@ -145,7 +145,8 @@ def save_rpg(rpg: Rpg,
              output_file: str,
              att: dict,
              data_type: str,
-             params: dict) -> Tuple[str, list]:
+             params: dict, 
+             site: str) -> Tuple[str, list]:
     """Saves the RPG MWR file."""
     
     if data_type == '1B01':
@@ -187,8 +188,9 @@ def save_rpg(rpg: Rpg,
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
 
-    rootgrp = init_file(output_file, dims, rpg.data, att)
-    rootgrp.close()
+    with init_file(output_file, dims, rpg.data, att) as rootgrp:
+        setattr(rootgrp, 'date', rpg.date)
+        setattr(rootgrp, 'site', site)
     
     
 def init_file(file_name: str,
@@ -201,6 +203,7 @@ def init_file(file_name: str,
         dimensions: Dictionary containing dimension for this file.
         rpg_arrays: Dictionary containing :class:`RpgArray` instances.
         att_global: Dictionary containing site specific global attributes
+        date: Date string of file
         
     """
     nc = netCDF4.Dataset(file_name, 'w', format='NETCDF4_CLASSIC')
@@ -227,17 +230,17 @@ def _get_dimensions(nc: netCDF4.Dataset,
 
 
 def _write_vars2nc(nc: netCDF4.Dataset, 
-                   cloudnet_variables: dict) -> None:
+                   mwr_variables: dict) -> None:
     """Iterates over RPG instances and write to netCDF file."""
 
-    for obj in cloudnet_variables.values():
+    for obj in mwr_variables.values():
         if obj.data_type == 'f4':
             fill_value = -999.
         else:
             fill_value = -99
 
         size = obj.dimensions or _get_dimensions(nc, obj.data)
-        if obj.name == 'time_bounds':
+        if obj.name == 'time_bnds':
             size = ('time', 'time_bnds')
         nc_variable = nc.createVariable(obj.name, obj.data_type, size, zlib=True,
                                         fill_value=fill_value)
@@ -248,5 +251,6 @@ def _write_vars2nc(nc: netCDF4.Dataset,
 
 def _add_standard_global_attributes(nc: netCDF4.Dataset, 
                                     att_global) -> None:
+    nc.mwrpy_version = version.__version__
     for name, value in att_global.items():
         setattr(nc, name, value)

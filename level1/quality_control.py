@@ -7,7 +7,8 @@ import netCDF4 as nc
 from pandas.tseries.frequencies import to_offset
 
 Fill_Value_Float = -999.
-   
+Fill_Value_Int = -99
+
 def apply_qc(site: str, 
              data: dict, 
              params: dict) -> None: 
@@ -33,6 +34,7 @@ def apply_qc(site: str,
     data['quality_flag_status'] = np.zeros(data['tb'].shape, dtype = np.int32)
     data['tb'][data['tb'] == 0.] = Fill_Value_Float
     c_list = get_coeff_list(site, 'tbx')
+    ind_bit4 = spectral_consistency(data, c_list, params['tbx_f'])
     ind_bit6 = np.where(data['rain'] == 1)
     ind_bit7 = orbpos(data, params)
         
@@ -63,7 +65,7 @@ def apply_qc(site: str,
         if params['flag_status'][3] == 1:
             data['quality_flag_status'][:, freq] = setbit(data['quality_flag_status'][:, freq], 3)
         else:        
-            ind = spectral_consistency(data, c_list[freq], freq, params['th_std'][freq])
+            ind = np.where(ind_bit4[:, freq] == 1)
             data['quality_flag'][ind, freq] = setbit(data['quality_flag'][ind, freq], 3) 
         
         """ Bit 5: Receiver sanity """        
@@ -111,7 +113,7 @@ def orbpos(data: dict,
         
         obs_loc.lat, obs_loc.lon = str(data['station_latitude'][ind]), str(data['station_longitude'][ind])
         obs_loc.elevation = data['station_altitude'][ind]
-        obs_loc.date = datetime.datetime.fromtimestamp(tim).strftime('%Y/%m/%d %H:%M:%S')
+        obs_loc.date = datetime.datetime.utcfromtimestamp(tim).strftime('%Y/%m/%d %H:%M:%S')
         sol.compute(obs_loc)
         sun['ele'][ind] = np.rad2deg(sol.alt)
         sun['azi'][ind] = np.rad2deg(sol.az)            
@@ -133,32 +135,37 @@ def orbpos(data: dict,
 
 
 def spectral_consistency(data: dict, 
-                         c_file: str,
-                         ind: np.int32,
-                         th_std: np.float32) -> np.ndarray:
+                         c_file: list,
+                         tbx_f: np.ndarray) -> np.ndarray:
     """ Applies spectral consistency coefficients for given frequency index and returns indices to be flagged """
     
-    coeff = nc.Dataset(c_file)
-    _, freq_ind, coeff_ind = np.intersect1d(data['frequency'], coeff['freq'], assume_unique = False, return_indices = True)
-    ele_ind = np.where((data['ele'][:] > coeff['elevation_predictand'][:] - .6) & (data['ele'][:] < coeff['elevation_predictand'][:] + .6))[0]
-    flag_ind = []
-    if (ele_ind.size > 0) & (freq_ind.size > 0):
+    flag_ind = np.zeros(data['tb'].shape)
+    tb_tot = np.zeros(data['tb'].shape)
+    for ifreq, freq in enumerate(data['frequency']):
+        with nc.Dataset(c_file[ifreq]) as coeff:
+            _, freq_ind, coeff_ind = np.intersect1d(data['frequency'], coeff['freq'], assume_unique = False, return_indices = True)
+            ele_ind = np.where((data['ele'][:] > coeff['elevation_predictand'][:] - .6) & (data['ele'][:] < coeff['elevation_predictand'][:] + .6))[0]
+
+            if (ele_ind.size > 0) & (freq_ind.size > 0):
+                tb_ret = coeff['offset_mvr'][:] + np.sum(coeff['coefficient_mvr'][coeff_ind].T * data['tb'][:, freq_ind], axis = 1) + np.sum(coeff['coefficient_mvr'][coeff_ind + (len(data['frequency']) - 1)].T * data['tb'][:, freq_ind]**2, axis = 1)
+                tb_df = pd.DataFrame({'Tb': (data['tb'][ele_ind, ifreq]-tb_ret[ele_ind])}, index = pd.to_datetime(data['time'][ele_ind], unit = 's'))
+                org = pd.DataFrame({'Tb': tb_ret}, index = pd.to_datetime(data['time'][:], unit = 's'))
+                tb_med = tb_df.resample("2min", origin = 'start', closed = 'left', label = 'left').mean()
+                tb_med.index = tb_med.index + to_offset('1min')  
+                tb_df = df_interp(tb_df, org.index)
+                tb_med = df_interp(tb_med, org.index)
+
+                flag_ind[((data['ele'][:] > coeff['elevation_predictand'][:] - .6) & (data['ele'][:] < coeff['elevation_predictand'][:] + .6) & (np.abs(tb_df['Tb'].values - tb_med['Tb'].values) > coeff['predictand_err'][:]*tbx_f[ifreq])), ifreq] = 1
+                tb_tot[ele_ind, ifreq] = np.abs(tb_med['Tb'][ele_ind])
         
-        tb_ret = coeff['offset_mvr'][:] + np.sum(coeff['coefficient_mvr'][coeff_ind].T * data['tb'][:, freq_ind], axis = 1) + np.sum(coeff['coefficient_mvr'][coeff_ind + (len(data['frequency']) - 1)].T * data['tb'][:, freq_ind]**2, axis = 1)
-        tb_df = pd.DataFrame({'Tb': np.abs(data['tb'][ele_ind, ind]-tb_ret[ele_ind])}, index = pd.to_datetime(data['time'][ele_ind], unit = 's'))
-        
-        tb_std = tb_df.resample("5min", origin = 'start', closed = 'left', label = 'left').std()
-        tb_std.index = tb_std.index + to_offset('150s')  
-        org = pd.DataFrame({'Tb': tb_ret}, index = pd.to_datetime(data['time'][:], unit = 's'))
-        tb_std = df_interp(tb_std, org.index)
-        
-        ind_flag = np.ones(len(data['time'][:])) * np.nan
-        ind_flag[((data['ele'][:] > coeff['elevation_predictand'][:] - .6) & (data['ele'][:] < coeff['elevation_predictand'][:] + .6) & ((tb_std['Tb'].values > th_std)))] = 1
-        df = pd.DataFrame({'Flag': ind_flag}, index = pd.to_datetime(data['time'][:], unit = 's'))
-        df = df.fillna(method = 'bfill', limit = 120)
-        df = df.fillna(method = 'ffill', limit = 300)    
-        flag_ind = np.where(df['Flag'].values == 1)[0]
-        
-    coeff.close()
+    flag_ind[np.sum(tb_tot[:, 0:7], axis=1) > 4., 0:7] = 1
+    flag_ind[np.sum(tb_tot[:, 7:14], axis=1) > 10., 7:14] = 1
+
+    for ifreq, _ in enumerate(data['frequency']):
+	    df = pd.DataFrame({'Flag': flag_ind[:, ifreq]}, index = pd.to_datetime(data['time'][:], unit = 's'))
+	    df = df.fillna(method = 'bfill', limit = 120)
+	    df = df.fillna(method = 'ffill', limit = 300)    
+	    flag_ind[((df['Flag'].values == 1) & (data['pointing_flag'] == 0)), ifreq] = 1
+
     return flag_ind
     

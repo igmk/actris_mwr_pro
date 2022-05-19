@@ -54,11 +54,10 @@ MetaData.__new__.__defaults__ = (None,) * len(MetaData._fields)
 ATTRIBUTES_COM = {
     'time': MetaData(
         long_name='Time (UTC) of the measurement',
-        standard_name='time',
         units='seconds since 1970-01-01 00:00:00.000',
         comment='Time indication of samples is at end of integration-time',
     ),
-    'time_bounds': MetaData(
+    'time_bnds': MetaData(
         long_name='Start and end time (UTC) of the measurements',
         units='seconds since 1970-01-01 00:00:00.000',
     ),
@@ -107,12 +106,11 @@ DEFINITIONS_1B01 = {
 ATTRIBUTES_1B01 = {
     'frequency': MetaData(
         long_name='Frequency of microwave channels',
-        standard_name='sensor_band_central_radiation_frequency',
+        standard_name='radiation_frequency',
         units='GHz',
     ),
     'bandwidth': MetaData(
-        long_name='Bandwidth of the central frequency',
-        standard_name='sensor_band_spectral_width',
+        long_name='Bandwidth of the microwave channels',
         units='GHz',
         comment='center frequency of single of upper side-band',
     ),
@@ -124,7 +122,7 @@ ATTRIBUTES_1B01 = {
         long_name='56.xx +/- X +/- Y',
     ),
     'beamwidth': MetaData(
-        long_name='Full width at half maximum',
+        long_name='Beam width of the microwave radiometer',
         units='degrees',
     ),
     'freq_shift': MetaData(
@@ -159,24 +157,21 @@ ATTRIBUTES_1B01 = {
         comment='the covariance matrix has been determined using the xxx method from observations at a blackbody target of temperature t_amb',
     ),
     'quality_flag': MetaData(
-        long_name='Quality_flag',
-        standard_name='quality_flag',
+        long_name='Quality flag',
         units='1 (bit variable)',
         definition=DEFINITIONS_1B01['quality_flag'],
         comment='0 indicates data with good quality according to applied tests. The list of (not) applied tests is encoded in quality_flag_status',
     ),
     'quality_flag_status': MetaData(
-        long_name='Quality_flag_status',
-        standard_name='quality_flag_status',
+        long_name='Quality flag status',
         units='1 (bit variable)',
         definition=DEFINITIONS_1B01['quality_flag_status'],
-        comment='0 indicates quality check has been applied.',
+        comment='Checks not executed in determination of quality_flag. 0 indicates quality check has been applied.',
     ),    
     'pointing_flag': MetaData(
         long_name='Pointing Flag',
-        standard_name='pointing_flag',
         units='1 (bit variable)',
-        comment='Flag indicating a single pointing (starring) or multiple pointing (scanning) observation sequence',
+        comment='Flag indicating a single pointing (starring = 0) or multiple pointing (scanning = 1) observation sequence',
     ),
     't_amb': MetaData(
         long_name='Ambient target temperature',
@@ -196,13 +191,13 @@ ATTRIBUTES_1B11 = {
         units='µm',
     ),
     'ir_bandwidth': MetaData(
-        long_name='Bandwidth of the infrared channels central frequency',
+        long_name='Bandwidth of the infrared channel',
         standard_name='sensor_band_spectral_width',
         units='µm',
         comment='channel centre frequency',
     ),
     'ir_beamwidth': MetaData(
-        long_name='Full width at half maximum of the infrared channels',
+        long_name='Beam width of the infrared radiometer',
         units='degrees',
     ),
     'irt': MetaData(
@@ -210,13 +205,13 @@ ATTRIBUTES_1B11 = {
         units='K'
     ),
     'irt_azi': MetaData(
-        long_name='Sensor azimuth angle',
+        long_name='Infrared sensor azimuth angle',
         standard_name='sensor_azimuth_angle',
         units='degrees',
         comment='0=North, 90=East, 180=South, 270=West',
     ),
     'irt_ele': MetaData(
-        long_name='Sensor elevation angle',
+        long_name='Infrared sensor elevation angle',
         standard_name='sensor_elevation_angle',
         units='degrees',
         comment='0=horizon, 90=zenith',
@@ -239,17 +234,14 @@ DEFINITIONS_1B21 = {
 ATTRIBUTES_1B21 = {
     'air_temperature': MetaData(
         long_name='Air temperature',
-        standard_name='air_temperature',
         units='K',
     ),
     'relative_humidity': MetaData(
         long_name='Relative humidity',
-        standard_name='relative_humidity',
         units='1',
     ),
     'air_pressure': MetaData(
         long_name='Air pressure',
-        standard_name='air_pressure',
         units='hPa',
     ),
     'rain_rate': MetaData(
@@ -264,14 +256,12 @@ ATTRIBUTES_1B21 = {
     ),    
     'wind_speed': MetaData(
         long_name='Wind speed',
-        standard_name='wind_speed',
         units='m/s',
     ),     
     'met_quality_flag': MetaData(
         long_name='Meterological data quality flag',
-        standard_name='met_quality_flag',
         units='1 (bit variable)',
         definition=DEFINITIONS_1B21['met_quality_flag'],
-        comment='bit variable: 0=ok, 1=problem',
+        comment='0=ok, 1=problem. Note: should also be set to 1 if corresponding sensor not available',
     ),    
 }

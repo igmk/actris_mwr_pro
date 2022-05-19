@@ -10,12 +10,11 @@ from matplotlib import rcParams
 from matplotlib.colors import ListedColormap
 from matplotlib.transforms import Affine2D, Bbox, ScaledTranslation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from utils import read_nc_fields, seconds2hours, convolve2DFFT, isbit
+from utils import read_nc_fields, seconds2hours, convolve2DFFT, isbit, read_nc_field_name
 from plots.plot_meta import ATTRIBUTES, _COLORS
-from scipy.signal import filtfilt, convolve2d
-from scipy.interpolate import interp2d
+from scipy.signal import filtfilt
 from copy import copy
-from scipy.ndimage import convolve
+import importlib
 
 class Dimensions:
     """Dimensions of a generated figure in pixels."""
@@ -52,7 +51,7 @@ class Dimensions:
 
 def generate_figure(nc_file: str,
                     field_names: list,
-                    show: bool = True,
+                    show: bool = False,
                     save_path: str = None,
                     max_y: int = 5,
                     ele_range: Tuple = [0., 91.],
@@ -93,7 +92,7 @@ def generate_figure(nc_file: str,
         field = _elevation_filter(nc_file, field, ele_range)   
         time = _elevation_filter(nc_file, time, ele_range) 
         if title:
-            _set_title(ax, name, '')
+            _set_title(ax, name, nc_file, '')
         if not is_height:
             source = ATTRIBUTES[name].source
             _plot_instrument_data(ax, field, name, source, time, fig, nc_file, ele_range, pointing)
@@ -108,7 +107,7 @@ def generate_figure(nc_file: str,
                 _plot_segment_data(ax, field, name, ax_value)
 
             elif plot_type == 'mesh':
-                _plot_colormesh_data(ax, field, name, ax_value, max_y)
+                _plot_colormesh_data(ax, field, name, ax_value, max_y, nc_file)
             
     case_date = _set_labels(fig, axes[-1], nc_file, sub_title)
     _handle_saving(image_name, save_path, show, case_date, valid_names)
@@ -180,54 +179,53 @@ def _set_labels(fig, ax, nc_file: str, sub_title: bool = True) -> date:
     return case_date
 
 
-def _set_title(ax, field_name: str, identifier: str = " from actris_mwr_pro"):
-    ax.set_title(f"{ATTRIBUTES[field_name].name}{identifier}", fontsize=14)
+def _set_title(ax, field_name: str, nc_file, identifier: str = " from actris_mwr_pro"):
+    if not ATTRIBUTES[field_name].name:
+        ax.set_title(f"{read_nc_field_name(nc_file, field_name)}{identifier}", fontsize=14)
+    else:
+        ax.set_title(f"{ATTRIBUTES[field_name].name}{identifier}", fontsize=14)
 
 
 def _find_valid_fields(nc_file: str, names: list) -> Tuple[list, list]:
     """Returns valid field names and corresponding data."""
     valid_names, valid_data = names[:], []
-    nc = netCDF4.Dataset(nc_file)
-    for name in names:
-        if name in nc.variables:
-            valid_data.append(nc.variables[name][:])
-        else:
-            valid_names.remove(name)
-    nc.close()
+    with netCDF4.Dataset(nc_file) as nc:
+        for name in names:
+            if name in nc.variables:
+                valid_data.append(nc.variables[name][:])
+            else:
+                valid_names.remove(name)
     if not valid_names:
         raise ValueError('No fields to be plotted')
     return valid_data, valid_names
 
 
 def _is_height_dimension(full_path: str) -> bool:
-    nc = netCDF4.Dataset(full_path)
-    is_height = 'altitude' in nc.variables
-    nc.close()
+    with netCDF4.Dataset(full_path) as nc:
+        is_height = 'altitude' in nc.variables
     return is_height
 
 
 def _elevation_filter(full_path: str, data_field: ndarray, ele_range: Tuple) -> ndarray:
-    nc = netCDF4.Dataset(full_path)
-    if 'ele' in nc.variables:
-        elevation = read_nc_fields(full_path, 'ele')
-        if data_field.ndim > 1:
-            data_field = data_field[(elevation >= ele_range[0]) & (elevation <= ele_range[1]), :]
-        else:
-            data_field = data_field[(elevation >= ele_range[0]) & (elevation <= ele_range[1])]
-    nc.close()
+    with netCDF4.Dataset(full_path) as nc:
+        if 'ele' in nc.variables:
+            elevation = read_nc_fields(full_path, 'ele')
+            if data_field.ndim > 1:
+                data_field = data_field[(elevation >= ele_range[0]) & (elevation <= ele_range[1]), :]
+            else:
+                data_field = data_field[(elevation >= ele_range[0]) & (elevation <= ele_range[1])]
     return data_field
 
 
 def _pointing_filter(full_path: str, data_field: ndarray, ele_range: Tuple, status: int) -> ndarray:
-    nc = netCDF4.Dataset(full_path)
-    if 'pointing_flag' in nc.variables:
-        pointing = read_nc_fields(full_path, 'pointing_flag')
-        pointing = _elevation_filter(full_path, pointing, ele_range)
-        if data_field.ndim > 1:
-            data_field = data_field[pointing == status, :]
-        else:
-            data_field = data_field[pointing == status]
-    nc.close()
+    with netCDF4.Dataset(full_path) as nc:
+        if 'pointing_flag' in nc.variables:
+            pointing = read_nc_fields(full_path, 'pointing_flag')
+            pointing = _elevation_filter(full_path, pointing, ele_range)
+            if data_field.ndim > 1:
+                data_field = data_field[pointing == status, :]
+            else:
+                data_field = data_field[pointing == status]
     return data_field
 
 
@@ -250,9 +248,8 @@ def _read_ax_values(full_path: str) -> Tuple[ndarray, ndarray]:
 
 def _read_time_vector(nc_file: str) -> ndarray:
     """Converts time vector to fraction hour."""
-    nc = netCDF4.Dataset(nc_file)
-    time = nc.variables['time'][:]
-    nc.close()
+    with netCDF4.Dataset(nc_file) as nc:
+        time = nc.variables['time'][:]
     return seconds2hours(time)
 
 
@@ -291,7 +288,7 @@ def _get_standard_time_ticks(resolution: int = 4) -> list:
             for i in np.arange(0, 24.01, resolution)]
 
 
-def _plot_segment_data(ax, data: ma.MaskedArray, name: str, axes: tuple):
+def _plot_segment_data(ax, data: ma.MaskedArray, name: str, axes: tuple, nc_file: str):
     """Plots categorical 2D variable.
     Args:
         ax (obj): Axes object of subplot (1,2,3,.. [1,1,],[1,2]... etc.)
@@ -306,11 +303,17 @@ def _plot_segment_data(ax, data: ma.MaskedArray, name: str, axes: tuple):
     pl = ax.pcolor(*axes, data.T, cmap=cmap, shading='nearest', vmin=-0.5, vmax=len(cbar) - 0.5)
     ax.grid(axis='y')
     colorbar = _init_colorbar(pl, ax)
-    colorbar.set_ticks(np.arange(len(clabel)))
+    colorbar.set_ticks(np.arange(len(clabel)))  
+    if name == 'quality_flag_2':
+        site_name = _read_location(nc_file)
+        site_dict = importlib.import_module(f"site_config." + site_name + ".config")
+        clabel[2] = clabel[2] + ' (' + str(site_dict.params['TB_threshold'][1]) + ' K)'
+        clabel[1] = clabel[1] + ' (' + str(site_dict.params['TB_threshold'][0]) + ' K)'
     colorbar.ax.set_yticklabels(clabel, fontsize=13)
 
 
-def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y: int):
+
+def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y: int, nc_file: str):
     """Plots continuous 2D variable.
     Creates only one plot, so can be used both one plot and subplot type of figs.
     Args:
@@ -359,8 +362,8 @@ def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y
    
     if variables.plot_type != 'bit':
         colorbar = _init_colorbar(pl, ax)
-        # locator = colorbar.ax.yaxis.get_major_locator()
-        locator, formatter = colorbar._get_ticker_locator_formatter()
+        locator = colorbar.ax.yaxis.get_major_locator()
+        # locator, formatter = colorbar._get_ticker_locator_formatter()
         locator.set_params(nbins=6)
         colorbar.update_ticks()
         colorbar.set_label(variables.clabel, fontsize=13)
@@ -388,10 +391,17 @@ def _plot_instrument_data(ax, data: ma.MaskedArray, name: str, product: Optional
     
 def _plot_sen(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     variables = ATTRIBUTES[name]
-    vmin, vmax = variables.plot_range    
     pointing_flag = read_nc_fields(nc_file, 'pointing_flag')
-    ax.plot(time[pointing_flag == 0], data_in[pointing_flag == 0], color=_COLORS['darkgreen'], label='single pointing')
-    ax.plot(time[pointing_flag == 1], data_in[pointing_flag == 1], '--', alpha=.5, color=_COLORS['green'], label='multiple pointing')
+    quality_flag = read_nc_fields(nc_file, 'quality_flag')
+    qf = _get_freq_data(quality_flag, [6])
+    vmin, vmax = variables.plot_range    
+    
+    ax.plot(time[pointing_flag == 0], data_in[pointing_flag == 0], '--.', color=_COLORS['darkgreen'], label='single pointing', linewidth=.8)
+    if name == 'ele':
+        ax.plot(time[(pointing_flag == 1) & (data_in > 0.)], data_in[(pointing_flag == 1) & (data_in > 0.)], '--.', alpha=.75, color=_COLORS['green'], label='multiple pointing', linewidth=.8)
+    else:
+        ax.plot(time[pointing_flag == 1], data_in[pointing_flag == 1], '--.', alpha=.75, color=_COLORS['green'], label='multiple pointing', linewidth=.8)
+    ax.plot(time[np.any(qf == 1, axis=1)], data_in[np.any(qf == 1, axis=1)], 'r.', linewidth=1, label='sun_in_beam')
     ax.set_ylim((vmin, vmax))
     ax.legend(loc='upper right')
     _set_ax(ax, vmax, variables.ylabel, vmin)
@@ -425,18 +435,18 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
     frequency = read_nc_fields(nc_file, 'frequency')
  
     qf = _get_bit_data(data_in[:,0], [4,5,6])
-    _plot_segment_data(axs[0], qf, 'quality_flag_0', (time, np.linspace(.5,2.5,3)))
+    _plot_segment_data(axs[0], qf, 'quality_flag_0', (time, np.linspace(.5,2.5,3)), nc_file)
     axs[0].set_yticks(np.arange(3))
     axs[0].yaxis.set_ticklabels([]) 
     _set_ax(axs[0], 3, '')  
     axs[0].set_title(ATTRIBUTES['quality_flag_0'].name)
     
     qf = _get_freq_data(data_in, [3])
-    _plot_segment_data(axs[1], qf, 'quality_flag_1', (time, np.linspace(.5,len(frequency)-.5,len(frequency))))    
+    _plot_segment_data(axs[1], qf, 'quality_flag_1', (time, np.linspace(.5,len(frequency)-.5,len(frequency))), nc_file)    
     axs[1].set_title(ATTRIBUTES['quality_flag_1'].name)
     
     qf = _get_freq_data(data_in, [1,2])
-    _plot_segment_data(axs[2], qf, 'quality_flag_2', (time, np.linspace(.5,len(frequency)-.5,len(frequency))))
+    _plot_segment_data(axs[2], qf, 'quality_flag_2', (time, np.linspace(.5,len(frequency)-.5,len(frequency))), nc_file)
     axs[2].set_title(ATTRIBUTES['quality_flag_2'].name)
     
     offset = ScaledTranslation(0/72, 8/72, fig.dpi_scale_trans)    
@@ -445,8 +455,8 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
         axs[i].set_yticklabels(frequency)
         for label in axs[i].yaxis.get_majorticklabels():
             label.set_transform(label.get_transform() + offset)        
-        axs[i].plot(time, np.ones(len(time))*7, 'k-', linewidth=1)
         _set_ax(axs[i], len(frequency), 'Frequency [GHz]')    
+        axs[i].plot(np.linspace(*axs[i].get_xlim(), len(time)), np.ones(len(time))*7, 'k-', linewidth=1)
     _set_labels(fig, axs[-1], nc_file)        
     
     
@@ -462,19 +472,21 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
     fig, axs = plt.subplots(7,2, figsize=(13, 16), facecolor='w', edgecolor='k', sharex=True, dpi=120)
     fig.subplots_adjust(hspace=.035, wspace=.15)
     fig.text(.06, .5, 'Brightness Temperature [K]', va='center', rotation='vertical', fontsize=20)
-    fig.text(.445, .1, 'flagged data', va='center', fontsize=20, color='r')
+    fig.text(.445, .09, 'flagged data', va='center', fontsize=20, color='r')
     axs[0,0].set_title('K-Band Channels', fontsize=15, color=_COLORS['darkgray'], loc='right')
     axs[0,1].set_title('V-Band Channels', fontsize=15, color=_COLORS['darkgray'], loc='right')
     trans = ScaledTranslation(10/72, -5/72, fig.dpi_scale_trans)
     tb_m, tb_s = [], []
     
     for i, ax in enumerate(axs.T.flatten()):
-        tb_m = np.append(tb_m, [np.mean(data_in[np.where(quality_flag[:,i] == 0)[0], i])]) #TB mean
-        tb_s = np.append(tb_s, [np.std(data_in[np.where(quality_flag[:,i] == 0)[0], i])]) #TB std        
+        no_flag = np.where(quality_flag[:,i] == 0)[0]
+        if len(np.array(no_flag)) == 0:
+            no_flag = np.arange(len(time))        
+        tb_m = np.append(tb_m, [np.mean(data_in[no_flag, i])]) #TB mean
+        tb_s = np.append(tb_s, [np.std(data_in[no_flag, i])]) #TB std        
         ax.plot(time, np.ones(len(time))*tb_m[i], '--', color=_COLORS['darkgray'], linewidth=1)
         ax.plot(time, data_in[:,i],'ko', markersize=.75, fillstyle='full')
         flag = np.where(quality_flag[:,i] > 0)[0]
-        no_flag = np.where(quality_flag[:,i] == 0)[0]
         ax.plot(time[flag], data_in[flag,i],'ro', markersize=.75, fillstyle='full')
         ax.set_facecolor(_COLORS['lightgray'])
         dif = np.max(data_in[no_flag,i]) - np.min(data_in[no_flag,i])
@@ -499,7 +511,7 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
     axaK.set_xticks(frequency)
     axaK.set_xticklabels(axaK.get_xticks(), rotation = 30)
     axaK.set_xlim([22, 32])
-    axaK.set_ylim([0, np.max(tb_m+tb_s)+30])
+    axaK.set_ylim([0, np.nanmax(tb_m+tb_s)+30])
     axaK.tick_params(axis='both', labelsize=12)
     axaK.set_facecolor(_COLORS['lightgray'])
     
@@ -510,7 +522,7 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
     axaV.set_xticks(frequency)
     axaV.set_xticklabels(axaV.get_xticks(), rotation = 30)    
     axaV.set_xlim([51, 58.5])    
-    axaV.set_ylim([0, np.max(tb_m+tb_s)+30])
+    axaV.set_ylim([0, np.nanmax(tb_m+tb_s)+30])
     axaV.tick_params(axis='both', labelsize=12)
     axaV.set_facecolor(_COLORS['lightgray'])
     
@@ -544,6 +556,10 @@ def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     ax.plot(time, data, '.', alpha=.8, color=_COLORS['darksky'], markersize=1)
     ax.plot(time, rolling_mean, 'o', fillstyle='full', color='darkblue', markersize=3)
     vmin, vmax = ATTRIBUTES[name].plot_range    
+    if (name == 'air_temperature') | (name == 'air_pressure'):
+        vmin, vmax = np.nanmin(data)-1., np.nanmax(data)+1.  
+    if (name == 'rain_rate') | (name == 'wind_speed'):
+        vmin, vmax = 0., np.nanmax([np.nanmax(data)+1., 3.])         
     _set_ax(ax, vmax, ylabel, min_y=vmin)    
     ax.grid(True)
     
@@ -559,7 +575,9 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray):
     ax.axhline(linewidth=0.8, color='k')
     ax.plot(time, rolling_mean, color='sienna', linewidth=2.0)
     ax.plot(time, rolling_mean, color='wheat', linewidth=0.6)
-    vmin, vmax = ATTRIBUTES[name].plot_range    
+    vmin, vmax = ATTRIBUTES[name].plot_range
+    if name == 'Iwv':
+        vmin, vmax = np.nanmin(data)-1., np.nanmax(data)+1.   
     _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
     
     
@@ -653,17 +671,15 @@ def _init_colorbar(plot, axis):
 
 def _read_location(nc_file: str) -> str:
     """Returns site name."""
-    nc = netCDF4.Dataset(nc_file)
-    site_name = nc.site
-    nc.close()
+    with netCDF4.Dataset(nc_file) as nc:
+        site_name = nc.site
     return site_name
 
 
 def _read_date(nc_file: str) -> date:
     """Returns measurement date."""
-    nc = netCDF4.Dataset(nc_file)
-    case_date = datetime.strptime(nc.date, "%Y-%m-%d")
-    nc.close()
+    with netCDF4.Dataset(nc_file) as nc:
+        case_date = datetime.strptime(nc.date, "%Y-%m-%d")
     return case_date
 
 

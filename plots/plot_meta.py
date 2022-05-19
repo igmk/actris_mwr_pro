@@ -3,7 +3,7 @@ from typing import NamedTuple, Optional, Tuple, Union, Sequence
 from enum import Enum
 
 class PlotMeta(NamedTuple):
-    name: str
+    name: Optional[str] = None
     cbar: Optional[Union[str, Sequence[str]]] = None
     clabel: Optional[Union[str, Sequence[Tuple[str, str]]]] = None
     ylabel: Optional[str] = None
@@ -63,7 +63,7 @@ _CLABEL = {
     
     'quality_flag_1':
         (("missing_tb", _COLORS['mask']),
-         ("spectral_consistency_above_threshold", _COLORS['shockred'])),    
+         ("spectral_consistency_failed", _COLORS['shockred'])),    
 
     'quality_flag_2':
         (("missing_tb", _COLORS['mask']),
@@ -116,7 +116,7 @@ ATTRIBUTES = {
         cbar_ext='max',
     ),
     'temperature': PlotMeta(
-        name='Retrieved temperature profile',
+        # name='Retrieved temperature profile',
         cbar='RdBu_r',
         clabel=_K,
         plot_range=(240., 300.),

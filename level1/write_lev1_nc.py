@@ -16,6 +16,7 @@ def lev1_to_nc(site: str,
                data_type: str,
                path_to_files: str, 
                path_to_prev: str,
+               path_to_next: str,
                output_file: str):
     """This function reads one day of RPG MWR binary files,
     adds attributes and writes it into netCDF file.
@@ -25,106 +26,107 @@ def lev1_to_nc(site: str,
         data_type: Data type of the netCDF file.
         path_to_files: Folder containing one day of RPG MWR binary files.
         path_to_prev: Folder containing previous day RPG MWR binary files.
+        path_to_next: Folder containing next day RPG MWR binary files.
         output_file: Output file name.
         
     Examples:
         >>> from level1.write_lev1_nc import lev1_to_nc
-        >>> lev1_to_nc('site_name', '1B01', '/path/to/files/', '/path/to/previous/day/', 'rpg_mwr.nc')
+        >>> lev1_to_nc('site_name', '1B01', '/path/to/files/', '/path/to/previous/day/', '/path/to/next/day/', 'rpg_mwr.nc')
     """
 
 
-    file_list_hkd = get_file_list(path_to_files, path_to_prev, 'hkd')
-    if any(file_list_hkd):
-        global_attributes, params = get_site_specs(site, data_type)
-        rpg_bin = prepare_data(path_to_files, path_to_prev, data_type, params)
-        if data_type in ('1B01', '1C01'):
-            apply_qc(site, rpg_bin.data, params)    
-        if data_type in ('1B21', '1C01'):
-            apply_met_qc(rpg_bin.data, params)
-        hatpro = rpg_mwr.Rpg(rpg_bin.data)
-        hatpro.find_valid_times()
-        hatpro.data = get_data_attributes(hatpro.data, data_type)
-        rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params, site)
-    else:
-        raise RuntimeError(['Error: no binary files with extension .hkd found in directory ' + path_to_files])
+    file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, 'hkd')
+    global_attributes, params = get_site_specs(site, data_type)
+    rpg_bin = prepare_data(path_to_files, path_to_prev, path_to_next, data_type, params)
+    if data_type in ('1B01', '1C01'):
+        apply_qc(site, rpg_bin.data, params)    
+    if data_type in ('1B21', '1C01'):
+        apply_met_qc(rpg_bin.data, params)
+    hatpro = rpg_mwr.Rpg(rpg_bin.data)
+    hatpro.find_valid_times()
+    hatpro.data = get_data_attributes(hatpro.data, data_type)
+    rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params, site)
     
     
 def get_file_list(path_to_files: str, 
                   path_to_prev: str,
+                  path_to_next: str,
                   extension: str):
     
     f_list = sorted(glob.glob(path_to_files + '*.' + extension))
     f_list_p = sorted(glob.glob(path_to_prev + '*.' + extension))
-    if any(f_list) & any(f_list_p):
-        f_list = [f_list_p[-1], *f_list]        
+    f_list_n = sorted(glob.glob(path_to_next + '*.' + extension))
+    if len(f_list) == 0:
+        raise RuntimeError(['Error: no binary files with extension ' + extension + ' found in directory ' + path_to_files])
+    if any(f_list_p) & any(f_list_n):
+        f_list = [f_list_p[-1], *f_list, f_list_n[0]]        
+    elif any(f_list_p) & len(f_list_n) == 0:    
+        f_list = [f_list_p[-1], *f_list]
+    elif len(f_list_p) == 0 & any(f_list_n):    
+        f_list = [*f_list, f_list_n[0]]  
     return f_list
       
     
 def prepare_data(path_to_files: str, 
                  path_to_prev: str,
+                 path_to_next: str,
                  data_type: str,
                  params: dict) -> dict:    
     """Load and prepare data for netCDF writing"""
     
     if data_type in ('1B01','1C01'):
-        file_list_brt = get_file_list(path_to_files, path_to_prev, 'brt')
-        if any(file_list_brt):
-            rpg_bin = get_rpg_bin(file_list_brt)
-            rpg_bin.data['frequency'] = rpg_bin.header['_f']
-            rpg_bin.data['bandwidth'] = params['bandwidth']
-            rpg_bin.data['sideband_count'] = params['sideband_count']
-            rpg_bin.data['sideband_IF_separation'] = params['sideband_IF_separation']
-            rpg_bin.data['freq_shift'] = params['freq_shift']
-            rpg_bin.data['time_bounds'] = add_time_bounds(rpg_bin.data['time'], params['int_time'])
-            rpg_bin.data['pointing_flag'] = np.zeros(len(rpg_bin.data['time']), np.int32)
-            
-            file_list_blb = get_file_list(path_to_files, path_to_prev, 'blb')
-            if any(file_list_blb):
-                file_list_hkd = get_file_list(path_to_files, path_to_prev, 'hkd')
-                rpg_hkd = get_rpg_bin(file_list_hkd)
-                rpg_blb = get_rpg_bin(file_list_blb)
-                _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)
-                
-            if params['azi_cor'] != -999.:
-                _azi_correction(rpg_bin.data, params)
+        file_list_brt = get_file_list(path_to_files, path_to_prev, path_to_next, 'brt')
+        rpg_bin = get_rpg_bin(file_list_brt)
+        rpg_bin.data['frequency'] = rpg_bin.header['_f']
+        rpg_bin.data['bandwidth'] = params['bandwidth']
+        rpg_bin.data['sideband_count'] = params['sideband_count']
+        rpg_bin.data['sideband_IF_separation'] = params['sideband_IF_separation']
+        rpg_bin.data['freq_shift'] = params['freq_shift']
+        rpg_bin.data['time_bnds'] = add_time_bounds(rpg_bin.data['time'], params['int_time'])
+        rpg_bin.data['pointing_flag'] = np.zeros(len(rpg_bin.data['time']), np.int32)
 
-            if data_type == '1C01':
-                file_list_irt = get_file_list(path_to_files, path_to_prev, 'irt')
-                if any(file_list_irt):                
-                    rpg_irt = get_rpg_bin(file_list_irt)
-                    rpg_irt.data['irt'][rpg_irt.data['irt'] < 150.] = Fill_Value_Float
-                    rpg_bin.data['ir_wavelength'] = rpg_irt.header['_f']
-                    rpg_bin.data['ir_bandwidth'] = params['ir_bandwidth']
-                    rpg_bin.data['ir_beamwidth'] = params['ir_beamwidth']                    
-                    _add_interpol1(rpg_bin.data, rpg_irt.data['irt'], rpg_irt.data['time'], 'irt')
-                    _add_interpol1(rpg_bin.data, rpg_irt.data['irt_ele'], rpg_irt.data['time'], 'irt_ele')
-                    _add_interpol1(rpg_bin.data, rpg_irt.data['irt_azi'], rpg_irt.data['time'], 'irt_azi')
+        file_list_blb = get_file_list(path_to_files, path_to_prev, path_to_next, 'blb')
+        file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, 'hkd')
+        rpg_hkd = get_rpg_bin(file_list_hkd)
+        rpg_blb = get_rpg_bin(file_list_blb)
+        _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)
 
-                file_list_met = get_file_list(path_to_files, path_to_prev, 'met')
-                if any(file_list_met):                    
-                    rpg_met = get_rpg_bin(file_list_met)
-                    _add_interpol1(rpg_bin.data, rpg_met.data['air_temperature'], rpg_met.data['time'], 'air_temperature')
-                    _add_interpol1(rpg_bin.data, rpg_met.data['relative_humidity'], rpg_met.data['time'], 'relative_humidity')
-                    _add_interpol1(rpg_bin.data, rpg_met.data['air_pressure'], rpg_met.data['time'], 'air_pressure')
-                    if (int(rpg_met.header['_n_sen'],2) & 1) != 0:
-                        _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,0], rpg_met.data['time'], 'wind_speed')
-                        rpg_bin.data['wind_speed'] = rpg_bin.data['wind_speed'] / 3.6
-                    if (int(rpg_met.header['_n_sen'],2) & 2) != 0:
-                        _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,1], rpg_met.data['time'], 'wind_direction')
-                    if (int(rpg_met.header['_n_sen'],2) & 4) != 0:
-                        _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,2], rpg_met.data['time'], 'rain_rate')
-        else:
-            raise RuntimeError(['Error: no binary files with extension .brt found in directory ' + path_to_files])
+        if params['azi_cor'] != -999.:
+            _azi_correction(rpg_bin.data, params)
+
+        if data_type == '1C01':
+            file_list_irt = get_file_list(path_to_files, path_to_prev, path_to_next, 'irt')               
+            rpg_irt = get_rpg_bin(file_list_irt)
+            rpg_irt.data['irt'][rpg_irt.data['irt'] < 150.] = Fill_Value_Float
+            rpg_bin.data['ir_wavelength'] = rpg_irt.header['_f']
+            rpg_bin.data['ir_bandwidth'] = params['ir_bandwidth']
+            rpg_bin.data['ir_beamwidth'] = params['ir_beamwidth']                    
+            _add_interpol1(rpg_bin.data, rpg_irt.data['irt'], rpg_irt.data['time'], 'irt')
+            _add_interpol1(rpg_bin.data, rpg_irt.data['irt_ele'], rpg_irt.data['time'], 'irt_ele')
+            _add_interpol1(rpg_bin.data, rpg_irt.data['irt_azi'], rpg_irt.data['time'], 'irt_azi')
+
+            file_list_met = get_file_list(path_to_files, path_to_prev, path_to_next, 'met')                  
+            rpg_met = get_rpg_bin(file_list_met)
+            _add_interpol1(rpg_bin.data, rpg_met.data['air_temperature'], rpg_met.data['time'], 'air_temperature')
+            _add_interpol1(rpg_bin.data, rpg_met.data['relative_humidity'], rpg_met.data['time'], 'relative_humidity')
+            _add_interpol1(rpg_bin.data, rpg_met.data['air_pressure'], rpg_met.data['time'], 'air_pressure')
+            if (int(rpg_met.header['_n_sen'],2) & 1) != 0:
+                _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,0], rpg_met.data['time'], 'wind_speed')
+                rpg_bin.data['wind_speed'] = rpg_bin.data['wind_speed'] / 3.6
+            if (int(rpg_met.header['_n_sen'],2) & 2) != 0:
+                _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,1], rpg_met.data['time'], 'wind_direction')
+            if (int(rpg_met.header['_n_sen'],2) & 4) != 0:
+                _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,2], rpg_met.data['time'], 'rain_rate')
         
     elif data_type == '1B11':
-        file_list_irt = get_file_list(path_to_files, path_to_prev, 'irt') 
+        file_list_irt = get_file_list(path_to_files, path_to_prev, path_to_next, 'irt') 
         rpg_bin = get_rpg_bin(file_list_irt)
         rpg_bin.data['ir_wavelength'] = rpg_bin.header['_f']
         rpg_bin.data['ir_bandwidth'] = params['ir_bandwidth']
         rpg_bin.data['ir_beamwidth'] = params['ir_beamwidth']
 
     elif data_type == '1B21':
-        file_list_met = get_file_list(path_to_files, path_to_prev, 'met')
+        file_list_met = get_file_list(path_to_files, path_to_prev, path_to_next, 'met')
         rpg_bin = get_rpg_bin(file_list_met)
         if (int(rpg_bin.header['_n_sen'],2) & 1) != 0:
             rpg_bin.data['wind_speed'] = rpg_bin.data['adds'][:,0] / 3.6
@@ -136,7 +138,7 @@ def prepare_data(path_to_files: str,
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
     
-    file_list_hkd = get_file_list(path_to_files, path_to_prev, 'hkd')
+    file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, 'hkd')
     _append_hkd(file_list_hkd, rpg_bin, data_type, params)
     rpg_bin.data['station_altitude'] = np.ones(len(rpg_bin.data['time']), np.float32) * params['station_altitude']
         
@@ -242,8 +244,8 @@ def _add_blb(brt: dict,
     brt.data['time'] = np.concatenate((brt.data['time'], time_add))    
     ind = np.argsort(brt.data['time'])
     brt.data['time'] = brt.data['time'][ind]
-    brt.data['time_bounds'] = np.concatenate((brt.data['time_bounds'], bnd_add))
-    brt.data['time_bounds'] = brt.data['time_bounds'][ind,:]
+    brt.data['time_bnds'] = np.concatenate((brt.data['time_bnds'], bnd_add))
+    brt.data['time_bnds'] = brt.data['time_bnds'][ind,:]
     brt.data['ele'] = np.concatenate((brt.data['ele'], ele_add))
     brt.data['ele'] = brt.data['ele'][ind]
     brt.data['azi'] = np.concatenate((brt.data['azi'], azi_add))

@@ -51,11 +51,10 @@ MetaData.__new__.__defaults__ = (None,) * len(MetaData._fields)
 ATTRIBUTES_COM = {
     'time': MetaData(
         long_name='Time (UTC) of the measurement',
-        standard_name='time',
         units='seconds since 1970-01-01 00:00:00.000',
         comment='Time indication of samples is at end of integration-time',
     ),
-    'time_bounds': MetaData(
+    'time_bnds': MetaData(
         long_name='Start and end time (UTC) of the measurements',
         units='seconds since 1970-01-01 00:00:00.000',
     ),
@@ -95,16 +94,16 @@ ATTRIBUTES_2P01 = {
         units='m',
     ),
     'temperature': MetaData(
-        long_name='Retrieved temperature profile',
+        long_name='Retrieved temperature profile (single pointing)',
         units='K',
     ),
     'temperature_random_error': MetaData(
-        long_name='Random uncertainty of retrieved temperature profile',
+        long_name='Random uncertainty of retrieved temperature profile (single pointing)',
         units='K',
         comment='specify here source of this variable',
     ),
     'temperature_systematic_error': MetaData(
-        long_name='Systematic uncertainty of retrieved temperature profile',
+        long_name='Systematic uncertainty of retrieved temperature profile (single pointing)',
         units='K',
         comment='specify here source of this variable',
     ),             
@@ -117,16 +116,16 @@ ATTRIBUTES_2P02 = {
         units='m',
     ),
     'temperature': MetaData(
-        long_name='Retrieved temperature profile',
+        long_name='Retrieved temperature profile (multiple pointing)',
         units='K',
     ),
     'temperature_random_error': MetaData(
-        long_name='Random uncertainty of retrieved temperature profile',
+        long_name='Random uncertainty of retrieved temperature profile (multiple pointing)',
         units='K',
         comment='specify here source of this variable',
     ),
     'temperature_systematic_error': MetaData(
-        long_name='Systematic uncertainty of retrieved temperature profile',
+        long_name='Systematic uncertainty of retrieved temperature profile (multiple pointing)',
         units='K',
         comment='specify here source of this variable',
     ),             
