@@ -269,8 +269,8 @@ def read_irt(file_name: str) -> dict:
                 vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
                        'rain' : np.ones( header['n'], np.byte)*Fill_Value_Int,
                        'irt' : np.ones( [header['n'], header['_n_f']], np.float32)*Fill_Value_Float,
-                       'irt_ele' : np.ones( header['n'], np.float32)*Fill_Value_Float,
-                       'irt_azi' : np.ones( header['n'], np.float32)*Fill_Value_Float}
+                       'ir_ele' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                       'ir_azi' : np.ones( header['n'], np.float32)*Fill_Value_Float}
                 return vrs
             
             def _angle_calc(ang, code):                
@@ -304,7 +304,7 @@ def read_irt(file_name: str) -> dict:
                         ang = np.fromfile( file, np.float32, 1)
                     elif code == 671112000:
                         ang = np.fromfile( file, np.int32, 1)
-                    data['irt_ele'][sample], data['irt_azi'][sample] = _angle_calc(ang,code)                    
+                    data['ir_ele'][sample], data['ir_azi'][sample] = _angle_calc(ang,code)                    
                 file.close()
                 return data
             

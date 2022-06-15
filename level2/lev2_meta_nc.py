@@ -19,7 +19,7 @@ def get_data_attributes(rpg_variables: dict,
         att = get_data_attributes('data','data_type')    
     """
     
-    if data_type in ('2P01', '2P02', '2P03', '2P04', '2I06', '2I07'):
+    if data_type in ('2P01', '2P02', '2P03', '2P04', '2P07', '2P08', '2I01', '2I02', '2S02'):
         
         attributes = dict(ATTRIBUTES_COM, **eval('ATTRIBUTES_'+ data_type))
         for key in list(rpg_variables):
@@ -176,22 +176,66 @@ ATTRIBUTES_2P04 = {
 }
 
 
-ATTRIBUTES_2I06 = {    
-    'Lwp': MetaData(
+ATTRIBUTES_2P07 = {
+    'altitude': MetaData(
+        long_name='Altitude above sea level',
+        units='m',
+    ),  
+    'potential_temperature': MetaData(
+        long_name='Potential Temperature',
+        units='K',
+    ),      
+    'potential_temperature_random_error': MetaData(
+        long_name='Random uncertainty of potential temperature',
+        units='K',
+        comment='specify here source of this variable',
+    ),  
+    'potential_temperature_systematic_error': MetaData(
+        long_name='Systematic uncertainty of potential temperature',
+        units='K',
+        comment='specify here source of this variable',
+    ),          
+}
+
+
+ATTRIBUTES_2P08 = {
+    'altitude': MetaData(
+        long_name='Altitude above sea level',
+        units='m',
+    ),  
+    'equivalent_potential_temperature': MetaData(
+        long_name='Equivalent Potential Temperature',
+        units='K',
+    ),      
+    'equivalent_potential_temperature_random_error': MetaData(
+        long_name='Random uncertainty of equivalent potential temperature',
+        units='K',
+        comment='specify here source of this variable',
+    ),  
+    'equivalent_potential_temperature_systematic_error': MetaData(
+        long_name='Systematic uncertainty of equivalent potential temperature',
+        units='K',
+        comment='specify here source of this variable',
+    ),          
+}
+
+
+ATTRIBUTES_2I01 = {    
+    'lwp': MetaData(
         long_name='Retrieved column-integrated liquid water path',
         units='mm',
     ),     
-    'Lwp_random_error': MetaData(
+    'lwp_random_error': MetaData(
         long_name='Random uncertainty of retrieved column-integrated liquid water path',
         units='mm',
         comment='specify here source of this variable',
     ),  
-    'Lwp_systematic_error': MetaData(
+    'lwp_systematic_error': MetaData(
         long_name='Systematic uncertainty of retrieved column-integrated liquid water path',
         units='mm',
         comment='specify here source of this variable',
     ),     
-    'Lwp_offset': MetaData(
+    'lwp_offset': MetaData(
         long_name='Subtracted offset correction of retrieved column-integrated liquid water path',
         units='mm',
         comment='specify here source of this variable',
@@ -199,19 +243,44 @@ ATTRIBUTES_2I06 = {
 }
 
 
-ATTRIBUTES_2I07 = {   
-    'Iwv': MetaData(
+ATTRIBUTES_2I02 = {   
+    'iwv': MetaData(
         long_name='Retrieved column-integrated water vapour',
         units='mm',
     ),     
-    'Iwv_random_error': MetaData(
+    'iwv_random_error': MetaData(
         long_name='Random uncertainty of retrieved column-integrated water vapour',
         units='mm',
         comment='specify here source of this variable',
     ),  
-    'Iwv_systematic_error': MetaData(
+    'iwv_systematic_error': MetaData(
         long_name='Systematic uncertainty of retrieved column-integrated water vapour',
         units='mm',
         comment='specify here source of this variable',
     ),       
+}
+
+
+ATTRIBUTES_2S02 = {   
+    'frequency': MetaData(
+        long_name='Centre frequency of microwave channels',
+        standard_name='radiation_frequency',
+        units='GHz',
+        comment='For more accurate frequency values use frequency+freq_shift.',
+    ),
+    'receiver_nb': MetaData(
+        long_name='Number of the microwave receiver',
+    ),
+    'receiver': MetaData(
+        long_name='Corresponding microwave receiver for each channel',
+    ),
+    'tb': MetaData(
+        long_name='Microwave brightness temperatures',
+        standard_name='microwave_brightness_temperature',
+        units='K',
+    ),    
+    'tb_spectrum': MetaData(
+        long_name='Brightness temperature spectrum',
+        units='K',
+    ),     
 }

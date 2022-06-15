@@ -1,6 +1,7 @@
 """Misc. plotting routines for actris_mwr_pro products."""
 from typing import Optional, Tuple
 from datetime import datetime, date
+import locale
 import numpy as np
 from numpy import ma
 from numpy import ndarray
@@ -10,11 +11,14 @@ from matplotlib import rcParams
 from matplotlib.colors import ListedColormap
 from matplotlib.transforms import Affine2D, Bbox, ScaledTranslation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from utils import read_nc_fields, seconds2hours, convolve2DFFT, isbit, read_nc_field_name
+from utils import read_nc_fields, seconds2hours, convolve2DFFT, isbit, read_nc_field_name, get_coeff_list
 from plots.plot_meta import ATTRIBUTES, _COLORS
 from scipy.signal import filtfilt
 from copy import copy
 import importlib
+from level1.quality_control import spectral_consistency
+from read_specs import get_site_specs
+
 
 class Dimensions:
     """Dimensions of a generated figure in pixels."""
@@ -180,10 +184,10 @@ def _set_labels(fig, ax, nc_file: str, sub_title: bool = True) -> date:
 
 
 def _set_title(ax, field_name: str, nc_file, identifier: str = " from actris_mwr_pro"):
-    if not ATTRIBUTES[field_name].name:
-        ax.set_title(f"{read_nc_field_name(nc_file, field_name)}{identifier}", fontsize=14)
-    else:
+    if ATTRIBUTES[field_name].name:
         ax.set_title(f"{ATTRIBUTES[field_name].name}{identifier}", fontsize=14)
+    else:
+        ax.set_title(f"{read_nc_field_name(nc_file, field_name)}{identifier}", fontsize=14)
 
 
 def _find_valid_fields(nc_file: str, names: list) -> Tuple[list, list]:
@@ -323,16 +327,16 @@ def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y
         axes (tuple): Time and height 1D arrays.
     """
     variables = ATTRIBUTES[name]
-    nlev = 16
+    if ATTRIBUTES[name].nlev:
+        nlev = ATTRIBUTES[name].nlev
+    else:
+        nlev = 16
+        
     assert variables.plot_range is not None
-    
-    if name == 'temperature':
-        nlev = 21
-    
+     
     if name == 'relative_humidity':
         data[data > 1.] = 1.
         data*=100.
-        nlev = 11
 
     if variables.plot_type == 'bit':
         cmap = ListedColormap(variables.cbar)
@@ -343,7 +347,7 @@ def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y
 
     vmin, vmax = variables.plot_range
     if np.ma.median(np.diff(axes[0][:])) < 5/60:
-        data, width = _calculate_rolling_mean(axes[0], data, win=15/60)    
+        data, width = _calculate_rolling_mean(axes[0], data, win=30/60)    
         time, data = _mark_gaps(axes[0][:], data, 35, 20)
     else:
         time, data = _mark_gaps(axes[0][:], data, 35, 0)
@@ -375,7 +379,7 @@ def _plot_instrument_data(ax, data: ma.MaskedArray, name: str, product: Optional
     elif product == 'met':
         _plot_met(ax, data, name, time, nc_file)
     elif product == 'tb':
-        _plot_tb(ax, data, time, fig, nc_file, ele_range, pointing)
+        _plot_tb(ax, data, time, fig, nc_file, ele_range, pointing, name)
     elif product == 'irt':
         _plot_irt(ax, data, name, time, nc_file)        
     elif product == 'qf':
@@ -460,14 +464,30 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
     _set_labels(fig, axs[-1], nc_file)        
     
     
-def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: Tuple, pointing: int):
-    data_in = _pointing_filter(nc_file, data_in, ele_range, pointing)
-    time = _pointing_filter(nc_file, time, ele_range, pointing)
+def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: Tuple, pointing: int, name: str):   
     frequency = read_nc_fields(nc_file, 'frequency')
-    quality_flag = read_nc_fields(nc_file, 'quality_flag')
-    quality_flag = _elevation_filter(nc_file, quality_flag, ele_range)
-    quality_flag = _pointing_filter(nc_file, quality_flag, ele_range, pointing)
-    
+    if name == 'tb': 
+        quality_flag = read_nc_fields(nc_file, 'quality_flag')
+        data_in = _pointing_filter(nc_file, data_in, ele_range, pointing)
+        time = _pointing_filter(nc_file, time, ele_range, pointing)
+        quality_flag = _elevation_filter(nc_file, quality_flag, ele_range)
+        quality_flag = _pointing_filter(nc_file, quality_flag, ele_range, pointing)
+    else:
+        sc = dict()
+        sc['tb'] = read_nc_fields(nc_file, 'tb')
+        sc['receiver_nb'] = read_nc_fields(nc_file, 'receiver_nb')
+        sc['receiver'] = read_nc_fields(nc_file, 'receiver')
+        sc['frequency'] = read_nc_fields(nc_file, 'frequency')
+        sc['ele'] = read_nc_fields(nc_file, 'ele')
+        sc['time'] = read_nc_fields(nc_file, 'time')
+        sc['pointing_flag'] = np.zeros(len(sc['time']))
+        site = _read_location(nc_file)
+        c_list = get_coeff_list(site, 'tbx')
+        _, params = get_site_specs(site, '1C01')
+        quality_flag, _ = spectral_consistency(sc, c_list, params['tbx_f'])        
+        data_in = np.abs(data_in - sc['tb'])
+
+        
     fig.clear()
     fig, axs = plt.subplots(7,2, figsize=(13, 16), facecolor='w', edgecolor='k', sharex=True, dpi=120)
     fig.subplots_adjust(hspace=.035, wspace=.15)
@@ -494,6 +514,11 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         _set_labels(fig, ax, nc_file)
         ax.text(.05,.9,str(frequency[i])+' GHz', transform=ax.transAxes + trans, color=_COLORS['darkgray'], fontweight='bold')
         ax.text(.55,.9,str(round(tb_m[i],2))+' +/- '+str(round(tb_s[i],2))+' K', transform=ax.transAxes+trans, color=_COLORS['darkgray'], fontweight='bold')
+        
+    if name == 'tb_spectrum':
+        tb_m = np.ones((len(sc['time']), len(sc['receiver_nb']))) * np.nan
+        for irec, rec in enumerate(sc['receiver_nb']):
+            tb_m[:, irec] = np.sum(data_in[:, sc['receiver'] == rec], axis=1)/np.median(np.sum(data_in[:, sc['receiver'] == rec], axis=1))  
 
     "TB mean"
     axa = fig.add_subplot(121)
@@ -504,39 +529,57 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         axa.spines[pos].set_visible(False)
     axa.set_facecolor(_COLORS['lightgray'])
     
-    axaK = fig.add_subplot(121)
-    axaK.set_position([.125, -.05, .36, .125])
-    axaK.plot(frequency, tb_m, 'ko', markerfacecolor='k', markersize=4)
-    axaK.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle='', capsize=8, color='k')
-    axaK.set_xticks(frequency)
-    axaK.set_xticklabels(axaK.get_xticks(), rotation = 30)
-    axaK.set_xlim([22, 32])
-    axaK.set_ylim([0, np.nanmax(tb_m+tb_s)+30])
-    axaK.tick_params(axis='both', labelsize=12)
-    axaK.set_facecolor(_COLORS['lightgray'])
-    
-    axaV = fig.add_subplot(122)
-    axaV.set_position([.54, -.05, .36, .125])
-    axaV.plot(frequency, tb_m, 'ko', markerfacecolor='k', markersize=4)
-    axaV.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle='', capsize=8, color='k')
-    axaV.set_xticks(frequency)
-    axaV.set_xticklabels(axaV.get_xticks(), rotation = 30)    
-    axaV.set_xlim([51, 58.5])    
-    axaV.set_ylim([0, np.nanmax(tb_m+tb_s)+30])
-    axaV.tick_params(axis='both', labelsize=12)
-    axaV.set_facecolor(_COLORS['lightgray'])
-    
-    axaK.spines['right'].set_visible(False)
-    axaV.spines['left'].set_visible(False)
-    axaV.yaxis.tick_right()    
-    d = .015
-    axaK.plot((1-d,1+d), (-d,+d), transform=axaK.transAxes, color='k', clip_on=False)
-    axaK.plot((1-d,1+d),(1-d,1+d), transform=axaK.transAxes, color='k', clip_on=False)
-    axaV.plot((-d,+d), (1-d,1+d), transform=axaV.transAxes, color='k', clip_on=False)
-    axaV.plot((-d,+d), (-d,+d), transform=axaV.transAxes, color='k', clip_on=False)    
-    axaK.set_ylabel('Brightness Temperature [K]', fontsize=12)
-    axaV.text(-.08, .9, 'TB daily means +/- standard deviation', fontsize=13, horizontalalignment='center', transform=axaV.transAxes, color=_COLORS['darkgray'], fontweight='bold')
-    axaV.text(-.08, -.35, 'Frequency [GHz]', fontsize=13, horizontalalignment='center', transform=axaV.transAxes)
+    if name == 'tb':
+        axaK = fig.add_subplot(121)
+        axaK.set_position([.125, -.05, .36, .125])
+        axaK.plot(frequency, tb_m, 'ko', markerfacecolor='k', markersize=4)
+        axaK.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle='', capsize=8, color='k')
+        axaK.set_xticks(frequency)
+        axaK.set_xticklabels(axaK.get_xticks(), rotation = 30)
+        axaK.set_xlim([22, 32])
+        axaK.set_ylim([0, np.nanmax(tb_m+tb_s)+30])
+        axaK.tick_params(axis='both', labelsize=12)
+        axaK.set_facecolor(_COLORS['lightgray'])
+
+        axaV = fig.add_subplot(122)
+        axaV.set_position([.54, -.05, .36, .125])
+        axaV.plot(frequency, tb_m, 'ko', markerfacecolor='k', markersize=4)
+        axaV.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle='', capsize=8, color='k')
+        axaV.set_xticks(frequency)
+        axaV.set_xticklabels(axaV.get_xticks(), rotation = 30)    
+        axaV.set_xlim([51, 58.5])    
+        axaV.set_ylim([0, np.nanmax(tb_m+tb_s)+30])
+        axaV.tick_params(axis='both', labelsize=12)
+        axaV.set_facecolor(_COLORS['lightgray'])
+
+        axaK.spines['right'].set_visible(False)
+        axaV.spines['left'].set_visible(False)
+        axaV.yaxis.tick_right()    
+        d = .015
+        axaK.plot((1-d,1+d), (-d,+d), transform=axaK.transAxes, color='k', clip_on=False)
+        axaK.plot((1-d,1+d),(1-d,1+d), transform=axaK.transAxes, color='k', clip_on=False)
+        axaV.plot((-d,+d), (1-d,1+d), transform=axaV.transAxes, color='k', clip_on=False)
+        axaV.plot((-d,+d), (-d,+d), transform=axaV.transAxes, color='k', clip_on=False)    
+        axaK.set_ylabel('Brightness Temperature [K]', fontsize=12)
+        axaV.text(-.08, .9, 'TB daily means +/- standard deviation', fontsize=13, horizontalalignment='center', transform=axaV.transAxes, color=_COLORS['darkgray'], fontweight='bold')
+        axaV.text(-.08, -.35, 'Frequency [GHz]', fontsize=13, horizontalalignment='center', transform=axaV.transAxes)
+        
+    else:
+        axa = fig.add_subplot(111)
+        axa.set_position([.125, -.05, .775, .125])
+        cl = [_COLORS['darksky'], _COLORS['lightpurple']]
+        lb = ['K-Band', 'V-Band']
+        for irec, _ in enumerate(sc['receiver_nb']):
+            axa.plot(time, tb_m[:, irec], color=cl[irec], markersize=.75, fillstyle='full', label=lb[irec])
+        axa.legend(loc='upper right')
+        axa.set_ylabel('Brightness Temperature [K]', fontsize=12)
+        axa.set_xlabel('Time (UTC)', fontsize=12)
+        ticks_x_labels = _get_standard_time_ticks()
+        axa.set_xticks(np.arange(0, 25, 4, dtype=int))
+        axa.set_xticklabels(ticks_x_labels, fontsize=12)
+        axa.set_xlim(0, 24)        
+        axa.set_ylim([0, np.nanmax(tb_m)+.5])
+        axa.text(.5, .9, 'Relative deviations retrieved from observed TB', fontsize=13, horizontalalignment='center', transform=axa.transAxes, color=_COLORS['darkgray'], fontweight='bold')
     
     
 def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
@@ -576,7 +619,7 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray):
     ax.plot(time, rolling_mean, color='sienna', linewidth=2.0)
     ax.plot(time, rolling_mean, color='wheat', linewidth=0.6)
     vmin, vmax = ATTRIBUTES[name].plot_range
-    if name == 'Iwv':
+    if name == 'iwv':
         vmin, vmax = np.nanmin(data)-1., np.nanmax(data)+1.   
     _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
     
@@ -678,6 +721,7 @@ def _read_location(nc_file: str) -> str:
 
 def _read_date(nc_file: str) -> date:
     """Returns measurement date."""
+    locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
     with netCDF4.Dataset(nc_file) as nc:
         case_date = datetime.strptime(nc.date, "%Y-%m-%d")
     return case_date

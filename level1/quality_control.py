@@ -34,7 +34,7 @@ def apply_qc(site: str,
     data['quality_flag_status'] = np.zeros(data['tb'].shape, dtype = np.int32)
     data['tb'][data['tb'] == 0.] = Fill_Value_Float
     c_list = get_coeff_list(site, 'tbx')
-    ind_bit4 = spectral_consistency(data, c_list, params['tbx_f'])
+    ind_bit4, _ = spectral_consistency(data, c_list, params['tbx_f'])
     ind_bit6 = np.where(data['rain'] == 1)
     ind_bit7 = orbpos(data, params)
         
@@ -141,25 +141,29 @@ def spectral_consistency(data: dict,
     
     flag_ind = np.zeros(data['tb'].shape)
     tb_tot = np.zeros(data['tb'].shape)
+    tb_ret = np.ones(data['tb'].shape) * Fill_Value_Float
     for ifreq, freq in enumerate(data['frequency']):
         with nc.Dataset(c_file[ifreq]) as coeff:
             _, freq_ind, coeff_ind = np.intersect1d(data['frequency'], coeff['freq'], assume_unique = False, return_indices = True)
             ele_ind = np.where((data['ele'][:] > coeff['elevation_predictand'][:] - .6) & (data['ele'][:] < coeff['elevation_predictand'][:] + .6))[0]
 
             if (ele_ind.size > 0) & (freq_ind.size > 0):
-                tb_ret = coeff['offset_mvr'][:] + np.sum(coeff['coefficient_mvr'][coeff_ind].T * data['tb'][:, freq_ind], axis = 1) + np.sum(coeff['coefficient_mvr'][coeff_ind + (len(data['frequency']) - 1)].T * data['tb'][:, freq_ind]**2, axis = 1)
-                tb_df = pd.DataFrame({'Tb': (data['tb'][ele_ind, ifreq]-tb_ret[ele_ind])}, index = pd.to_datetime(data['time'][ele_ind], unit = 's'))
-                org = pd.DataFrame({'Tb': tb_ret}, index = pd.to_datetime(data['time'][:], unit = 's'))
-                tb_med = tb_df.resample("2min", origin = 'start', closed = 'left', label = 'left').mean()
-                tb_med.index = tb_med.index + to_offset('1min')  
+                tb_ret[:, ifreq] = coeff['offset_mvr'][:] + np.sum(coeff['coefficient_mvr'][coeff_ind].T * data['tb'][:, freq_ind], axis = 1) + np.sum(coeff['coefficient_mvr'][coeff_ind + (len(data['frequency']) - 1)].T * data['tb'][:, freq_ind]**2, axis = 1)
+                tb_df = pd.DataFrame({'Tb': (data['tb'][ele_ind, ifreq]-tb_ret[ele_ind, ifreq])}, index = pd.to_datetime(data['time'][ele_ind], unit = 's'))
+                org = pd.DataFrame({'Tb': tb_ret[:, ifreq]}, index = pd.to_datetime(data['time'][:], unit = 's'))
+                tb_med = tb_df.resample("10min", origin = 'start', closed = 'left', label = 'left').mean()
+                tb_med.index = tb_med.index + to_offset('5min')  
                 tb_df = df_interp(tb_df, org.index)
-                tb_med = df_interp(tb_med, org.index)
+                tb_med = df_interp(tb_med, org.index)                
 
                 flag_ind[((data['ele'][:] > coeff['elevation_predictand'][:] - .6) & (data['ele'][:] < coeff['elevation_predictand'][:] + .6) & (np.abs(tb_df['Tb'].values - tb_med['Tb'].values) > coeff['predictand_err'][:]*tbx_f[ifreq])), ifreq] = 1
-                tb_tot[ele_ind, ifreq] = np.abs(tb_med['Tb'][ele_ind])
-        
-    flag_ind[np.sum(tb_tot[:, 0:7], axis=1) > 4., 0:7] = 1
-    flag_ind[np.sum(tb_tot[:, 7:14], axis=1) > 10., 7:14] = 1
+                tb_tot[ele_ind, ifreq] = np.abs(tb_df['Tb'][ele_ind])
+    
+    # if len(data['receiver_nb']) == 1:
+    #     flag_ind[np.sum(tb_tot[:, :], axis=1)/np.median(np.sum(tb_tot[:, :], axis=1)) > 2., :] = 1
+    # else:
+    for _, rec in enumerate(data['receiver_nb']):
+        flag_ind[np.ix_(np.sum(tb_tot[:, data['receiver'] == rec], axis=1)/np.median(np.sum(tb_tot[:, data['receiver'] == rec], axis=1)) > 2., data['receiver'] == rec)] = 1   
 
     for ifreq, _ in enumerate(data['frequency']):
 	    df = pd.DataFrame({'Flag': flag_ind[:, ifreq]}, index = pd.to_datetime(data['time'][:], unit = 's'))
@@ -167,5 +171,5 @@ def spectral_consistency(data: dict,
 	    df = df.fillna(method = 'ffill', limit = 300)    
 	    flag_ind[((df['Flag'].values == 1) & (data['pointing_flag'] == 0)), ifreq] = 1
 
-    return flag_ind
+    return flag_ind, tb_ret
     

@@ -16,17 +16,20 @@ params = {
 
     # integration time of measurements in seconds
     'int_time': 1, 
+    
+    # receiver information
+    'receiver_nb': np.array([1, 2]),
+    'receiver': np.array([1, 1, 1, 1, 1, 1, 1, 
+                          2, 2, 2, 2, 2, 2, 2]),
 
     # bandwidth of the central frequency in GHz (center frequency of single of upper side-band)
     'bandwidth': np.array([230., 230., 230., 230., 230., 230., 230., 
                            230., 230., 230., 230., 600., 1000., 2000.]),
 
-    # single, double, or double-double sideband (1, 2, 4 are possible values)
-    'sideband_count': 1,
-
     # 56.xx +/- X +/- Y
-    'sideband_IF_separation': np.array([[0.], [0.], [0.], [0.], [0.], [0.], [0.], 
-                                        [0.], [0.], [0.], [0.], [0.], [0.], [0.]]),
+    'n_sidebands': np.array([1, 1]),
+    'sideband_IF_separation': np.array([0., 0., 0., 0., 0., 0., 0., 
+                                        0., 0., 0., 0., 0., 0., 0.]),
     
     # Beam width (3 dB) of the microwave radiometer
     'beam_width': -999.,
@@ -60,6 +63,8 @@ params = {
     # Set az_cor to the angle that RPG software gives when instrument is pointing to the North.
     # If you do not want to transform the coordinates set azi_cor to -999.
     'azi_cor': 0.,
+    # constant azimuth angle (from .MDF)
+    'const_azi': 0.,
 
     # quality flag status for level 1 data; 0: flag active
     # Bit 1: missing_tb
@@ -76,8 +81,8 @@ params = {
     # multiplied with channel TB retrieval error
     # compared to absolute difference of retrieved and observed brightness temperatures
     # (subtracting a 5min mean for noise reduction)
-    'tbx_f': np.array([2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 
-                        3.5, 3.5, 3.5, 3.5, 3.5, 3.5, 3.5]),     
+    'tbx_f': np.array([2.25, 2.25, 2.25, 2.25, 2.25, 2.25, 2.25, 
+                        3.25, 3.25, 3.25, 3.25, 3.25, 3.25, 3.25]),     
     
     # thresholds for met quality flags
     'met_thresholds': np.array([[213.15, 333.15], # air_temperature [K]
@@ -157,7 +162,7 @@ global_specs = {
     'date_of_last_covariance_matrix' : '',
     
     # Type of automatic calibrations including information on calibration interval and respective integration time
-    'type_of_automatic_calibrations' : '',
+    'type_of_automatic_calibrations' : 'calibration with ambient temperature target and noise diode with high-frequency noise switching',
     
     # Logbook repair/replacement work performed
     'instrument_history' : '',

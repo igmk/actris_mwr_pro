@@ -5,7 +5,6 @@ import netCDF4
 from level1.lev1_meta_nc import MetaData
 import utils, version
 import datetime
-import pdb
 
 class RpgArray:
     """Stores netCDF4 variables, numpy arrays and scalars as RpgArrays.
@@ -152,9 +151,8 @@ def save_rpg(rpg: Rpg,
     if data_type == '1B01':
         dims = {'time': len(rpg.data['time'][:]),
                 'frequency': len(rpg.data['tb'][:].T),
-                'n_receivers': len(rpg.data['t_rec'][:].T),
-                'n_sidebands': params['sideband_count'],
-                'time_bnds': 2}
+                'receiver_nb': len(rpg.data['receiver_nb'][:]),
+                'bnds': 2}
     elif data_type == '1B11':
         dims = {'time': len(rpg.data['time'][:]),
                 'ir_wavelength': len(rpg.data['irt'][:].T)}
@@ -164,27 +162,28 @@ def save_rpg(rpg: Rpg,
         if 'irt' in rpg.data:
             dims = {'time': len(rpg.data['time'][:]),
                     'frequency': len(rpg.data['tb'][:].T),
-                    'n_receivers': len(rpg.data['t_rec'][:].T),
-                    'n_sidebands': params['sideband_count'],                    
+                    'receiver_nb': len(rpg.data['receiver_nb'][:]),                  
                     'ir_wavelength': len(rpg.data['irt'][:].T),
-                    'time_bnds': 2}
+                    'bnds': 2}
         else:
             dims = {'time': len(rpg.data['time'][:]),
                     'frequency': len(rpg.data['tb'][:].T),
-                    'n_receivers': len(rpg.data['t_rec'][:].T),
-                    'n_sidebands': params['sideband_count'],
-                    'time_bnds': 2}
-    elif data_type in ('2P01', '2P02', '2P03', '2P04'):
+                    'receiver_nb': len(rpg.data['receiver_nb'][:]),
+                    'bnds': 2}
+    elif data_type in ('2P01', '2P02', '2P03', '2P04', '2P07', '2P08'):
         dims = {'time': len(rpg.data['time'][:]),
-               'time_bnds': 2,
+               'bnds': 2,
                'altitude' : len(rpg.data['altitude'][:])}
-    elif data_type in ('2I06', '2I07'):
+    elif data_type in ('2I01', '2I02'):
         dims = {'time': len(rpg.data['time'][:]),
-               'time_bnds': 2}
-    # elif data_type == '2S00':
-    #     dims = {'time': len(rpg.data['time'][:]),
-    #            'time_bnds': 2,
-    #            'n_freq_spectrum' : len(rpg.data['spectrum'][:])}
+               'bnds': 2}
+    elif data_type == '2S02':
+        # import pdb
+        # pdb.set_trace()
+        dims = {'time': len(rpg.data['time'][:]),
+               'bnds': 2, 
+               'receiver_nb': len(rpg.data['receiver_nb'][:]),
+               'frequency': len(rpg.data['tb_spectrum'][:].T)}
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
 
@@ -241,7 +240,9 @@ def _write_vars2nc(nc: netCDF4.Dataset,
 
         size = obj.dimensions or _get_dimensions(nc, obj.data)
         if obj.name == 'time_bnds':
-            size = ('time', 'time_bnds')
+            size = ('time', 'bnds')
+        if obj.name == 'receiver_nb':
+            size = ('receiver_nb')
         nc_variable = nc.createVariable(obj.name, obj.data_type, size, zlib=True,
                                         fill_value=fill_value)
         nc_variable[:] = obj.data

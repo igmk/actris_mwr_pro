@@ -11,6 +11,7 @@ class PlotMeta(NamedTuple):
     plot_type: Optional[str] = None
     source: Optional[str] = None
     cbar_ext: Optional[str] = None
+    nlev: Optional[int] = None
 
 _K = '$K$'
 _KGM2 = 'kg m$^{-2}$'
@@ -91,7 +92,7 @@ _CBAR = {
 }
 
 ATTRIBUTES = {
-    'Lwp': PlotMeta(
+    'lwp': PlotMeta(
         name='Retrieved column-integrated liquid water path',
         cbar='Blues',
         ylabel=_KGM2,
@@ -99,7 +100,7 @@ ATTRIBUTES = {
         plot_type='bar',
         source='int',
     ),  
-    'Iwv': PlotMeta(
+    'iwv': PlotMeta(
         name='Retrieved column-integrated water vapour',
         cbar='Blues',
         ylabel=_KGM2,
@@ -119,10 +120,27 @@ ATTRIBUTES = {
         # name='Retrieved temperature profile',
         cbar='RdBu_r',
         clabel=_K,
-        plot_range=(240., 300.),
+        plot_range=(245., 305.),
         plot_type='mesh',
         cbar_ext='both',
+        nlev=21,
     ),   
+    'potential_temperature': PlotMeta(
+        cbar='inferno',
+        clabel=_K,
+        plot_range=(260., 320.),
+        plot_type='mesh',
+        cbar_ext='both',
+        nlev=31,
+    ),     
+    'equivalent_potential_temperature': PlotMeta(
+        cbar='turbo',
+        clabel=_K,
+        plot_range=(270., 330.),
+        plot_type='mesh',
+        cbar_ext='both',
+        nlev=31,
+    ),     
     'relative_humidity': PlotMeta(
         name='Relative Humidity',
         cbar='viridis',
@@ -130,7 +148,8 @@ ATTRIBUTES = {
         plot_range=(0., 100.1),
         plot_type='mesh',
         cbar_ext='neither',
-        source='met',        
+        source='met',       
+        nlev=11,
     ),      
     'air_temperature': PlotMeta(
         name='Air temperature',
@@ -177,7 +196,13 @@ ATTRIBUTES = {
         ylabel=_K,
         plot_type='bar',
         source='tb',
-    ),        
+    ), 
+    'tb_spectrum': PlotMeta(
+        name='Brightness temperature spectrum',
+        ylabel=_K,
+        plot_type='bar',
+        source='tb',
+    ),      
     'ele': PlotMeta(
         name='Sensor elevation angle',
         ylabel=_DEG,

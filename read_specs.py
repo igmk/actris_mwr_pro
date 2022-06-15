@@ -76,12 +76,12 @@ def get_global_specs(global_specs: dict,
         keys = kk[0:37]
         values = vv[0:37]
         
-    elif data_type in ('2P01', '2P02', '2P03', '2P04', '2I06', '2I07'):
+    elif data_type in ('2P01', '2P02', '2P03', '2P04', '2P07', '2P08', '2I01', '2I02', '2S02'):
 
         vv2 = list(global_l2.values())[:]
         kk2 = list(global_l2.keys())[:]          
-        keys = kk[0:11] + kk2
-        values = vv[0:11] + vv2
+        keys = kk[0:24] + kk2
+        values = vv[0:24] + vv2
         
     else:
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])

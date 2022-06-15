@@ -3,6 +3,7 @@ from level1.rpg_bin import get_rpg_bin
 from level1.lev1_meta_nc import get_data_attributes
 from level1.quality_control import apply_qc
 from level1.met_quality_control import apply_met_qc
+from utils import isbit
 import rpg_mwr
 import numpy as np
 from typing import Optional
@@ -78,10 +79,9 @@ def prepare_data(path_to_files: str,
         file_list_brt = get_file_list(path_to_files, path_to_prev, path_to_next, 'brt')
         rpg_bin = get_rpg_bin(file_list_brt)
         rpg_bin.data['frequency'] = rpg_bin.header['_f']
-        rpg_bin.data['bandwidth'] = params['bandwidth']
-        rpg_bin.data['sideband_count'] = params['sideband_count']
-        rpg_bin.data['sideband_IF_separation'] = params['sideband_IF_separation']
-        rpg_bin.data['freq_shift'] = params['freq_shift']
+        fields = ['bandwidth', 'n_sidebands', 'sideband_IF_separation', 'freq_shift', 'receiver_nb', 'receiver']
+        for name in fields:
+            rpg_bin.data[name] = params[name]
         rpg_bin.data['time_bnds'] = add_time_bounds(rpg_bin.data['time'], params['int_time'])
         rpg_bin.data['pointing_flag'] = np.zeros(len(rpg_bin.data['time']), np.int32)
 
@@ -95,15 +95,18 @@ def prepare_data(path_to_files: str,
             _azi_correction(rpg_bin.data, params)
 
         if data_type == '1C01':
-            file_list_irt = get_file_list(path_to_files, path_to_prev, path_to_next, 'irt')               
-            rpg_irt = get_rpg_bin(file_list_irt)
-            rpg_irt.data['irt'][rpg_irt.data['irt'] < 150.] = Fill_Value_Float
-            rpg_bin.data['ir_wavelength'] = rpg_irt.header['_f']
-            rpg_bin.data['ir_bandwidth'] = params['ir_bandwidth']
-            rpg_bin.data['ir_beamwidth'] = params['ir_beamwidth']                    
-            _add_interpol1(rpg_bin.data, rpg_irt.data['irt'], rpg_irt.data['time'], 'irt')
-            _add_interpol1(rpg_bin.data, rpg_irt.data['irt_ele'], rpg_irt.data['time'], 'irt_ele')
-            _add_interpol1(rpg_bin.data, rpg_irt.data['irt_azi'], rpg_irt.data['time'], 'irt_azi')
+            try:
+                file_list_irt = get_file_list(path_to_files, path_to_prev, path_to_next, 'irt')               
+                rpg_irt = get_rpg_bin(file_list_irt)
+                rpg_irt.data['irt'][rpg_irt.data['irt'] < 150.] = Fill_Value_Float
+                rpg_bin.data['ir_wavelength'] = rpg_irt.header['_f']
+                rpg_bin.data['ir_bandwidth'] = params['ir_bandwidth']
+                rpg_bin.data['ir_beamwidth'] = params['ir_beamwidth']                    
+                _add_interpol1(rpg_bin.data, rpg_irt.data['irt'], rpg_irt.data['time'], 'irt')
+                _add_interpol1(rpg_bin.data, rpg_irt.data['ir_ele'], rpg_irt.data['time'], 'ir_ele')
+                _add_interpol1(rpg_bin.data, rpg_irt.data['ir_azi'], rpg_irt.data['time'], 'ir_azi')
+            except:
+                print(['No binary files with extension irt found in directory ' + path_to_files])
 
             file_list_met = get_file_list(path_to_files, path_to_prev, path_to_next, 'met')                  
             rpg_met = get_rpg_bin(file_list_met)
@@ -165,7 +168,7 @@ def _append_hkd(file_list_hkd: list,
         _add_interpol1(rpg_bin.data, hkd.data['station_longitude'][idx], hkd.data['time'][idx], 'station_longitude')   
     
     if data_type in ('1B01','1C01'):
-        _add_interpol1(rpg_bin.data, hkd.data['temp'][:,0:2], hkd.data['time'], 't_amb')
+        _add_interpol1(rpg_bin.data, np.mean(hkd.data['temp'][:,0:2], axis=1), hkd.data['time'], 't_amb')
         _add_interpol1(rpg_bin.data, hkd.data['temp'][:,2:4], hkd.data['time'], 't_rec')
     
         """check time intervals of +-15 min of .HKD data for sanity checks"""
@@ -222,7 +225,7 @@ def _add_blb(brt: dict,
     
     bl_mod = np.ones(len(hkd.data['time']))*-99
     mul_ang = np.where(hkd.data['status'][:] & (1<<18))
-    bl_mod[mul_ang] = 1
+    bl_mod[mul_ang] = 1      
 
     for time_ind, time_blb in enumerate(blb.data['time']):
         
@@ -230,9 +233,16 @@ def _add_blb(brt: dict,
 
         if np.any(ind_scan):
             
+            if (not isbit(blb.data['rf_mod'][time_ind], 5)) & (not isbit(blb.data['rf_mod'][time_ind], 6)):
+                sq = 0.
+            elif (not isbit(blb.data['rf_mod'][time_ind], 5)) & (not isbit(blb.data['rf_mod'][time_ind], 6)):
+                sq = 180.
+            else:
+                sq = 0.
+            
             time_add[xx:xx + blb.header['_n_ang'] - 1] = np.linspace(hkd.data['time'][ind_scan[0]], hkd.data['time'][ind_scan[-2]], blb.header['_n_ang'] - 1)
             time_add[xx + blb.header['_n_ang'] - 1] = hkd.data['time'][ind_scan[-1]]
-            azi_add[xx:xx + blb.header['_n_ang']] = 0.
+            azi_add[xx:xx + blb.header['_n_ang']] = (sq + params['const_azi']) % 360
             rain_add[xx:xx + blb.header['_n_ang']] = blb.data['rf_mod'][time_ind] & 1
             for ang in range(blb.header['_n_ang']):              
                 tb_add[xx, :] = np.squeeze(blb.data['tb'][time_ind, :, ang])

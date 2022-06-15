@@ -9,7 +9,7 @@ import pandas as pd
 from typing import Optional, Tuple, Union
 import glob
 import netCDF4
-from scipy import signal
+from scipy import signal, stats
 
 SECONDS_PER_MINUTE = 60
 SECONDS_PER_HOUR = 3600
@@ -132,6 +132,66 @@ def df_interp(df, new_index):
         df_out[colname] = np.interp(new_index, df.index, col)
 
     return df_out
+
+
+def binvec(x: Union[np.ndarray, list]) -> np.ndarray:
+    """Converts 1-D center points to bins with even spacing.
+    Args:
+        x: 1-D array of N real values.
+    Returns:
+        ndarray: N + 1 edge values.
+    Examples:
+        >>> binvec([1, 2, 3])
+            [0.5, 1.5, 2.5, 3.5]
+    """
+    edge1 = x[0] - (x[1] - x[0]) / 2
+    edge2 = x[-1] + (x[-1] - x[-2]) / 2
+    return np.linspace(edge1, edge2, len(x) + 1)
+
+
+def rebin_2d(
+    x_in: np.ndarray,
+    array: ma.MaskedArray,
+    x_new: np.ndarray,
+    statistic: str = "mean",
+    n_min: int = 1,
+) -> Tuple[ma.MaskedArray, list]:
+    """Rebins 2-D data in one dimension.
+    Args:
+        x_in: 1-D array with shape (n,).
+        array: 2-D input data with shape (n, m).
+        x_new: 1-D target vector (center points) with shape (N,).
+        statistic: Statistic to be calculated. Possible statistics are 'mean', 'std'.
+            Default is 'mean'.
+        n_min: Minimum number of points to have good statistics in a bin. Default is 1.
+    Returns:
+        tuple: Rebinned data with shape (N, m) and indices of bins without enough data.
+    Notes:
+        0-values are masked in the returned array.
+    """
+    edges = binvec(x_new)
+    result = np.zeros((len(x_new), array.shape[1]))
+    array_screened = ma.masked_invalid(array, copy=True)  # data may contain nan-values
+    for ind, values in enumerate(array_screened.T):
+        mask = ~values.mask
+        if ma.any(values[mask]):
+            result[:, ind], _, _ = stats.binned_statistic(
+                x_in[mask], values[mask], statistic=statistic, bins=edges
+            )
+    result[~np.isfinite(result)] = 0
+    masked_result = ma.masked_equal(result, 0)
+
+    # Fill bins with not enough profiles
+    empty_indices = []
+    for ind in range(len(edges) - 1):
+        is_data = np.where((x_in > edges[ind]) & (x_in <= edges[ind + 1]))[0]
+        if len(is_data) < n_min:
+            masked_result[ind, :] = ma.masked
+            empty_indices.append(ind)
+    if len(empty_indices) > 0:
+        logging.info(f"No data in {len(empty_indices)} bins")
+
+    return masked_result, empty_indices
 
 
 def seconds2date(time_in_seconds: float, 

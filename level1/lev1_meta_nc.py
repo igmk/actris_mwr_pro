@@ -105,28 +105,36 @@ DEFINITIONS_1B01 = {
 
 ATTRIBUTES_1B01 = {
     'frequency': MetaData(
-        long_name='Frequency of microwave channels',
+        long_name='Centre frequency of microwave channels',
         standard_name='radiation_frequency',
         units='GHz',
+        comment='For more accurate frequency values use frequency+freq_shift.',
+    ),
+    'receiver_nb': MetaData(
+        long_name='Number of the microwave receiver',
+    ),
+    'receiver': MetaData(
+        long_name='Corresponding microwave receiver for each channel',
     ),
     'bandwidth': MetaData(
         long_name='Bandwidth of the microwave channels',
         units='GHz',
-        comment='center frequency of single of upper side-band',
     ),
-    'sideband_count': MetaData(
-        long_name='Single, double, or double-double sideband',
-        comment='1, 2, 4 are possible values',
+    'n_sidebands': MetaData(
+        long_name='Number of sidebands',
+        comment='1: single-sideband or direct detection receivers, 2: double-sideband. The frequency separation of sidebands is indicated in sideband_IF_separation.',
     ),
     'sideband_IF_separation': MetaData(
-        long_name='56.xx +/- X +/- Y',
+        long_name='For double sideband channels, this is the positive and negative IF range distance of the two band passes around the centre frequency (which is the LO frqeuency)',
+        units='GHz',
+        comment='ositive number for IF centre frequency',
     ),
     'beamwidth': MetaData(
         long_name='Beam width of the microwave radiometer',
         units='degrees',
     ),
     'freq_shift': MetaData(
-        long_name='frequency shift applied to correct measured brightness temperature for frequency offset of microwave radiometer channel',
+        long_name='Hypothetical frequency shift which has been applied to correct TB readings for compensation of assumed biases.',
         units='GHz',
     ),
     'tb': MetaData(
@@ -181,6 +189,10 @@ ATTRIBUTES_1B01 = {
         long_name='Receiver physical temperature',
         units='K',
     ),
+    # 'tn': MetaData(
+    #     long_name='Receiver noise temperature',
+    #     units='K',
+    # )
 }
 
 
@@ -204,13 +216,13 @@ ATTRIBUTES_1B11 = {
         long_name='Infrared brightness temperatures',
         units='K'
     ),
-    'irt_azi': MetaData(
+    'ir_azi': MetaData(
         long_name='Infrared sensor azimuth angle',
         standard_name='sensor_azimuth_angle',
         units='degrees',
         comment='0=North, 90=East, 180=South, 270=West',
     ),
-    'irt_ele': MetaData(
+    'ir_ele': MetaData(
         long_name='Infrared sensor elevation angle',
         standard_name='sensor_elevation_angle',
         units='degrees',
