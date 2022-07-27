@@ -3,11 +3,13 @@ from level1.rpg_bin import get_rpg_bin
 from level1.lev1_meta_nc import get_data_attributes
 from level1.quality_control import apply_qc
 from level1.met_quality_control import apply_met_qc
-from utils import isbit
+from utils import isbit, epoch2unix
 import rpg_mwr
 import numpy as np
 from typing import Optional
 import glob
+import datetime
+from itertools import groupby
 
 Fill_Value_Float = -999.
 Fill_Value_Int = -99  
@@ -40,13 +42,14 @@ def lev1_to_nc(site: str,
     global_attributes, params = get_site_specs(site, data_type)
     rpg_bin = prepare_data(path_to_files, path_to_prev, path_to_next, data_type, params)
     if data_type in ('1B01', '1C01'):
-        apply_qc(site, rpg_bin.data, params)    
+        apply_qc(site, rpg_bin.data, params)
+        _cal_his(params, global_attributes)
     if data_type in ('1B21', '1C01'):
         apply_met_qc(rpg_bin.data, params)
     hatpro = rpg_mwr.Rpg(rpg_bin.data)
     hatpro.find_valid_times()
     hatpro.data = get_data_attributes(hatpro.data, data_type)
-    rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params, site)
+    rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params)
     
     
 def get_file_list(path_to_files: str, 
@@ -57,13 +60,14 @@ def get_file_list(path_to_files: str,
     f_list = sorted(glob.glob(path_to_files + '*.' + extension))
     f_list_p = sorted(glob.glob(path_to_prev + '*.' + extension))
     f_list_n = sorted(glob.glob(path_to_next + '*.' + extension))
+
     if len(f_list) == 0:
         raise RuntimeError(['Error: no binary files with extension ' + extension + ' found in directory ' + path_to_files])
-    if any(f_list_p) & any(f_list_n):
+    if (len(f_list_p) > 0) & (len(f_list_n) > 0):
         f_list = [f_list_p[-1], *f_list, f_list_n[0]]        
-    elif any(f_list_p) & len(f_list_n) == 0:    
+    elif (len(f_list_p) > 0) & (len(f_list_n) == 0):
         f_list = [f_list_p[-1], *f_list]
-    elif len(f_list_p) == 0 & any(f_list_n):    
+    elif (len(f_list_p) == 0) & (len(f_list_n) > 0):    
         f_list = [*f_list, f_list_n[0]]  
     return f_list
       
@@ -75,7 +79,8 @@ def prepare_data(path_to_files: str,
                  params: dict) -> dict:    
     """Load and prepare data for netCDF writing"""
     
-    if data_type in ('1B01','1C01'):
+    if data_type in ('1B01', '1C01'):
+      
         file_list_brt = get_file_list(path_to_files, path_to_prev, path_to_next, 'brt')
         rpg_bin = get_rpg_bin(file_list_brt)
         rpg_bin.data['frequency'] = rpg_bin.header['_f']
@@ -89,9 +94,9 @@ def prepare_data(path_to_files: str,
         file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, 'hkd')
         rpg_hkd = get_rpg_bin(file_list_hkd)
         rpg_blb = get_rpg_bin(file_list_blb)
-        _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)
+        _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)         
 
-        if params['azi_cor'] != -999.:
+        if params['azi_cor'] != Fill_Value_Float:
             _azi_correction(rpg_bin.data, params)
 
         if data_type == '1C01':
@@ -167,25 +172,30 @@ def _append_hkd(file_list_hkd: list,
         idx = np.where(hkd.data['station_longitude'] != Fill_Value_Float)[0]
         _add_interpol1(rpg_bin.data, hkd.data['station_longitude'][idx], hkd.data['time'][idx], 'station_longitude')   
     
-    if data_type in ('1B01','1C01'):
+    if data_type in ('1B01', '1C01'):
         _add_interpol1(rpg_bin.data, np.mean(hkd.data['temp'][:,0:2], axis=1), hkd.data['time'], 't_amb')
         _add_interpol1(rpg_bin.data, hkd.data['temp'][:,2:4], hkd.data['time'], 't_rec')
-    
+        _add_interpol1(rpg_bin.data, hkd.data['stab'], hkd.data['time'], 't_sta')
+
         """check time intervals of +-15 min of .HKD data for sanity checks"""
         rpg_bin.data['status'] = np.zeros([len(rpg_bin.data['time']), len(rpg_bin.data['tb'][:].T)], np.int32)                
         for i_time, v_time in enumerate(rpg_bin.data['time']):
             ind = np.where((hkd.data['time'] >= v_time - 900) & (hkd.data['time'] <= v_time + 900))
             status = hkd.data['status'][ind]
             for bit in range(7):
+                # status flags for channel 1 to 7 of the humidity profiler receiver
                 if np.any((status & 2**bit) == 0):
                     rpg_bin.data['status'][i_time, bit] = 1
-                if np.any((status & 2**bit + 8) == 0):
+                # status flags for channel 1 to 7 of the temperature profiler receiver
+                if np.any((status & 2**(bit + 8)) == 0):
                     rpg_bin.data['status'][i_time, bit + 7] = 1  
-            if np.any(((status & 2**25) == 1) | ((status & 2**29) == 1)):
+            # receiver 1 (humidity profiler) thermal stability & ambient target stability & noise diode
+            if np.any(((status & 2**25) == 1) | ((status & 2**29) == 1) | ((status & 2**23) == 0)):
                 rpg_bin.data['status'][i_time, 0:6] = 1
-            if np.any(((status & 2**27) == 1) | ((status & 2**29) == 1)):
+            # receiver 2 (temperature profiler) thermal stability & ambient target stability & noise diode
+            if np.any(((status & 2**27) == 1) | ((status & 2**29) == 1) | ((status & 2**24) == 0)):
                 rpg_bin.data['status'][i_time, 7:13] = 1              
-                
+
         
 def _add_interpol1(data0: dict, 
                    data1: np.ndarray, 
@@ -201,7 +211,7 @@ def _add_interpol1(data0: dict,
         
         
 def add_time_bounds(time: np.ndarray,
-                     int_time: int) -> np.ndarray:
+                    int_time: int) -> np.ndarray:
     
     time_bounds = np.ones([len(time), 2]) * Fill_Value_Int
     time_bounds[:,0] = time - int_time
@@ -216,56 +226,41 @@ def _add_blb(brt: dict,
              params: dict) -> None:
     """Add boundary-layer scans using a linear time axis"""
     
-    xx = 0
-    time_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.int32) * Fill_Value_Int
-    ele_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.float32) * Fill_Value_Float
-    azi_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.float32) * Fill_Value_Float
-    tb_add = np.ones( [blb.header['n'] * blb.header['_n_ang'], blb.header['_n_f']], np.float32) * Fill_Value_Float
-    rain_add = np.ones( blb.header['n'] * blb.header['_n_ang'], np.int32) * Fill_Value_Int
-    
-    bl_mod = np.ones(len(hkd.data['time']))*-99
-    mul_ang = np.where(hkd.data['status'][:] & (1<<18))
-    bl_mod[mul_ang] = 1      
+    time_add, ele_add, azi_add, rain_add, tb_add = np.empty([0], dtype=np.int32), [], [], [], []        
+    seqs = [(key, len(list(val))) for key, val in groupby(hkd.data['status'][:] & 2**18 > 0)]
+    seqs = np.array([(key, sum(s[1] for s in seqs[:i]), len) for i, (key, len) in enumerate(seqs) if key == True])
 
     for time_ind, time_blb in enumerate(blb.data['time']):
-        
-        ind_scan = np.where((hkd.data['time'] >= time_blb - 1.5 * params['scan_time']) & (hkd.data['time'] <= time_blb) & (bl_mod == 1))[0]
+        seqi = np.where(np.abs(hkd.data['time'][seqs[:, 1] + seqs[:, 2] - 1] - time_blb) < 2)[0]
 
-        if np.any(ind_scan):
-            
-            if (not isbit(blb.data['rf_mod'][time_ind], 5)) & (not isbit(blb.data['rf_mod'][time_ind], 6)):
-                sq = 0.
-            elif (not isbit(blb.data['rf_mod'][time_ind], 5)) & (not isbit(blb.data['rf_mod'][time_ind], 6)):
-                sq = 180.
-            else:
-                sq = 0.
-            
-            time_add[xx:xx + blb.header['_n_ang'] - 1] = np.linspace(hkd.data['time'][ind_scan[0]], hkd.data['time'][ind_scan[-2]], blb.header['_n_ang'] - 1)
-            time_add[xx + blb.header['_n_ang'] - 1] = hkd.data['time'][ind_scan[-1]]
-            azi_add[xx:xx + blb.header['_n_ang']] = (sq + params['const_azi']) % 360
-            rain_add[xx:xx + blb.header['_n_ang']] = blb.data['rf_mod'][time_ind] & 1
-            for ang in range(blb.header['_n_ang']):              
-                tb_add[xx, :] = np.squeeze(blb.data['tb'][time_ind, :, ang])
-                ele_add[xx] = blb.header['_ang'][ang]
-                xx += 1
+        if len(seqi) == 1:
+            sq = 0. # scan quadrant, 0: 1st, 180: 2nd
+            if (not isbit(blb.data['rf_mod'][time_ind], 5)) & (isbit(blb.data['rf_mod'][time_ind], 6)):
+                sq = 180.    
 
-    bnd_add = add_time_bounds(time_add, params['scan_time'] / blb.header['_n_ang'] - 1)
-    
+            time_add = np.concatenate((time_add, np.squeeze(np.linspace(hkd.data['time'][seqs[seqi, 1]], hkd.data['time'][seqs[seqi, 1]] + int(np.floor(seqs[seqi, 2] / blb.header['_n_ang'])) * blb.header['_n_ang'], blb.header['_n_ang'], dtype=np.int32))))
+            azi_add = np.concatenate((azi_add, np.ones(blb.header['_n_ang']) * ((sq + params['const_azi']) % 360)))
+            rain_add = np.concatenate((rain_add, np.ones(blb.header['_n_ang'], np.int32) * int(isbit(blb.data['rf_mod'][time_ind], 1))))
+            ele_add = np.concatenate((ele_add, blb.header['_ang']))
+            for ang in range(blb.header['_n_ang']):
+                if len(tb_add) == 0:
+                    tb_add = blb.data['tb'][time_ind, :, ang]
+                else:
+                    tb_add = np.vstack((tb_add, blb.data['tb'][time_ind, :, ang]))
+
+    time_bnds_add = add_time_bounds(time_add, np.floor(params['scan_time'] / (blb.header['_n_ang'] - 1)))
+    pointing_flag_add = np.ones(len(time_add), np.int32)
     brt.data['time'] = np.concatenate((brt.data['time'], time_add))    
     ind = np.argsort(brt.data['time'])
     brt.data['time'] = brt.data['time'][ind]
-    brt.data['time_bnds'] = np.concatenate((brt.data['time_bnds'], bnd_add))
-    brt.data['time_bnds'] = brt.data['time_bnds'][ind,:]
-    brt.data['ele'] = np.concatenate((brt.data['ele'], ele_add))
-    brt.data['ele'] = brt.data['ele'][ind]
-    brt.data['azi'] = np.concatenate((brt.data['azi'], azi_add))
-    brt.data['azi'] = brt.data['azi'][ind]
-    brt.data['tb'] = np.concatenate((brt.data['tb'], tb_add))
-    brt.data['tb'] = brt.data['tb'][ind,:]
-    brt.data['rain'] = np.concatenate((brt.data['rain'], rain_add))
-    brt.data['rain'] = brt.data['rain'][ind]
-    brt.data['pointing_flag'] = np.concatenate((brt.data['pointing_flag'], np.ones(len(time_add), np.int32)))
-    brt.data['pointing_flag'] = brt.data['pointing_flag'][ind]
+    names = ['time_bnds', 'ele', 'azi', 'rain', 'tb', 'pointing_flag']
+    for var in names:
+        brt.data[var] = np.concatenate((brt.data[var], eval(var + '_add')))
+        if brt.data[var].ndim > 1:
+            brt.data[var] = brt.data[var][ind, :]
+        else:
+            brt.data[var] = brt.data[var][ind]
+
     brt.header['n'] = brt.header['n'] + blb.header['n'] * blb.header['_n_ang']
     
     
@@ -278,3 +273,19 @@ def _azi_correction(brt: dict,
     brt['azi'][ind180] = params['azi_cor'] - brt['azi'][ind180]
     brt['azi'][ind360] = 360. + params['azi_cor'] - brt['azi'][ind360]    
     brt['azi'][brt['azi'][:] < 0] += 360.
+    
+    
+def _cal_his(params: dict,
+             glob_att: dict) -> None:
+    """Load and add information from ABSCAL.HIS file"""
+    
+    try:
+        file_list_cal = get_file_list(params['path_to_cal'], ' ', ' ', 'HIS')
+        rpg_cal = get_rpg_bin(file_list_cal)
+
+        rec_cal = np.where(rpg_cal.data['cal1_t'] + rpg_cal.data['cal1_t'] > 0)[0]
+        if len(rec_cal) > 0:
+            glob_att['date_of_last_absolute_calibration'] = datetime.datetime.utcfromtimestamp(epoch2unix(rpg_cal.data['t1'][rec_cal[-1]], rpg_cal.header['_time_ref'])).strftime('%Y%m%d') + glob_att['date_of_last_absolute_calibration']
+            
+    except:
+        print(['No binary files with extension HIS found in directory ' + params['path_to_cal']])                

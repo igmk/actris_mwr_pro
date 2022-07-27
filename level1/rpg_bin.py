@@ -4,6 +4,9 @@ import datetime
 import utils
 import logging
 
+Fill_Value_Float = -999.
+Fill_Value_Int = -99
+
 def get_rpg_bin(file_list: list) -> np.ndarray:    
     """ This function reads one day of a RPG MWR binary file type and concatenates the data. 
     Args:
@@ -37,13 +40,13 @@ def stack_files(file_list):
                                 if name in target else value)  
             else:
                 target[name] = value                                
-                
     
+    if str(file_list[0][-3:]) not in ('brt', 'irt', 'met', 'hkd', 'blb', 'spc', 'HIS'):
+        raise RuntimeError(['Error: no reader for file type ' + str(file_list[0][-3:])])
     reader_name = str('read_' + file_list[0][-3:])
-    data = {}
-    header = {}
+    data, header = {}, {}
     
-    for file in file_list:
+    for file in file_list:    
         try:
             header_tmp, data_tmp = eval(reader_name + '(file)')
         except (TypeError, ValueError) as err:
@@ -68,10 +71,8 @@ class RpgBin:
             self.data[key] = self.raw_data[key]
         
     def _get_date(self):
-        epoch = datetime.datetime(1970, 1, 1).timestamp()
         time_median = float(np.ma.median(self.raw_data['time']))
-        time_median += epoch
-        return datetime.datetime.utcfromtimestamp(time_median).strftime('%Y %m %d').split()    
+        return datetime.datetime.utcfromtimestamp(utils.epoch2unix(time_median, self.header['_time_ref'])).strftime('%Y %m %d').split()    
 
 
 def read_brt(file_name: str) -> dict:    
@@ -83,88 +84,85 @@ def read_brt(file_name: str) -> dict:
     with open(file_name, "rb") as file :
         
         code = np.fromfile( file, np.int32, 1)
-        if code in (666000 , 666666):
-            
-            def _get_header():                
-                """ Read header info """
-                           
-                n = int(np.fromfile( file, np.uint32, 1))
-                time_ref = np.fromfile( file, np.uint32, 1)
-                n_f = int(np.fromfile( file, np.int32, 1))
-                f = np.fromfile( file, np.float32, n_f)
-                xmin = np.fromfile( file, np.float32, n_f)
-                xmax = np.fromfile( file, np.float32, n_f)
-                
-                header_names = ['_code', 'n', '_time_ref', '_n_f', '_f', '_xmin', '_xmax']                 
-                header_values = [code, n, time_ref, n_f, f, xmin, xmax]
-                header = dict(zip(header_names, header_values))
-                return header
-            
-            def _create_variables():                
-                """ Initialize data arrays """
-                
-                Fill_Value_Float = -999.
-                Fill_Value_Int = -99
-                vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
-                       'rain' : np.ones( header['n'], np.byte)*Fill_Value_Int,
-                       'tb' : np.ones( [header['n'], header['_n_f']], np.float32)*Fill_Value_Float,
-                       'ele' : np.ones( header['n'], np.float32)*Fill_Value_Float,
-                       'azi' : np.ones( header['n'], np.float32)*Fill_Value_Float}
-                return vrs
-            
-            def _angle_calc(ang, code):                
-                """ Convert angle """
-                
-                if code == 666666:
-                    if angle_calc == 1:
-                        """ Angle calculation until 24.10.2014 """
-                        sign = 1
-                        if ang < 0:
-                            sign = -1
-                        az = sign*((ang/100.).astype(np.int32))/10.
-                        el = ang - (sign*az*1000.)
-
-                    elif angle_calc == 0:
-                        els = ang-100.*((ang/100.).astype(np.int32))
-                        azs = (ang-els)/1000.
-                        if azs <= 360.:
-                            el = els
-                            az = azs
-                        elif azs > 1000.:
-                            az = azs - 1000.
-                            el = 100. + els
-                        else:
-                            raise RuntimeError(['Error: Inconsistency in angle calculation!'])
-
-                elif code == 666000:
-                    a_str = str(ang[0])
-                    el = float(a_str[0:-5])/100.
-                    az = float(a_str[-5:])/100.
-                return el, az
-            
-            def _get_data():
-                """ Loop over file to read data """
-                
-                data = _create_variables()
-                for sample in range(header['n']):  
-
-                    data['time'][sample] = np.fromfile( file, np.int32, 1)
-                    data['rain'][sample] = np.fromfile( file, np.byte, 1)
-                    data['tb'][sample,] = np.fromfile( file, np.float32, header['_n_f'])
-                    if code == 666666:
-                        ang = np.fromfile( file, np.float32, 1)
-                    elif code == 666000:
-                        ang = np.fromfile( file, np.int32, 1)
-                    data['ele'][sample], data['azi'][sample] = _angle_calc(ang,code)
-                file.close()
-                return data
-            
-            header = _get_header()                    
-            data = _get_data()   
-            return header, data
-                        
-        else:
+        if code not in (666000 , 666666):
             raise RuntimeError(['Error: BRT file code ' + str(code) + ' not suported'])
+            
+        def _get_header():                
+            """ Read header info """
+
+            n = int(np.fromfile( file, np.uint32, 1))
+            time_ref = np.fromfile( file, np.uint32, 1)
+            n_f = int(np.fromfile( file, np.int32, 1))
+            f = np.fromfile( file, np.float32, n_f)
+            xmin = np.fromfile( file, np.float32, n_f)
+            xmax = np.fromfile( file, np.float32, n_f)
+
+            header_names = ['_code', 'n', '_time_ref', '_n_f', '_f', '_xmin', '_xmax']                 
+            header_values = [code, n, time_ref, n_f, f, xmin, xmax]
+            header = dict(zip(header_names, header_values))
+            return header
+
+        def _create_variables():                
+            """ Initialize data arrays """
+
+            vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'rain' : np.ones( header['n'], np.byte)*Fill_Value_Int,
+                   'tb' : np.ones( [header['n'], header['_n_f']], np.float32)*Fill_Value_Float,
+                   'ele' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'azi' : np.ones( header['n'], np.float32)*Fill_Value_Float}
+            return vrs
+
+        def _angle_calc(ang, code):                
+            """ Convert angle """
+
+            if code == 666666:
+                if angle_calc == 1:
+                    """ Angle calculation until 24.10.2014 """
+                    sign = 1
+                    if ang < 0:
+                        sign = -1
+                    az = sign*((ang/100.).astype(np.int32))/10.
+                    el = ang - (sign*az*1000.)
+
+                elif angle_calc == 0:
+                    els = ang-100.*((ang/100.).astype(np.int32))
+                    azs = (ang-els)/1000.
+                    if azs <= 360.:
+                        el = els
+                        az = azs
+                    elif azs > 1000.:
+                        az = azs - 1000.
+                        el = 100. + els
+                    else:
+                        raise RuntimeError(['Error: Inconsistency in angle calculation!'])
+
+            elif code == 666000:
+                a_str = str(ang[0])
+                el = float(a_str[0:-5])/100.
+                az = float(a_str[-5:])/100.
+
+            return el, az
+
+        def _get_data():
+            """ Loop over file to read data """
+
+            data = _create_variables()
+            for sample in range(header['n']):  
+
+                data['time'][sample] = np.fromfile( file, np.int32, 1)
+                data['rain'][sample] = np.fromfile( file, np.byte, 1)
+                data['tb'][sample,] = np.fromfile( file, np.float32, header['_n_f'])
+                if code == 666666:
+                    ang = np.fromfile( file, np.float32, 1)
+                elif code == 666000:
+                    ang = np.fromfile( file, np.int32, 1)
+                data['ele'][sample], data['azi'][sample] = _angle_calc(ang,code)
+            file.close()
+            return data
+
+        header = _get_header()                    
+        data = _get_data()   
+        return header, data
 
 
 def read_met(file_name: str) -> dict:    
@@ -173,65 +171,61 @@ def read_met(file_name: str) -> dict:
     with open(file_name, "rb") as file:
         
         code = np.fromfile( file, np.int32, 1)
-        if code in (599658943 , 599658944):
-            
-            def _get_header():
-                """ Read header info """
-                
-                Fill_Value_Float = -999.
-                Fill_Value_Int = -99
-                n = int(np.fromfile( file, np.uint32, 1))
-                n_add = np.ones( 1, np.byte)
-                if code == 599658944:
-                    n_add = np.fromfile( file, np.byte, 1)
-                n_sen = bin(int(n_add))
-                xmin = np.ones( 3+n_sen.count('1'), np.float32)*Fill_Value_Float
-                xmax = np.ones( 3+n_sen.count('1'), np.float32)*Fill_Value_Float
-                for index in range(3+n_sen.count('1')):
-                    xmin[index] = np.fromfile( file, np.float32, 1)
-                    xmax[index] = np.fromfile( file, np.float32, 1)
-                time_ref = np.fromfile( file, np.uint32, 1)
-                
-                header_names = ['_code','n', '_n_add', '_n_sen', '_xmin', '_xmax', '_time_ref']                
-                header_values = [code, n, n_add, n_sen, xmin, xmax, time_ref]
-                header = dict(zip(header_names, header_values))
-                return header                
-            
-            def _create_variables():                
-                """ Initialize data arrays """
-                
-                Fill_Value_Float = -999.
-                Fill_Value_Int = -99
-                vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
-                       'rain' : np.ones( header['n'], np.byte)*Fill_Value_Int,
-                       'air_pressure' : np.ones( header['n'], np.float32)*Fill_Value_Float,
-                       'air_temperature' : np.ones( header['n'], np.float32)*Fill_Value_Float,            
-                       'relative_humidity' : np.ones( header['n'], np.float32)*Fill_Value_Float,
-                       'adds' : np.ones( [header['n'], 3], np.float32)*Fill_Value_Float}
-                       #'adds' : np.ones( [header['n'], header['_n_sen'].count('1')], np.float32)*Fill_Value_Float}
-                return vrs            
-
-            def _get_data():
-                """ Loop over file to read data """
-                
-                data = _create_variables()
-                for sample in range(header['n']): 
-                    data['time'][sample] = np.fromfile( file, np.int32, 1)
-                    data['rain'][sample] = np.fromfile( file, np.byte, 1)
-                    data['air_pressure'][sample] = np.fromfile( file, np.float32,1)
-                    data['air_temperature'][sample] = np.fromfile( file, np.float32, 1)
-                    data['relative_humidity'][sample] = np.fromfile( file, np.float32, 1) / 100.
-                    for add in range(header['_n_sen'].count('1')):
-                        data['adds'][sample,add] = np.fromfile( file, np.float32, 1)
-                file.close()
-                return data
-            
-            header = _get_header()                    
-            data = _get_data()   
-            return header, data            
-            
-        else:
+        if code not in (599658943 , 599658944):
             raise RuntimeError(['Error: MET file code ' + str(code) + ' not suported'])
+            
+        def _get_header():
+            """ Read header info """
+
+            n = int(np.fromfile( file, np.uint32, 1))
+            n_add = np.ones( 1, np.byte)
+            if code == 599658944:
+                n_add = np.fromfile( file, np.byte, 1)
+            n_sen = bin(int(n_add))
+            xmin = np.ones( 3+n_sen.count('1'), np.float32)*Fill_Value_Float
+            xmax = np.ones( 3+n_sen.count('1'), np.float32)*Fill_Value_Float
+            for index in range(3+n_sen.count('1')):
+                xmin[index] = np.fromfile( file, np.float32, 1)
+                xmax[index] = np.fromfile( file, np.float32, 1)
+            time_ref = np.fromfile( file, np.uint32, 1)
+
+            header_names = ['_code','n', '_n_add', '_n_sen', '_xmin', '_xmax', '_time_ref']                
+            header_values = [code, n, n_add, n_sen, xmin, xmax, time_ref]
+            header = dict(zip(header_names, header_values))
+            return header                
+
+        def _create_variables():                
+            """ Initialize data arrays """
+
+            Fill_Value_Float = -999.
+            Fill_Value_Int = -99
+            vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'rain' : np.ones( header['n'], np.byte)*Fill_Value_Int,
+                   'air_pressure' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'air_temperature' : np.ones( header['n'], np.float32)*Fill_Value_Float,            
+                   'relative_humidity' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'adds' : np.ones( [header['n'], 3], np.float32)*Fill_Value_Float}
+                   #'adds' : np.ones( [header['n'], header['_n_sen'].count('1')], np.float32)*Fill_Value_Float}
+            return vrs            
+
+        def _get_data():
+            """ Loop over file to read data """
+
+            data = _create_variables()
+            for sample in range(header['n']): 
+                data['time'][sample] = np.fromfile( file, np.int32, 1)
+                data['rain'][sample] = np.fromfile( file, np.byte, 1)
+                data['air_pressure'][sample] = np.fromfile( file, np.float32,1)
+                data['air_temperature'][sample] = np.fromfile( file, np.float32, 1)
+                data['relative_humidity'][sample] = np.fromfile( file, np.float32, 1) / 100.
+                for add in range(header['_n_sen'].count('1')):
+                    data['adds'][sample,add] = np.fromfile( file, np.float32, 1)
+            file.close()
+            return data
+
+        header = _get_header()                    
+        data = _get_data()   
+        return header, data            
         
             
 def read_irt(file_name: str) -> dict:    
@@ -240,80 +234,76 @@ def read_irt(file_name: str) -> dict:
     with open(file_name, "rb") as file:
         
         code = np.fromfile( file, np.int32, 1)
-        if code in (671112495,671112496,671112000):
-            
-            def _get_header():
-                """ Read header info """
-                
-                n = int(np.fromfile( file, np.uint32, 1))
-                xmin = np.fromfile( file, np.float32, 1)
-                xmax = np.fromfile( file, np.float32, 1)
-                time_ref = np.fromfile( file, np.uint32, 1)
-                if code == 671112495:
-                    n_f = 1
-                    f = 11.1
-                else:
-                    n_f = int(np.fromfile( file, np.uint32, 1))
-                    f = np.fromfile( file, np.float32, n_f )
-                    
-                header_names = ['_code','n','_xmin','_xmax','_time_ref','_n_f','_f']                    
-                header_values = [code, n, xmin, xmax, time_ref, n_f, f]
-                header = dict(zip(header_names, header_values))
-                return header 
-            
-            def _create_variables():                
-                """ Initialize data arrays """
-                
-                Fill_Value_Float = -999.
-                Fill_Value_Int = -99
-                vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
-                       'rain' : np.ones( header['n'], np.byte)*Fill_Value_Int,
-                       'irt' : np.ones( [header['n'], header['_n_f']], np.float32)*Fill_Value_Float,
-                       'ir_ele' : np.ones( header['n'], np.float32)*Fill_Value_Float,
-                       'ir_azi' : np.ones( header['n'], np.float32)*Fill_Value_Float}
-                return vrs
-            
-            def _angle_calc(ang, code):                
-                """ Convert angle """
-                
-                if code == 671112496:
-                    els = ang-100.*((ang/100.).astype(np.int32))
-                    azs = (ang-els)/1000.
-                    if azs <= 360.:
-                        el = els
-                        az = azs
-                    elif azs > 1000.:
-                        az = azs-1000.
-                        el = 100.+els                    
-                elif code == 671112000:
-                    a_str = str(ang[0])
-                    el = float(a_str[0:-5])/100.
-                    az = float(a_str[-5:])/100.
-                return el, az
-                    
-
-            def _get_data():
-                """ Loop over file to read data """
-                
-                data = _create_variables()
-                for sample in range(header['n']): 
-                    data['time'][sample] = np.fromfile( file, np.int32, 1)
-                    data['rain'][sample] = np.fromfile( file, np.byte, 1)
-                    data['irt'][sample,] = np.fromfile( file, np.float32, header['_n_f']) + 273.15
-                    if code == 671112496:
-                        ang = np.fromfile( file, np.float32, 1)
-                    elif code == 671112000:
-                        ang = np.fromfile( file, np.int32, 1)
-                    data['ir_ele'][sample], data['ir_azi'][sample] = _angle_calc(ang,code)                    
-                file.close()
-                return data
-            
-            header = _get_header()                    
-            data = _get_data()   
-            return header, data 
-        
-        else:
+        if code not in (671112495,671112496,671112000):
             raise RuntimeError(['Error: IRT file code ' + str(code) + ' not suported'])
+            
+        def _get_header():
+            """ Read header info """
+
+            n = int(np.fromfile( file, np.uint32, 1))
+            xmin = np.fromfile( file, np.float32, 1)
+            xmax = np.fromfile( file, np.float32, 1)
+            time_ref = np.fromfile( file, np.uint32, 1)
+            if code == 671112495:
+                n_f = 1
+                f = 11.1
+            else:
+                n_f = int(np.fromfile( file, np.uint32, 1))
+                f = np.fromfile( file, np.float32, n_f )
+
+            header_names = ['_code','n','_xmin','_xmax','_time_ref','_n_f','_f']                    
+            header_values = [code, n, xmin, xmax, time_ref, n_f, f]
+            header = dict(zip(header_names, header_values))
+            return header 
+
+        def _create_variables():                
+            """ Initialize data arrays """
+
+            vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'rain' : np.ones( header['n'], np.byte)*Fill_Value_Int,
+                   'irt' : np.ones( [header['n'], header['_n_f']], np.float32)*Fill_Value_Float,
+                   'ir_ele' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'ir_azi' : np.ones( header['n'], np.float32)*Fill_Value_Float}
+            return vrs
+
+        def _angle_calc(ang, code):                
+            """ Convert angle """
+
+            if code == 671112496:
+                els = ang-100.*((ang/100.).astype(np.int32))
+                azs = (ang-els)/1000.
+                if azs <= 360.:
+                    el = els
+                    az = azs
+                elif azs > 1000.:
+                    az = azs-1000.
+                    el = 100.+els                    
+            elif code == 671112000:
+                a_str = str(ang[0])
+                el = float(a_str[0:-5])/100.
+                az = float(a_str[-5:])/100.
+            return el, az
+
+
+        def _get_data():
+            """ Loop over file to read data """
+
+            data = _create_variables()
+            for sample in range(header['n']): 
+                data['time'][sample] = np.fromfile( file, np.int32, 1)
+                data['rain'][sample] = np.fromfile( file, np.byte, 1)
+                data['irt'][sample,] = np.fromfile( file, np.float32, header['_n_f']) + 273.15
+                if code == 671112496:
+                    ang = np.fromfile( file, np.float32, 1)
+                elif code == 671112000:
+                    ang = np.fromfile( file, np.int32, 1)
+                data['ir_ele'][sample], data['ir_azi'][sample] = _angle_calc(ang,code)                    
+            file.close()
+            return data
+
+        header = _get_header()                    
+        data = _get_data()   
+        return header, data 
      
         
 def read_blb(file_name: str) -> dict:    
@@ -322,58 +312,54 @@ def read_blb(file_name: str) -> dict:
     with open(file_name, "rb") as file:
         
         code = np.fromfile( file, np.int32, 1)
-        if code in (567845847 , 567845848):
-            
-            def _get_header():
-                """ Read header info """
-                
-                n = int(np.fromfile( file, np.uint32, 1))
-                if code == 567845848:
-                    n_f = int(np.fromfile( file, np.int32, 1))
-                else:
-                    n_f = 14
-                xmin = np.fromfile( file, np.float32, n_f)
-                xmax = np.fromfile( file, np.float32, n_f)
-                time_ref = np.fromfile( file, np.uint32, 1)
-                if code == 567845847:
-                    n_f = int(np.fromfile( file, np.int32, 1))
-                f = np.fromfile( file, np.float32, n_f)
-                n_ang = int(np.fromfile( file, np.int32, 1)) + 1
-                ang = np.append(np.fromfile( file, np.float32, n_ang-1), 0)
-                
-                header_names = ['_code','n','_xmin','_xmax','_time_ref','_n_f','_f','_n_ang','_ang']
-                header_values = [code, n, xmin, xmax, time_ref, n_f, f, n_ang, ang]
-                header = dict(zip(header_names, header_values))
-                return header                 
-
-            def _create_variables():                
-                """ Initialize data arrays """
-                
-                Fill_Value_Float = -999.
-                Fill_Value_Int = -99
-                vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
-                       'rf_mod' : np.ones( header['n'], np.byte)*Fill_Value_Int,
-                       'tb' : np.ones( [header['n'], header['_n_f'], header['_n_ang']], np.float32)*Fill_Value_Float}
-                return vrs
-
-            def _get_data():
-                """ Loop over file to read data """
-                
-                data = _create_variables()
-                for sample in range(header['n']): 
-                    data['time'][sample] = np.fromfile( file, np.int32, 1)
-                    data['rf_mod'][sample] = np.fromfile( file, np.byte, 1)
-                    for freq in range(header['_n_f']):
-                        data['tb'][sample, freq, ] = np.fromfile( file, np.float32, header['_n_ang'])   
-                file.close()
-                return data
-            
-            header = _get_header()                    
-            data = _get_data()   
-            return header, data 
-        
-        else:
+        if code not in (567845847 , 567845848):
             raise RuntimeError(['Error: BLB file code ' + str(code) + ' not suported'])
+            
+        def _get_header():
+            """ Read header info """
+
+            n = int(np.fromfile( file, np.uint32, 1))
+            if code == 567845848:
+                n_f = int(np.fromfile( file, np.int32, 1))
+            else:
+                n_f = 14
+            xmin = np.fromfile( file, np.float32, n_f)
+            xmax = np.fromfile( file, np.float32, n_f)
+            time_ref = np.fromfile( file, np.uint32, 1)
+            if code == 567845847:
+                n_f = int(np.fromfile( file, np.int32, 1))
+            f = np.fromfile( file, np.float32, n_f)
+            n_ang = int(np.fromfile( file, np.int32, 1)) + 1
+            ang = np.append(np.fromfile( file, np.float32, n_ang-1), 0)
+
+            header_names = ['_code','n','_xmin','_xmax','_time_ref','_n_f','_f','_n_ang','_ang']
+            header_values = [code, n, xmin, xmax, time_ref, n_f, f, n_ang, ang]
+            header = dict(zip(header_names, header_values))
+            return header                 
+
+        def _create_variables():                
+            """ Initialize data arrays """
+
+            vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'rf_mod' : np.ones( header['n'], np.byte)*Fill_Value_Int,
+                   'tb' : np.ones( [header['n'], header['_n_f'], header['_n_ang']], np.float32)*Fill_Value_Float}
+            return vrs
+
+        def _get_data():
+            """ Loop over file to read data """
+
+            data = _create_variables()
+            for sample in range(header['n']): 
+                data['time'][sample] = np.fromfile( file, np.int32, 1)
+                data['rf_mod'][sample] = np.fromfile( file, np.byte, 1)
+                for freq in range(header['_n_f']):
+                    data['tb'][sample, freq, ] = np.fromfile( file, np.float32, header['_n_ang'])   
+            file.close()
+            return data
+
+        header = _get_header()                    
+        data = _get_data()   
+        return header, data 
         
         
 def read_hkd(file_name: str) -> dict:    
@@ -382,65 +368,61 @@ def read_hkd(file_name: str) -> dict:
     with open(file_name, "rb") as file:
         
         code = np.fromfile( file, np.int32, 1)
-        if code == 837854832:
-            
-            def _get_header():
-                """ Read header info """
-                
-                n = int(np.fromfile( file, np.uint32, 1))
-                time_ref = np.fromfile( file, np.uint32, 1)
-                sel = np.fromfile( file, np.uint32, 1)
-                
-                header_names = ['_code','n','_time_ref','_sel']
-                header_values = [code, n, time_ref, sel]
-                header = dict(zip(header_names,header_values))
-                return header                   
-
-            def _create_variables():                
-                """ Initialize data arrays """
-                
-                Fill_Value_Float = -999.
-                Fill_Value_Int = -99
-                vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
-                       'alarm' : np.ones( header['n'], np.byte)*Fill_Value_Int, 
-                       'station_longitude' : np.ones( header['n'], np.float32)*Fill_Value_Float,
-                       'station_latitude' : np.ones( header['n'], np.float32)*Fill_Value_Float,          
-                       'temp' : np.ones( [header['n'],4], np.float32)*Fill_Value_Float,
-                       'stab' : np.ones( [header['n'],2], np.float32)*Fill_Value_Float,           
-                       'flash' : np.ones( header['n'], np.int32)*Fill_Value_Int,      
-                       'qual' : np.ones( header['n'], np.int32)*Fill_Value_Int,          
-                       'status' : np.ones( header['n'], np.int32)*Fill_Value_Int}
-                return vrs
-
-            def _get_data():
-                """ Loop over file to read data """
-                
-                data = _create_variables()
-                for sample in range(header['n']): 
-                    data['time'][sample] = np.fromfile( file, np.int32, 1)
-                    data['alarm'][sample] = np.fromfile( file, np.byte, count=1)
-                    if (header['_sel'] & 1):
-                        data['station_longitude'][sample] = np.fromfile( file, np.float32, count=1)
-                        data['station_latitude'][sample] = np.fromfile( file, np.float32, count=1)
-                    if (header['_sel'] & 2):
-                        data['temp'][sample,] = np.fromfile( file, np.float32, count=4)
-                    if (header['_sel'] & 4):
-                        data['stab'][sample,] = np.fromfile( file, np.float32, count=2)
-                    if (header['_sel'] & 8):
-                        data['flash'][sample] = np.fromfile( file, np.int32, count=1)
-                    if (header['_sel'] & 16):
-                        data['qual'][sample] = np.fromfile( file, np.int32, count=1)
-                    if (header['_sel'] & 32):
-                        data['status'][sample] = np.fromfile( file, np.int32, count=1)
-                file.close()
-                return data
-            
-            header = _get_header()                    
-            data = _get_data()   
-            return header, data 
-        
-        else:
+        if code != 837854832:
             raise RuntimeError(['Error: HKD file code ' + str(code) + ' not suported'])
+            
+        def _get_header():
+            """ Read header info """
+
+            n = int(np.fromfile( file, np.uint32, 1))
+            time_ref = np.fromfile( file, np.uint32, 1)
+            sel = np.fromfile( file, np.uint32, 1)
+
+            header_names = ['_code','n','_time_ref','_sel']
+            header_values = [code, n, time_ref, sel]
+            header = dict(zip(header_names,header_values))
+            return header                   
+
+        def _create_variables():                
+            """ Initialize data arrays """
+
+            vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'alarm' : np.ones( header['n'], np.byte)*Fill_Value_Int, 
+                   'station_longitude' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'station_latitude' : np.ones( header['n'], np.float32)*Fill_Value_Float,          
+                   'temp' : np.ones( [header['n'],4], np.float32)*Fill_Value_Float,
+                   'stab' : np.ones( [header['n'],2], np.float32)*Fill_Value_Float,           
+                   'flash' : np.ones( header['n'], np.int32)*Fill_Value_Int,      
+                   'qual' : np.ones( header['n'], np.int32)*Fill_Value_Int,          
+                   'status' : np.ones( header['n'], np.int32)*Fill_Value_Int}
+            return vrs
+
+        def _get_data():
+            """ Loop over file to read data """
+
+            data = _create_variables()
+            for sample in range(header['n']): 
+                data['time'][sample] = np.fromfile( file, np.int32, 1)
+                data['alarm'][sample] = np.fromfile( file, np.byte, count=1)
+                if (header['_sel'] & 1):
+                    data['station_longitude'][sample] = np.fromfile( file, np.float32, count=1)
+                    data['station_latitude'][sample] = np.fromfile( file, np.float32, count=1)
+                if (header['_sel'] & 2):
+                    data['temp'][sample,] = np.fromfile( file, np.float32, count=4)
+                if (header['_sel'] & 4):
+                    data['stab'][sample,] = np.fromfile( file, np.float32, count=2)
+                if (header['_sel'] & 8):
+                    data['flash'][sample] = np.fromfile( file, np.int32, count=1)
+                if (header['_sel'] & 16):
+                    data['qual'][sample] = np.fromfile( file, np.int32, count=1)
+                if (header['_sel'] & 32):
+                    data['status'][sample] = np.fromfile( file, np.int32, count=1)
+            file.close()
+            return data
+
+        header = _get_header()                    
+        data = _get_data()   
+        return header, data 
 
             
 def read_spc(file_name: str) -> dict:    
@@ -452,85 +434,171 @@ def read_spc(file_name: str) -> dict:
     with open(file_name, "rb") as file :
         
         code = np.fromfile( file, np.int32, 1)
-        if code in (666667 , 667000):
-            
-            def _get_header():                
-                """ Read header info """
-                           
-                n = int(np.fromfile( file, np.uint32, 1))
-                time_ref = np.fromfile( file, np.uint32, 1)
-                n_f = int(np.fromfile( file, np.int32, 1))
-                f = np.fromfile( file, np.float32, n_f)
-                xmin = np.fromfile( file, np.float32, n_f)
-                xmax = np.fromfile( file, np.float32, n_f)
-                
-                header_names = ['_code', 'n', '_time_ref', '_n_f', '_f', '_xmin', '_xmax']                 
-                header_values = [code, n, time_ref, n_f, f, xmin, xmax]
-                header = dict(zip(header_names, header_values))
-                return header
-            
-            def _create_variables():                
-                """ Initialize data arrays """
-                
-                Fill_Value_Float = -999.
-                Fill_Value_Int = -99
-                vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
-                       'rain' : np.ones( header['n'], np.byte)*Fill_Value_Int,
-                       'tb' : np.ones( [header['n'], header['_n_f']], np.float32)*Fill_Value_Float,
-                       'ele' : np.ones( header['n'], np.float32)*Fill_Value_Float,
-                       'azi' : np.ones( header['n'], np.float32)*Fill_Value_Float}
-                return vrs
-            
-            def _angle_calc(ang, code):                
-                """ Convert angle """
-                
-                if code == 666667:
-                    if angle_calc == 1:
-                        """ Angle calculation until 24.10.2014 """
-                        sign = 1
-                        if ang < 0:
-                            sign = -1
-                        az = sign*((ang/100.).astype(np.int32))/10.
-                        el = ang - (sign*az*1000.)
-
-                    elif angle_calc == 0:
-                        els = ang-100.*((ang/100.).astype(np.int32))
-                        azs = (ang-els)/1000.
-                        if azs <= 360.:
-                            el = els
-                            az = azs
-                        elif azs > 1000.:
-                            az = azs - 1000.
-                            el = 100. + els
-                        else:
-                            raise RuntimeError(['Error: Inconsistency in angle calculation!'])
-
-                elif code == 667000:
-                    a_str = str(ang[0])
-                    el = float(a_str[0:-5])/100.
-                    az = float(a_str[-5:])/100.
-                return el, az
-            
-            def _get_data():
-                """ Loop over file to read data """
-                
-                data = _create_variables()
-                for sample in range(header['n']):  
-
-                    data['time'][sample] = np.fromfile( file, np.int32, 1)
-                    data['rain'][sample] = np.fromfile( file, np.byte, 1)
-                    data['tb'][sample,] = np.fromfile( file, np.float32, header['_n_f'])
-                    if code == 666667:
-                        ang = np.fromfile( file, np.float32, 1)
-                    elif code == 667000:
-                        ang = np.fromfile( file, np.int32, 1)
-                    data['ele'][sample], data['azi'][sample] = _angle_calc(ang,code)
-                file.close()
-                return data
-            
-            header = _get_header()                    
-            data = _get_data()   
-            return header, data
-                        
-        else:
+        if code not in (666667 , 667000):
             raise RuntimeError(['Error: SPC file code ' + str(code) + ' not suported'])
+            
+        def _get_header():                
+            """ Read header info """
+
+            n = int(np.fromfile( file, np.uint32, 1))
+            time_ref = np.fromfile( file, np.uint32, 1)
+            n_f = int(np.fromfile( file, np.int32, 1))
+            f = np.fromfile( file, np.float32, n_f)
+            xmin = np.fromfile( file, np.float32, n_f)
+            xmax = np.fromfile( file, np.float32, n_f)
+
+            header_names = ['_code', 'n', '_time_ref', '_n_f', '_f', '_xmin', '_xmax']                 
+            header_values = [code, n, time_ref, n_f, f, xmin, xmax]
+            header = dict(zip(header_names, header_values))
+            return header
+
+        def _create_variables():                
+            """ Initialize data arrays """
+
+            vrs = {'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'rain' : np.ones( header['n'], np.byte)*Fill_Value_Int,
+                   'tb' : np.ones( [header['n'], header['_n_f']], np.float32)*Fill_Value_Float,
+                   'ele' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'azi' : np.ones( header['n'], np.float32)*Fill_Value_Float}
+            return vrs
+
+        def _angle_calc(ang, code):                
+            """ Convert angle """
+
+            if code == 666667:
+                if angle_calc == 1:
+                    """ Angle calculation until 24.10.2014 """
+                    sign = 1
+                    if ang < 0:
+                        sign = -1
+                    az = sign*((ang/100.).astype(np.int32))/10.
+                    el = ang - (sign*az*1000.)
+
+                elif angle_calc == 0:
+                    els = ang-100.*((ang/100.).astype(np.int32))
+                    azs = (ang-els)/1000.
+                    if azs <= 360.:
+                        el = els
+                        az = azs
+                    elif azs > 1000.:
+                        az = azs - 1000.
+                        el = 100. + els
+                    else:
+                        raise RuntimeError(['Error: Inconsistency in angle calculation!'])
+
+            elif code == 667000:
+                a_str = str(ang[0])
+                el = float(a_str[0:-5])/100.
+                az = float(a_str[-5:])/100.
+            return el, az
+
+        def _get_data():
+            """ Loop over file to read data """
+
+            data = _create_variables()
+            for sample in range(header['n']):  
+
+                data['time'][sample] = np.fromfile( file, np.int32, 1)
+                data['rain'][sample] = np.fromfile( file, np.byte, 1)
+                data['tb'][sample,] = np.fromfile( file, np.float32, header['_n_f'])
+                if code == 666667:
+                    ang = np.fromfile( file, np.float32, 1)
+                elif code == 667000:
+                    ang = np.fromfile( file, np.int32, 1)
+                data['ele'][sample], data['azi'][sample] = _angle_calc(ang,code)
+            file.close()
+            return data
+
+        header = _get_header()                    
+        data = _get_data()   
+        return header, data
+            
+            
+def read_HIS(file_name: str) -> dict:    
+    """ This function reads RPG MWR ABSCAL.HIS binary files. """
+
+    with open(file_name, "rb") as file :
+        
+        code = np.fromfile( file, np.int32, 1)
+        if code != 39583209:
+            raise RuntimeError(['Error: CAL file code ' + str(code) + ' not suported'])
+            
+        def _get_header():                
+            """ Read header info """
+
+            n = int(np.fromfile( file, np.uint32, 1))
+            time_ref = 1
+            header_names = ['_code', 'n', '_time_ref']                 
+            header_values = [code, n, time_ref]
+            header = dict(zip(header_names, header_values))
+            return header
+
+        def _create_variables():                
+            """ Initialize data arrays """
+
+            vrs = {'len' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'rad_id' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'cal1_t' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'cal2_t' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   't1' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'time' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   't2' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'a_temp1' : np.ones( header['n'], np.float32)*Fill_Value_Float,                   
+                   'a_temp2' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'p1' : np.ones( header['n'], np.float32)*Fill_Value_Float, 
+                   'p2' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'hl_temp1' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'hl_temp2' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'cl_temp1' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'cl_temp2' : np.ones( header['n'], np.float32)*Fill_Value_Float,
+                   'spare' : np.ones( [header['n'], 5], np.float32)*Fill_Value_Float,
+                   'n_ch1' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'freq1' : np.ones( [header['n'], 7], np.float32)*Fill_Value_Float,
+                   'n_ch2' : np.ones( header['n'], np.int32)*Fill_Value_Int,
+                   'freq2' : np.ones( [header['n'], 7], np.float32)*Fill_Value_Float,                   
+                   'cal_flag' : np.ones( [header['n'], 14], np.int32)*Fill_Value_Int,
+                   'gain' : np.ones( [header['n'], 14], np.float32)*Fill_Value_Float,   
+                   'tn' : np.ones( [header['n'], 14], np.float32)*Fill_Value_Float,   
+                   't_sys' : np.ones( [header['n'], 14], np.float32)*Fill_Value_Float,   
+                   'alpha' : np.ones( [header['n'], 14], np.float32)*Fill_Value_Float}
+            return vrs
+
+        def _get_data():
+            """ Loop over file to read data """
+
+            data = _create_variables()
+            for sample in range(header['n']):  
+
+                data['len'][sample] = np.fromfile( file, np.int32, 1)
+                data['rad_id'][sample] = np.fromfile( file, np.int32, 1)
+                data['cal1_t'][sample] = np.fromfile( file, np.int32, 1)
+                data['cal2_t'][sample] = np.fromfile( file, np.int32, 1)
+                data['t1'][sample] = np.fromfile( file, np.int32, 1)
+                data['time'][sample] = data['t1'][sample]
+                data['t2'][sample] = np.fromfile( file, np.int32, 1)
+                data['a_temp1'][sample] = np.fromfile( file, np.float32, 1)
+                data['a_temp2'][sample] = np.fromfile( file, np.float32, 1)
+                data['p1'][sample] = np.fromfile( file, np.float32, 1)
+                data['p2'][sample] = np.fromfile( file, np.float32, 1)
+                data['hl_temp1'][sample] = np.fromfile( file, np.float32, 1)
+                data['hl_temp2'][sample] = np.fromfile( file, np.float32, 1)
+                data['cl_temp1'][sample] = np.fromfile( file, np.float32, 1)
+                data['cl_temp2'][sample] = np.fromfile( file, np.float32, 1)
+                data['spare'][sample,] = np.fromfile( file, np.float32, 5)
+                data['n_ch1'][sample] = np.fromfile( file, np.int32, 1)
+                data['n_ch1'][sample] = data['n_ch1'][sample]
+                data['freq1'][sample, 0:data['n_ch1'][sample]] = np.fromfile( file, np.float32, int(data['n_ch1'][sample]))
+                data['n_ch2'][sample] = np.fromfile( file, np.int32, 1)
+                data['freq2'][sample, 0:int(data['n_ch2'][sample])] = np.fromfile( file, np.float32, int(data['n_ch2'][sample]))         
+                data['cal_flag'][sample, 0:int(data['n_ch1'][sample]+data['n_ch2'][sample])] = np.fromfile( file, np.int32, int(data['n_ch1'][sample]+data['n_ch2'][sample]))
+                data['gain'][sample, 0:int(data['n_ch1'][sample]+data['n_ch2'][sample])] = np.fromfile( file, np.float32, int(data['n_ch1'][sample]+data['n_ch2'][sample]))
+                data['tn'][sample, 0:int(data['n_ch1'][sample]+data['n_ch2'][sample])] = np.fromfile( file, np.float32, int(data['n_ch1'][sample]+data['n_ch2'][sample]))
+                data['t_sys'][sample, 0:int(data['n_ch1'][sample]+data['n_ch2'][sample])] = np.fromfile( file, np.float32, int(data['n_ch1'][sample]+data['n_ch2'][sample]))
+                data['alpha'][sample, 0:int(data['n_ch1'][sample]+data['n_ch2'][sample])] = np.fromfile( file, np.float32, int(data['n_ch1'][sample]+data['n_ch2'][sample]))
+
+            file.close()
+            return data
+
+        header = _get_header()
+        data = _get_data()   
+        return header, data

@@ -5,6 +5,9 @@ params = {
     'station_altitude': 108., # m MSL
     'station_longitude': 6.407, # degrees east
     'station_latitude': 50.906, # degrees north
+    
+    # path to ABSCAL.HIS file
+    'path_to_cal' : '/data/obs/site/jue/tophat/calibration/',
 
     # integration time BLB files: 
     # The integration time for a boundary layer scan (RPG-specific) must be specified here. 
@@ -117,7 +120,7 @@ global_specs = {
     'references' : '',
     
     # Name of measurement station
-    'site_location' : 'Juelich, Germany',
+    'site_location' : 'juelich',
     
     # E-PROFILE instrument identifier. “A” if there is only one instrument on the station. Additional instruments are identified with the letters B, C, etc.
     'instrument_id' : '',

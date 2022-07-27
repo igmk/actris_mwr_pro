@@ -107,10 +107,7 @@ def generate_figure(nc_file: str,
             _set_ax(ax, max_y)
             
             plot_type = ATTRIBUTES[name].plot_type
-            if plot_type == 'segment':
-                _plot_segment_data(ax, field, name, ax_value)
-
-            elif plot_type == 'mesh':
+            if plot_type == 'mesh':
                 _plot_colormesh_data(ax, field, name, ax_value, max_y, nc_file)
             
     case_date = _set_labels(fig, axes[-1], nc_file, sub_title)
@@ -316,7 +313,6 @@ def _plot_segment_data(ax, data: ma.MaskedArray, name: str, axes: tuple, nc_file
     colorbar.ax.set_yticklabels(clabel, fontsize=13)
 
 
-
 def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y: int, nc_file: str):
     """Plots continuous 2D variable.
     Creates only one plot, so can be used both one plot and subplot type of figs.
@@ -352,7 +348,7 @@ def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y
     else:
         time, data = _mark_gaps(axes[0][:], data, 35, 0)
     pl = ax.contourf(time, axes[1], data.T, levels=np.linspace(vmin,vmax,nlev), cmap=cmap, extend=variables.cbar_ext)
-    ds = int(np.round(len(time)*.15))
+    ds = int(np.round(len(time)*.05))
     cp = ax.contour(time[ds:len(time)-ds], axes[1], data[ds:len(time)-ds, :].T, levels=np.linspace(vmin,vmax,nlev), colors='black', linewidths=.0001)
     cbl = plt.clabel(cp, fontsize=8)
     ta = []
@@ -415,9 +411,9 @@ def _plot_irt(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     variables = ATTRIBUTES[name]
     vmin, vmax = variables.plot_range
     ir_wavelength = read_nc_fields(nc_file, 'ir_wavelength')
-    if not ma.all(ma.is_masked(data_in[:, 0])):
+    if not data_in[:, 0].mask.all():
         ax.plot(time, data_in[:,0],'o', markersize=.75, fillstyle='full', color='sienna', label=str(ir_wavelength[0])+' µm')
-    if not ma.all(ma.is_masked(data_in[:, 1])):    
+    if not data_in[:, 1].mask.all():    
         ax.plot(time, data_in[:,1],'o', markersize=.75, fillstyle='full', color=_COLORS['shockred'], label=str(ir_wavelength[1])+' µm')
     ax.set_ylim((vmin, vmax))
     ax.legend(loc='upper right')
@@ -485,14 +481,17 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         c_list = get_coeff_list(site, 'tbx')
         _, params = get_site_specs(site, '1C01')
         quality_flag, _ = spectral_consistency(sc, c_list, params['tbx_f'])        
-        data_in = np.abs(data_in - sc['tb'])
+        data_in -= sc['tb']
 
         
     fig.clear()
     fig, axs = plt.subplots(7,2, figsize=(13, 16), facecolor='w', edgecolor='k', sharex=True, dpi=120)
     fig.subplots_adjust(hspace=.035, wspace=.15)
-    fig.text(.06, .5, 'Brightness Temperature [K]', va='center', rotation='vertical', fontsize=20)
-    fig.text(.445, .09, 'flagged data', va='center', fontsize=20, color='r')
+    if name == 'tb':
+        fig.text(.06, .5, 'Brightness Temperature [K]', va='center', rotation='vertical', fontsize=20)
+    else:
+        fig.text(.06, .5, 'Brightness Temperature (Observed - Retrieved) [K]', va='center', rotation='vertical', fontsize=20)
+    fig.text(.445, .09, 'flagged data', va='center', fontsize=20, color='r')        
     axs[0,0].set_title('K-Band Channels', fontsize=15, color=_COLORS['darkgray'], loc='right')
     axs[0,1].set_title('V-Band Channels', fontsize=15, color=_COLORS['darkgray'], loc='right')
     trans = ScaledTranslation(10/72, -5/72, fig.dpi_scale_trans)
@@ -510,15 +509,10 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         ax.plot(time[flag], data_in[flag,i],'ro', markersize=.75, fillstyle='full')
         ax.set_facecolor(_COLORS['lightgray'])
         dif = np.max(data_in[no_flag,i]) - np.min(data_in[no_flag,i])
-        _set_ax(ax, np.max(data_in[no_flag,i])+.25*dif, '', np.max([0., np.min(data_in[no_flag,i])-.25*dif]))
+        _set_ax(ax, np.max(data_in[no_flag,i])+.25*dif, '', np.min(data_in[no_flag,i])-.25*dif)
         _set_labels(fig, ax, nc_file)
         ax.text(.05,.9,str(frequency[i])+' GHz', transform=ax.transAxes + trans, color=_COLORS['darkgray'], fontweight='bold')
         ax.text(.55,.9,str(round(tb_m[i],2))+' +/- '+str(round(tb_s[i],2))+' K', transform=ax.transAxes+trans, color=_COLORS['darkgray'], fontweight='bold')
-        
-    if name == 'tb_spectrum':
-        tb_m = np.ones((len(sc['time']), len(sc['receiver_nb']))) * np.nan
-        for irec, rec in enumerate(sc['receiver_nb']):
-            tb_m[:, irec] = np.sum(data_in[:, sc['receiver'] == rec], axis=1)/np.median(np.sum(data_in[:, sc['receiver'] == rec], axis=1))  
 
     "TB mean"
     axa = fig.add_subplot(121)
@@ -565,21 +559,32 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         axaV.text(-.08, -.35, 'Frequency [GHz]', fontsize=13, horizontalalignment='center', transform=axaV.transAxes)
         
     else:
+        tb_m = np.ones((len(sc['time']), len(sc['receiver_nb']))) * np.nan
+        data_in = np.abs(data_in)
         axa = fig.add_subplot(111)
         axa.set_position([.125, -.05, .775, .125])
-        cl = [_COLORS['darksky'], _COLORS['lightpurple']]
+        axa.set_facecolor(_COLORS['lightgray'])
+        cl = [_COLORS['darksky'], _COLORS['darkgreen']]
         lb = ['K-Band', 'V-Band']
-        for irec, _ in enumerate(sc['receiver_nb']):
-            axa.plot(time, tb_m[:, irec], color=cl[irec], markersize=.75, fillstyle='full', label=lb[irec])
+        
+        for irec, rec in enumerate(sc['receiver_nb']):
+            tb_m[:, irec] = np.sum(data_in[:, sc['receiver'] == rec], axis=1)/np.ma.median(np.sum(data_in[:, sc['receiver'] == rec], axis=1))
+            axa.plot(time, tb_m[:, irec], 'o', color=cl[irec], markersize=.75, fillstyle='full', label=lb[irec])
+            flag = np.where(np.sum(quality_flag[:, sc['receiver'] == rec], axis=1) > 0)[0]
+            axa.plot(time[flag], tb_m[flag, irec],'ro', markersize=.75, fillstyle='full')             
+           
         axa.legend(loc='upper right')
-        axa.set_ylabel('Brightness Temperature [K]', fontsize=12)
+        axa.set_ylabel('Relative Deviation []', fontsize=12)
         axa.set_xlabel('Time (UTC)', fontsize=12)
         ticks_x_labels = _get_standard_time_ticks()
         axa.set_xticks(np.arange(0, 25, 4, dtype=int))
         axa.set_xticklabels(ticks_x_labels, fontsize=12)
-        axa.set_xlim(0, 24)        
-        axa.set_ylim([0, np.nanmax(tb_m)+.5])
-        axa.text(.5, .9, 'Relative deviations retrieved from observed TB', fontsize=13, horizontalalignment='center', transform=axa.transAxes, color=_COLORS['darkgray'], fontweight='bold')
+        axa.set_xlim(0, 24)
+        no_flag = np.where(np.sum(quality_flag[:, :], axis=1) == 0)[0]
+        if len(no_flag) == 0:
+            no_flag = np.arange(len(sc['time']))
+        axa.set_ylim([0, np.nanmax(tb_m[no_flag, :])+.5])
+        axa.text(.5, .9, 'Total relative deviations retrieved from observed TB', fontsize=13, horizontalalignment='center', transform=axa.transAxes, color=_COLORS['darkgray'], fontweight='bold')
     
     
 def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
@@ -609,12 +614,11 @@ def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
 
 def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray):
     data, time = _get_unmasked_values(data_in, time)
-    # data = _filter_noise(data)
     rolling_mean, width = _calculate_rolling_mean(time, data)
     time = _nan_time_gaps(time)
     rolling_mean = np.interp(time, time[int(width / 2 - 1):int(-width / 2)], rolling_mean)
     
-    ax.plot(time, data, color='royalblue', lw=.5)
+    ax.plot(time, data, '.', color='royalblue', markersize=1)
     ax.axhline(linewidth=0.8, color='k')
     ax.plot(time, rolling_mean, color='sienna', linewidth=2.0)
     ax.plot(time, rolling_mean, color='wheat', linewidth=0.6)
@@ -715,7 +719,7 @@ def _init_colorbar(plot, axis):
 def _read_location(nc_file: str) -> str:
     """Returns site name."""
     with netCDF4.Dataset(nc_file) as nc:
-        site_name = nc.site
+        site_name = nc.site_location
     return site_name
 
 

@@ -4,7 +4,8 @@ from numpy import ma
 import netCDF4
 from level1.lev1_meta_nc import MetaData
 import utils, version
-import datetime
+from datetime import datetime, timezone
+import locale
 
 class RpgArray:
     """Stores netCDF4 variables, numpy arrays and scalars as RpgArrays.
@@ -97,38 +98,34 @@ class Rpg:
         return data
     
     def _get_date(self):
-        epoch = datetime.datetime(1970, 1, 1).timestamp()
+        epoch = datetime(1970, 1, 1).timestamp()
         time_median = float(np.ma.median(self.raw_data['time']))
         time_median += epoch
-        return datetime.datetime.utcfromtimestamp(time_median).strftime('%Y-%m-%d')      
+        return datetime.utcfromtimestamp(time_median).strftime('%Y-%m-%d')      
     
     def find_valid_times(self):
         # sort timestamps
         time = self.data['time'].data[:]
-        n_time = len(time)
         ind = time.argsort()
         self._screen(ind)
                 
         # remove duplicate timestamps
         time = self.data['time'].data[:]
-        n_time = len(time)
         _, ind = np.unique(time, return_index=True)
         self._screen(ind)
                 
         # find valid date        
         time = self.data['time'].data[:]
-        n_time = len(time)        
-        date_f = np.zeros(n_time, np.int32)
+        ind = np.zeros(len(time), dtype=int)
         for i, t in enumerate(time):
-            date_str = '-'.join(utils.seconds2date(t)[:3])
-            if date_str == self.date:
-                date_f[i] = 1          
-        ind = np.where(date_f == 1)[0]
-        self._screen(ind)
-        if len(ind) < 1:
-            raise RuntimeError(['Error: no valid data for date: ' + self.date])        
+            if '-'.join(utils.seconds2date(t)[:3]) == self.date:
+                ind[i] = 1
+        self._screen(np.where(ind == 1)[0])      
         
-    def _screen(self, ind: np.ndarray):
+    def _screen(self, 
+                ind: np.ndarray):
+        if len(ind) < 1:
+            raise RuntimeError(['Error: no valid data for date: ' + self.date])          
         n_time = len(self.data['time'].data)
         for key, array in self.data.items():
             data = array.data
@@ -144,8 +141,7 @@ def save_rpg(rpg: Rpg,
              output_file: str,
              att: dict,
              data_type: str,
-             params: dict, 
-             site: str) -> Tuple[str, list]:
+             params: dict) -> Tuple[str, list]:
     """Saves the RPG MWR file."""
     
     if data_type == '1B01':
@@ -162,7 +158,7 @@ def save_rpg(rpg: Rpg,
         if 'irt' in rpg.data:
             dims = {'time': len(rpg.data['time'][:]),
                     'frequency': len(rpg.data['tb'][:].T),
-                    'receiver_nb': len(rpg.data['receiver_nb'][:]),                  
+                    'receiver_nb': len(rpg.data['receiver_nb'][:]),
                     'ir_wavelength': len(rpg.data['irt'][:].T),
                     'bnds': 2}
         else:
@@ -178,8 +174,6 @@ def save_rpg(rpg: Rpg,
         dims = {'time': len(rpg.data['time'][:]),
                'bnds': 2}
     elif data_type == '2S02':
-        # import pdb
-        # pdb.set_trace()
         dims = {'time': len(rpg.data['time'][:]),
                'bnds': 2, 
                'receiver_nb': len(rpg.data['receiver_nb'][:]),
@@ -189,7 +183,7 @@ def save_rpg(rpg: Rpg,
 
     with init_file(output_file, dims, rpg.data, att) as rootgrp:
         setattr(rootgrp, 'date', rpg.date)
-        setattr(rootgrp, 'site', site)
+        # setattr(rootgrp, 'site', att['site_location'])
     
     
 def init_file(file_name: str,
@@ -243,6 +237,10 @@ def _write_vars2nc(nc: netCDF4.Dataset,
             size = ('time', 'bnds')
         if obj.name == 'receiver_nb':
             size = ('receiver_nb')
+        if obj.name == 'irt':
+            size = ('time', 'ir_wavelength')
+        if obj.name == 'ir_wavelength':
+            size = ('ir_wavelength')
         nc_variable = nc.createVariable(obj.name, obj.data_type, size, zlib=True,
                                         fill_value=fill_value)
         nc_variable[:] = obj.data
@@ -253,5 +251,7 @@ def _write_vars2nc(nc: netCDF4.Dataset,
 def _add_standard_global_attributes(nc: netCDF4.Dataset, 
                                     att_global) -> None:
     nc.mwrpy_version = version.__version__
+    locale.setlocale(locale.LC_TIME, 'en_US.UTF-8')
+    nc.processed = datetime.now(tz=timezone.utc).strftime("%d %b %Y %H:%M:%S") + ' UTC'
     for name, value in att_global.items():
         setattr(nc, name, value)

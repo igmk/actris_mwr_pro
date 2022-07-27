@@ -23,7 +23,7 @@ def get_site_specs(site: str,
 
     site_dict = importlib.import_module(f"site_config." + site + ".config")
     global_specs = get_global_specs(site_dict.global_specs, data_type)
-    add_global_description(global_specs, GLOBAL_ALL)
+    # add_global_description(global_specs, GLOBAL_ALL)
 
     return global_specs, site_dict.params
             

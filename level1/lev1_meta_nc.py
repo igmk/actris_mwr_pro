@@ -179,7 +179,7 @@ ATTRIBUTES_1B01 = {
     'pointing_flag': MetaData(
         long_name='Pointing Flag',
         units='1 (bit variable)',
-        comment='Flag indicating a single pointing (starring = 0) or multiple pointing (scanning = 1) observation sequence',
+        comment='Flag indicating a single pointing (staring = 0) or multiple pointing (scanning = 1) observation sequence',
     ),
     't_amb': MetaData(
         long_name='Ambient target temperature',
@@ -189,6 +189,10 @@ ATTRIBUTES_1B01 = {
         long_name='Receiver physical temperature',
         units='K',
     ),
+    't_sta': MetaData(
+        long_name='Receiver temperature stability',
+        units='K',
+    ),    
     # 'tn': MetaData(
     #     long_name='Receiver noise temperature',
     #     units='K',

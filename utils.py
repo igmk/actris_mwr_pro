@@ -48,7 +48,7 @@ def epoch2unix(epoch_time, time_ref,
     unix_time = epoch_time + int(delta)
     if time_ref == 0:
         for index in range(len(unix_time)):
-            unix_time[index] = time.mktime(datetime.fromtimestamp(unix_time[index], tz=timezone.utc).timetuple())
+            unix_time[index] = time.mktime(datetime.fromtimestamp(unix_time[index], timezone.utc).timetuple())
     return unix_time
 
 
@@ -154,8 +154,7 @@ def rebin_2d(
     array: ma.MaskedArray,
     x_new: np.ndarray,
     statistic: str = "mean",
-    n_min: int = 1,
-) -> Tuple[ma.MaskedArray, list]:
+    n_min: int = 1) -> Tuple[ma.MaskedArray, list]:
     """Rebins 2-D data in one dimension.
     Args:
         x_in: 1-D array with shape (n,).
@@ -175,9 +174,7 @@ def rebin_2d(
     for ind, values in enumerate(array_screened.T):
         mask = ~values.mask
         if ma.any(values[mask]):
-            result[:, ind], _, _ = stats.binned_statistic(
-                x_in[mask], values[mask], statistic=statistic, bins=edges
-            )
+            result[:, ind], _, _ = stats.binned_statistic(x_in[mask], values[mask], statistic=statistic, bins=edges)
     result[~np.isfinite(result)] = 0
     masked_result = ma.masked_equal(result, 0)
 
@@ -188,8 +185,8 @@ def rebin_2d(
         if len(is_data) < n_min:
             masked_result[ind, :] = ma.masked
             empty_indices.append(ind)
-    if len(empty_indices) > 0:
-        logging.info(f"No data in {len(empty_indices)} bins")
+    # if len(empty_indices) > 0:
+    #     logging.info(f"No data in {len(empty_indices)} bins")
 
     return masked_result, empty_indices
 

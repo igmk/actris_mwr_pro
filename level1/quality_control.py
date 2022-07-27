@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import ma
 import pandas as pd
 from utils import setbit, get_coeff_list, df_interp
 import datetime
@@ -140,8 +141,9 @@ def spectral_consistency(data: dict,
     """ Applies spectral consistency coefficients for given frequency index and returns indices to be flagged """
     
     flag_ind = np.zeros(data['tb'].shape)
-    tb_tot = np.zeros(data['tb'].shape)
-    tb_ret = np.ones(data['tb'].shape) * Fill_Value_Float
+    flag_tmp = np.ones(data['tb'].shape) * np.nan
+    tb_tot = np.ones(data['tb'].shape) * np.nan
+    tb_ret = np.ones(data['tb'].shape) * np.nan
     for ifreq, freq in enumerate(data['frequency']):
         with nc.Dataset(c_file[ifreq]) as coeff:
             _, freq_ind, coeff_ind = np.intersect1d(data['frequency'], coeff['freq'], assume_unique = False, return_indices = True)
@@ -156,19 +158,16 @@ def spectral_consistency(data: dict,
                 tb_df = df_interp(tb_df, org.index)
                 tb_med = df_interp(tb_med, org.index)                
 
-                flag_ind[((data['ele'][:] > coeff['elevation_predictand'][:] - .6) & (data['ele'][:] < coeff['elevation_predictand'][:] + .6) & (np.abs(tb_df['Tb'].values - tb_med['Tb'].values) > coeff['predictand_err'][:]*tbx_f[ifreq])), ifreq] = 1
+                flag_tmp[((data['ele'][:] > coeff['elevation_predictand'][:] - .6) & (data['ele'][:] < coeff['elevation_predictand'][:] + .6) & (np.abs(tb_df['Tb'].values - tb_med['Tb'].values) > coeff['predictand_err'][:]*tbx_f[ifreq])), ifreq] = 1
                 tb_tot[ele_ind, ifreq] = np.abs(tb_df['Tb'][ele_ind])
     
-    # if len(data['receiver_nb']) == 1:
-    #     flag_ind[np.sum(tb_tot[:, :], axis=1)/np.median(np.sum(tb_tot[:, :], axis=1)) > 2., :] = 1
-    # else:
     for _, rec in enumerate(data['receiver_nb']):
-        flag_ind[np.ix_(np.sum(tb_tot[:, data['receiver'] == rec], axis=1)/np.median(np.sum(tb_tot[:, data['receiver'] == rec], axis=1)) > 2., data['receiver'] == rec)] = 1   
+        flag_tmp[np.ix_(np.sum(tb_tot[:, data['receiver'] == rec], axis=1)/np.nanmean(np.sum(tb_tot[:, data['receiver'] == rec], axis=1)) > 2., data['receiver'] == rec)] = 1   
 
     for ifreq, _ in enumerate(data['frequency']):
-	    df = pd.DataFrame({'Flag': flag_ind[:, ifreq]}, index = pd.to_datetime(data['time'][:], unit = 's'))
-	    df = df.fillna(method = 'bfill', limit = 120)
-	    df = df.fillna(method = 'ffill', limit = 300)    
+	    df = pd.DataFrame({'Flag': flag_tmp[:, ifreq]}, index = pd.to_datetime(data['time'][:], unit = 's'))
+	    df = df.fillna(method = 'bfill', limit = 60)
+	    df = df.fillna(method = 'ffill', limit = 60)    
 	    flag_ind[((df['Flag'].values == 1) & (data['pointing_flag'] == 0)), ifreq] = 1
 
     return flag_ind, tb_ret

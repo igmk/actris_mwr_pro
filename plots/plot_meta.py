@@ -136,7 +136,7 @@ ATTRIBUTES = {
     'equivalent_potential_temperature': PlotMeta(
         cbar='turbo',
         clabel=_K,
-        plot_range=(270., 330.),
+        plot_range=(275., 335.),
         plot_type='mesh',
         cbar_ext='both',
         nlev=31,
@@ -244,7 +244,7 @@ ATTRIBUTES = {
     'irt': PlotMeta(
         name='Infrared brightness temperatures',
         ylabel=_K,
-        plot_range=(210,310),
+        plot_range=(170,310),
         plot_type='bar',
         source='irt',
     ),       
