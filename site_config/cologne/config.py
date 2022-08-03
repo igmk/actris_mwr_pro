@@ -2,13 +2,13 @@ import numpy as np
 
 
 params = {
-    'station_altitude': 108., # m MSL
-    'station_longitude': 6.407, # degrees east
-    'station_latitude': 50.906, # degrees north
+    'station_altitude': 20., # m MSL
+    'station_longitude': 6.935, # degrees east
+    'station_latitude': 50.928, # degrees north
     
     # path to level1 data and path for processed files
-    'data_in' : '/data/obs/site/jue/tophat/l1/',
-    'data_out' : '/data/obs/site/jue/tophat/actris/',
+    'data_in' : '/data/obs/site/cgn/foghat/l1/',
+    'data_out' : '/data/obs/site/cgn/foghat/actris/',
     
     # path to ABSCAL.HIS file
     'path_to_cal' : '/data/obs/site/jue/tophat/calibration/',
@@ -19,7 +19,7 @@ params = {
     # You can find this number with the RPG software when you load your Measurement Definition File (MDF) and open "Definition of Measurement and Calibration Parameters" 
     # --> "Products and Integration" --> "Total Integration Time" --> "Brightness Temperatures (BL). 
     # Specify integration time in seconds.
-    'scan_time' : 50.,
+    'scan_time' : 100.,
 
     # integration time of measurements in seconds
     'int_time': 1, 
@@ -57,7 +57,7 @@ params = {
     
     # IRT parameters
     'ir_bandwidth' : -999.,
-    'ir_beamwidth': 2.64,
+    'ir_beamwidth': -999.,
 
     # solar angle flagging:
     # saf parameter lets the user determine within what angular region (in deg) around the sun the MWR TBs and products are flagged, 
@@ -71,7 +71,7 @@ params = {
     # If you do not want to transform the coordinates set azi_cor to -999.
     'azi_cor': 0.,
     # constant azimuth angle (from .MDF; not transformed)
-    'const_azi': 0.,
+    'const_azi': 330.,
 
     # quality flag status for level 1 data; 0: flag active
     # Bit 1: missing_tb
@@ -82,7 +82,7 @@ params = {
     # Bit 6: rain_detected
     # Bit 7: sun_in_beam
     # Bit 8: tb_offset_above_threshold
-    'flag_status': [0, 0, 0, 0, 0, 0, 0, 1], 
+    'flag_status': [0, 0, 0, 0, 0, 0, 0, 1],   
     
     # thresholds for met quality flags
     'met_thresholds': np.array([[213.15, 333.15], # air_temperature [K]
@@ -99,7 +99,7 @@ global_specs = {
     'conventions' : 'CF-1.8',
     
     # A succinct description of what is in the dataset, composed of instrument type and site name
-    'title' : 'HATPRO G5 MWR at Juelich, Germany',
+    'title' : 'HATPRO G5 MWR at Cologne, Germany',
     
     # Versioning of the datasets (containing date and software version)
     'history' : '',
@@ -117,7 +117,7 @@ global_specs = {
     'references' : '',
     
     # Name of measurement station
-    'site_location' : 'juelich',
+    'site_location' : 'cologne',
     
     # E-PROFILE instrument identifier. “A” if there is only one instrument on the station. Additional instruments are identified with the letters B, C, etc.
     'instrument_id' : '',
