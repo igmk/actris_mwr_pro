@@ -1,5 +1,7 @@
+import os
 import numpy as np
 import pandas as pd
+from time import gmtime
 from pandas.tseries.frequencies import to_offset
 from utils import df_interp
 
@@ -57,7 +59,12 @@ def correct_lwp_offset(lev1: dict,
         lwp_mn = lwp_df.resample("20min", origin = 'start', closed = 'left', label = 'left').mean()
         lwp_mn.index = lwp_mn.index + to_offset('10min')
 
-        off = pd.read_csv('site_config/' + site + '/lwp_offset.csv', usecols = ['date', 'offset'])
+        t1=gmtime(time.data[0])
+        if not os.path.isfile('site_config/' + site + '/lwp_offset_' + str(t1[0]) + '.csv'):
+            df = pd.DataFrame({'date': [], 'offset': []})
+            df.to_csv('site_config/' + site + '/lwp_offset_' + str(t1[0]) + '.csv')
+
+        off = pd.read_csv('site_config/' + site + '/lwp_offset_' + str(t1[0]) + '.csv', usecols = ['date', 'offset'])
         ind = np.where(lwp_mn['Lwp'].values > 0)[0]
         if ind.size > 1:
             off = off.append(pd.DataFrame({'date': time[ind[0]], 'offset': lwp_mn['Lwp'][ind[0]]}, index = {0}), ignore_index = True)
@@ -66,7 +73,7 @@ def correct_lwp_offset(lev1: dict,
             off = off.append(pd.DataFrame({'date': time[ind], 'offset': lwp_mn['Lwp'][int(ind)]}, index = {0}), ignore_index = True)
         off = off.sort_values(by=['date'])
         off = off.drop_duplicates(subset=['date'])
-        off.to_csv('site_config/' + site + '/lwp_offset.csv', index = False)
+        off.to_csv('site_config/' + site + '/lwp_offset_' + str(t1[0]) + '.csv', index = False)
 
         off_ind = np.where((off['date'].values < time[0]) & (time[0] - off['date'].values < 48.*3600.))[0]
         if off_ind.size == 1:

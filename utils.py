@@ -176,19 +176,19 @@ def rebin_2d(
         if ma.any(values[mask]):
             result[:, ind], _, _ = stats.binned_statistic(x_in[mask], values[mask], statistic=statistic, bins=edges)
     result[~np.isfinite(result)] = 0
-    masked_result = ma.masked_equal(result, 0)
 
     # Fill bins with not enough profiles
     empty_indices = []
     for ind in range(len(edges) - 1):
         is_data = np.where((x_in > edges[ind]) & (x_in <= edges[ind + 1]))[0]
         if len(is_data) < n_min:
-            masked_result[ind, :] = ma.masked
+            result[ind, :] = 0
             empty_indices.append(ind)
     # if len(empty_indices) > 0:
     #     logging.info(f"No data in {len(empty_indices)} bins")
+    masked = ma.make_mask(result)
 
-    return masked_result, empty_indices
+    return ma.array(result, mask=~masked), empty_indices
 
 
 def seconds2date(time_in_seconds: float, 

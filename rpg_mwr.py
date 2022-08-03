@@ -199,6 +199,7 @@ def init_file(file_name: str,
         date: Date string of file
         
     """
+
     nc = netCDF4.Dataset(file_name, 'w', format='NETCDF4_CLASSIC')
     for key, dimension in dimensions.items():
         nc.createDimension(key, dimension)

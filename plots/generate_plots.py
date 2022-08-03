@@ -347,6 +347,10 @@ def _plot_colormesh_data(ax, data: ma.MaskedArray, name: str, axes: tuple, max_y
         time, data = _mark_gaps(axes[0][:], data, 35, 20)
     else:
         time, data = _mark_gaps(axes[0][:], data, 35, 0)
+        
+    if variables.cbar_ext in ('neither', 'max'):
+        data[data < vmin] = vmin        
+        
     pl = ax.contourf(time, axes[1], data.T, levels=np.linspace(vmin,vmax,nlev), cmap=cmap, extend=variables.cbar_ext)
     ds = int(np.round(len(time)*.05))
     cp = ax.contour(time[ds:len(time)-ds], axes[1], data[ds:len(time)-ds, :].T, levels=np.linspace(vmin,vmax,nlev), colors='black', linewidths=.0001)
@@ -480,7 +484,7 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         site = _read_location(nc_file)
         c_list = get_coeff_list(site, 'tbx')
         _, params = get_site_specs(site, '1C01')
-        quality_flag, _ = spectral_consistency(sc, c_list, params['tbx_f'])        
+        quality_flag, _ = spectral_consistency(sc, c_list)        
         data_in -= sc['tb']
 
         

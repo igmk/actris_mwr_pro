@@ -10,7 +10,7 @@ from numpy import ma
 import netCDF4 as nc
 import pandas as pd
 import metpy.calc as mpcalc
-from metpy.units import units
+from metpy.units import units, masked_array
 
 Fill_Value_Float = -999.
 Fill_Value_Int = -99  
@@ -203,7 +203,7 @@ def get_products(site: str,
         hum_se = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr_systematic_error'][:,:], lev1['time'][index])        
 
         rpg_dat['altitude'] = tem_dat['altitude']
-        rpg_dat['relative_humidity'] = vap_pres(hum[0].data, tem_dat['temperature'].data) / mpcalc.saturation_vapor_pressure(tem_dat['temperature'].data*units.K).magnitude
+        rpg_dat['relative_humidity'] = vap_pres(hum[0], tem_dat['temperature'].data) / mpcalc.saturation_vapor_pressure(masked_array(tem_dat['temperature'], data_units='K')).magnitude
         rpg_dat['relative_humidity_random_error'] = rh_err(tem_dat['temperature'], hum[0], tem_dat['temperature_random_error'], hum_re[0])
         rpg_dat['relative_humidity_systematic_error'] = rh_err(tem_dat['temperature'], hum[0], tem_dat['temperature_systematic_error'], hum_se[0])     
         
@@ -218,11 +218,10 @@ def get_products(site: str,
         hum = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr'][:,:], lev1['time'][index])
         hum_re = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr_random_error'][:,:], lev1['time'][index])
         hum_se = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr_systematic_error'][:,:], lev1['time'][index]) 
-        
+
         rpg_dat['altitude'] = tem_dat['altitude']
-        p_baro = calc_p_baro(tem_dat['temperature'].data, hum[0], lev1['air_pressure'][index], rpg_dat['altitude'])
-        rpg_dat['potential_temperature'] = mpcalc.potential_temperature(p_baro.data*units.Pa, tem_dat['temperature'].data*units.K).magnitude
-  
+        p_baro = calc_p_baro(tem_dat['temperature'], hum[0], lev1['air_pressure'][index], rpg_dat['altitude'])
+        rpg_dat['potential_temperature'] = mpcalc.potential_temperature(masked_array(p_baro, data_units='Pa'), masked_array(tem_dat['temperature'], data_units='K')).magnitude
             
     elif data_type == '2P08':
         
@@ -236,9 +235,9 @@ def get_products(site: str,
         hum_se = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr_systematic_error'][:,:], lev1['time'][index])        
         
         rpg_dat['altitude'] = tem_dat['altitude']
-        p_baro = calc_p_baro(tem_dat['temperature'].data, hum[0], lev1['air_pressure'][index], rpg_dat['altitude'])
-        Theta = mpcalc.potential_temperature(p_baro.data*units.Pa, tem_dat['temperature'].data*units.K).magnitude
-        e = vap_pres(hum[0].data, tem_dat['temperature'].data)
+        p_baro = calc_p_baro(tem_dat['temperature'], hum[0], lev1['air_pressure'][index], rpg_dat['altitude'])
+        Theta = mpcalc.potential_temperature(masked_array(p_baro, data_units='Pa'), masked_array(tem_dat['temperature'], data_units='K')).magnitude
+        e = vap_pres(hum[0], tem_dat['temperature'].data)
         rpg_dat['equivalent_potential_temperature'] = Theta+(spec_heat(tem_dat['temperature'].data)*.622*e/(p_baro-e)/1004.)*Theta/tem_dat['temperature'].data
         
         
@@ -247,7 +246,7 @@ def get_products(site: str,
         c_list = get_coeff_list(site, 'tbx')
         _, _, _, coeff, _, _ = get_mvr_coeff(site, 'tbx', lev1['frequency'][:])
         index = np.where((lev1['ele'][:] > coeff['ele'] - .6) & (lev1['ele'][:] < coeff['ele'] + .6) & (lev1['pointing_flag'][:] == 0))[0]
-        _, tb_ret = spectral_consistency(lev1, c_list, params['tbx_f'])
+        _, tb_ret = spectral_consistency(lev1, c_list)
         rpg_dat['tb_spectrum'] = tb_ret[index, :]
         rpg_dat['tb'] = lev1['tb'][index, :]
         fields = ['frequency', 'receiver_nb', 'receiver']
@@ -277,7 +276,7 @@ def _mask_flag(rpg_dat: dict,
     for ivars in rpg_dat:
         if (rpg_dat[ivars].ndim > 1) & (len(rpg_dat[ivars]) == len(rpg_dat['time'])):
             rpg_dat[ivars][flag, :] = ma.masked
-        elif (rpg_dat[ivars].ndim == 1) & (len(rpg_dat[ivars]) == len(rpg_dat['time'])):
+        elif (rpg_dat[ivars].ndim == 1) & (len(rpg_dat[ivars]) == len(rpg_dat['time'])) & (ivars != 'time'):
             rpg_dat[ivars][flag] = ma.masked 
             
             
@@ -292,39 +291,39 @@ def _add_att(global_attributes: dict,
 "specific heat for evaporation (J/kg)"
 def spec_heat(T): return (2500.-2.42*(T-T0))*1000. 
 "water vapor pressure"
-def vap_pres(q, T): return q*Rw*T 
+def vap_pres(qs, T): return qs*Rw*T 
 
 
 def rh_err(T: np.ndarray, 
-           q: np.ndarray,
+           qs: np.ndarray,
            dT: np.ndarray,
            dq: np.ndarray) -> np.ndarray:
     "Calculates relative humidity error from absolute humidity and temperature"
     
     L = spec_heat(T)
-    e = vap_pres(q, T)
-    es = mpcalc.saturation_vapor_pressure(T.data*units.K).magnitude
+    e = vap_pres(qs, T)
+    es = mpcalc.saturation_vapor_pressure(masked_array(T, data_units='K')).magnitude
     # es = e0*np.exp((L/(Rw*T0))*((T-T0)/T))    
     
     "error propagation"
     drh_dq = Rw*T/es
     # des_dT = es*(T*(T-T0)*(-2420)+T0*L)/(Rw*T0*T**2)   
     des_dT = es * 17.67*243.5 / ((T-T0) + 243.5)**2
-    drh_dT = q*Rw/es**2*(es-T*des_dT)
+    drh_dT = qs*Rw/es**2*(es-T*des_dT)
     drh = np.sqrt((drh_dq * dq)**2 + (drh_dT * dT)**2)
     
     return drh
     
 
 def calc_p_baro(T: np.ndarray,
-           q: np.ndarray,
+           qs: np.ndarray,
            p: np.ndarray,
            z: np.ndarray) -> np.ndarray:
     "Calculate pressure in each level using barometric height formula"
     
-    Tv = T*(1.+0.608*q)
-    p_baro = ma.masked_all((len(p), len(z))) 
-    p_baro[:, 0] = p * 100.
+    Tv = T*(1.+0.608*qs)
+    p_baro = ma.masked_all(T.shape) 
+    p_baro[(~qs.mask.any(axis=1)) & (~T.mask.any(axis=1)), 0] = p[(~qs.mask.any(axis=1)) & (~T.mask.any(axis=1))] * 100.
     for ialt in (np.arange(len(z) - 1) + 1): 
         p_baro[:, ialt] = p_baro[:, ialt-1] * np.exp(-9.81*(z[ialt] - z[ialt-1]) / (287. * (Tv[:, ialt] + Tv[:, ialt-1]) / 2.))
         
