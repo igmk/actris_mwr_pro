@@ -76,8 +76,12 @@ def get_products(site: str,
         coeff_quad = quad(lev1['ele'][index])        
         lwp = coeff_offset + np.sum(coeff_lin.T * lev1['tb'][index, :], axis = 1) + np.sum(coeff_quad.T * lev1['tb'][index, :] **2, axis = 1)
         rpg_dat['lwp_random_error'] = ran_err(lev1['ele'][index])
-        rpg_dat['lwp_systematic_error'] = sys_err(lev1['ele'][index])            
-        rpg_dat['lwp'], rpg_dat['lwp_offset'] = correct_lwp_offset(lev1, lwp, index, site)        
+        rpg_dat['lwp_systematic_error'] = sys_err(lev1['ele'][index])
+        freq_31 = np.where(lev1['frequency'][:] == 31.4)[0]
+        if len(freq_31) != 1:
+            rpg_dat['lwp'], rpg_dat['lwp_offset'] = lwp, np.ones(len(index)) * Fill_Value_Float
+        else:
+            rpg_dat['lwp'], rpg_dat['lwp_offset'] = correct_lwp_offset(lev1.variables, lwp, index, site)        
         
         
     elif data_type == '2I02':

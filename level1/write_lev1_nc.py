@@ -3,9 +3,11 @@ from level1.rpg_bin import get_rpg_bin
 from level1.lev1_meta_nc import get_data_attributes
 from level1.quality_control import apply_qc
 from level1.met_quality_control import apply_met_qc
-from utils import isbit, epoch2unix
+from utils import isbit, epoch2unix, df_interp
 import rpg_mwr
 import numpy as np
+import pandas as pd
+from pandas.tseries.frequencies import to_offset
 from typing import Optional
 import glob
 import datetime
@@ -111,7 +113,14 @@ def prepare_data(path_to_files: str,
                 _add_interpol1(rpg_bin.data, rpg_irt.data['ir_ele'], rpg_irt.data['time'], 'ir_ele')
                 _add_interpol1(rpg_bin.data, rpg_irt.data['ir_azi'], rpg_irt.data['time'], 'ir_azi')
             except:
-                print(['No binary files with extension irt found in directory ' + path_to_files])
+                print(['No binary files with extension irt found in directory ' + path_to_files])                
+            
+            rpg_bin.data['liquid_cloud_flag'] = np.ones(len(rpg_bin.data['time']), dtype=int) * 2
+            rpg_bin.data['liquid_cloud_flag_status'] = np.ones(len(rpg_bin.data['time']), dtype=int) * Fill_Value_Int
+            vst = np.where(rpg_bin.data['pointing_flag'] == 0)[0]
+            ix, stat = find_lwcl_free(rpg_bin.data, vst)
+            rpg_bin.data['liquid_cloud_flag'][vst] = ix
+            rpg_bin.data['liquid_cloud_flag_status'][vst] = stat
 
             file_list_met = get_file_list(path_to_files, path_to_prev, path_to_next, 'met')                  
             rpg_met = get_rpg_bin(file_list_met)
@@ -218,6 +227,42 @@ def add_time_bounds(time: np.ndarray,
     time_bounds[:,1] = time 
     
     return time_bounds        
+
+
+def find_lwcl_free(lev1: dict,
+                   ix: np.ndarray) -> tuple:
+    
+    index = np.zeros(len(ix), dtype=int)
+    status = np.ones(len(ix), dtype=int)
+    freq_31 = np.where(lev1['frequency'][:] == 31.4)[0]
+    if len(freq_31) == 1:
+        time = lev1['time'][ix]
+        tb = np.squeeze(lev1['tb'][ix, freq_31])      
+    
+        tb_df = pd.DataFrame({'Tb': tb}, index = pd.to_datetime(time, unit = 's'))
+        tb_cc = tb_df.resample("2min", origin = 'start', closed = 'left', label = 'left').count()
+        tb_cc.index = tb_cc.index + to_offset('1min')
+        tb_std = tb_df.resample("2min", origin = 'start', closed = 'left', label = 'left').std()
+        tb_std.index = tb_std.index + to_offset('1min')
+        tb_std[tb_cc['Tb'] < 30] = np.nan    
+        tb_mx = tb_std.resample("20min", origin = 'start', closed = 'left', label = 'left').max()
+        tb_mx.index = tb_mx.index + to_offset('10min')
+        tb_mx = df_interp(tb_mx, tb_df.index)      
+
+        if 'irt' in lev1:
+            irt = lev1['irt'][ix, 0]
+            irt_df = pd.DataFrame({'Irt': irt[:]}, index = pd.to_datetime(time, unit = 's'))
+            irt_mx = irt_df.resample("20min", origin = 'start', closed = 'left', label = 'left').max()
+            irt_mx.index = irt_mx.index + to_offset('10min')
+            irt_mx = df_interp(irt_mx, irt_df.index) 
+            index[(irt_mx['Irt'] > 233.15) & (tb_mx['Tb'] > .2)] = 1            
+            index[np.isnan(irt_mx['Irt']) | np.isnan(tb_mx['Tb'])] = 2
+            status[:] = 0
+        else:
+            index[(tb_mx['Tb'] > .2)] = 1
+            index[np.isnan(tb_mx['Tb'])] = 2
+        
+    return index, status
         
                 
 def _add_blb(brt: dict,

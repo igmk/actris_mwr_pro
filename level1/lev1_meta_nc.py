@@ -176,8 +176,18 @@ ATTRIBUTES_1B01 = {
         definition=DEFINITIONS_1B01['quality_flag_status'],
         comment='Checks not executed in determination of quality_flag. 0 indicates quality check has been applied.',
     ),    
+    'liquid_cloud_flag': MetaData(
+        long_name='Liquid cloud flag',
+        units='1 (bit variable)',
+        comment='Flag meaning: no liquid cloud (0), liquid cloud present (1), undefined (2)',
+    ),    
+    'liquid_cloud_flag_status': MetaData(
+        long_name='Liquid cloud flag status',
+        units='1 (bit variable)',
+        comment='Flag meaning: using mwr and ir (0), using mwr only (1), other (2)',
+    ),      
     'pointing_flag': MetaData(
-        long_name='Pointing Flag',
+        long_name='Pointing flag',
         units='1 (bit variable)',
         comment='Flag indicating a single pointing (staring = 0) or multiple pointing (scanning = 1) observation sequence',
     ),
