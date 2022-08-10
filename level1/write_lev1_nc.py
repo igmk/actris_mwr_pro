@@ -3,7 +3,8 @@ from level1.rpg_bin import get_rpg_bin
 from level1.lev1_meta_nc import get_data_attributes
 from level1.quality_control import apply_qc
 from level1.met_quality_control import apply_met_qc
-from utils import isbit, epoch2unix, df_interp
+from level1.tb_offset import correct_tb_offset
+from utils import isbit, epoch2unix
 import rpg_mwr
 import numpy as np
 import pandas as pd
@@ -45,7 +46,8 @@ def lev1_to_nc(site: str,
     rpg_bin = prepare_data(path_to_files, path_to_prev, path_to_next, data_type, params)
     if data_type in ('1B01', '1C01'):
         apply_qc(site, rpg_bin.data, params)
-        _cal_his(params, global_attributes)
+        rpg_cal = cal_his(params, global_attributes, rpg_bin.data['time'][0])
+        correct_tb_offset(site, rpg_bin.data, params, global_attributes, rpg_cal)
     if data_type in ('1B21', '1C01'):
         apply_met_qc(rpg_bin.data, params)
     hatpro = rpg_mwr.Rpg(rpg_bin.data)
@@ -91,6 +93,7 @@ def prepare_data(path_to_files: str,
             rpg_bin.data[name] = params[name]
         rpg_bin.data['time_bnds'] = add_time_bounds(rpg_bin.data['time'], params['int_time'])
         rpg_bin.data['pointing_flag'] = np.zeros(len(rpg_bin.data['time']), np.int32)
+        rpg_bin.data['liquid_cloud_flag'], rpg_bin.data['liquid_cloud_flag_status'] = find_lwcl_free(rpg_bin.data, np.arange(len(rpg_bin.data['time'])))
 
         file_list_blb = get_file_list(path_to_files, path_to_prev, path_to_next, 'blb')
         file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, 'hkd')
@@ -114,13 +117,6 @@ def prepare_data(path_to_files: str,
                 _add_interpol1(rpg_bin.data, rpg_irt.data['ir_azi'], rpg_irt.data['time'], 'ir_azi')
             except:
                 print(['No binary files with extension irt found in directory ' + path_to_files])                
-            
-            rpg_bin.data['liquid_cloud_flag'] = np.ones(len(rpg_bin.data['time']), dtype=int) * 2
-            rpg_bin.data['liquid_cloud_flag_status'] = np.ones(len(rpg_bin.data['time']), dtype=int) * Fill_Value_Int
-            vst = np.where(rpg_bin.data['pointing_flag'] == 0)[0]
-            ix, stat = find_lwcl_free(rpg_bin.data, vst)
-            rpg_bin.data['liquid_cloud_flag'][vst] = ix
-            rpg_bin.data['liquid_cloud_flag_status'][vst] = stat
 
             file_list_met = get_file_list(path_to_files, path_to_prev, path_to_next, 'met')                  
             rpg_met = get_rpg_bin(file_list_met)
@@ -232,37 +228,35 @@ def add_time_bounds(time: np.ndarray,
 def find_lwcl_free(lev1: dict,
                    ix: np.ndarray) -> tuple:
     
-    index = np.zeros(len(ix), dtype=int)
+    index = np.ones(len(ix)) * np.nan
     status = np.ones(len(ix), dtype=int)
     freq_31 = np.where(lev1['frequency'][:] == 31.4)[0]
     if len(freq_31) == 1:
         time = lev1['time'][ix]
         tb = np.squeeze(lev1['tb'][ix, freq_31])      
-    
+        tb[(lev1['pointing_flag'][ix] == 1) | (lev1['ele'][ix] < 89.)] = np.nan
         tb_df = pd.DataFrame({'Tb': tb}, index = pd.to_datetime(time, unit = 's'))
-        tb_cc = tb_df.resample("2min", origin = 'start', closed = 'left', label = 'left').count()
-        tb_cc.index = tb_cc.index + to_offset('1min')
-        tb_std = tb_df.resample("2min", origin = 'start', closed = 'left', label = 'left').std()
-        tb_std.index = tb_std.index + to_offset('1min')
-        tb_std[tb_cc['Tb'] < 30] = np.nan    
-        tb_mx = tb_std.resample("20min", origin = 'start', closed = 'left', label = 'left').max()
-        tb_mx.index = tb_mx.index + to_offset('10min')
-        tb_mx = df_interp(tb_mx, tb_df.index)      
+        tb_std = tb_df.rolling('2min', center = True, min_periods = 30).std()
+        tb_mx = tb_std.rolling('20min', center = True, min_periods = 300).max()
 
         if 'irt' in lev1:
             irt = lev1['irt'][ix, 0]
+            irt[(lev1['pointing_flag'][ix] == 1) | (lev1['ele'][ix] < 89.)] = np.nan
             irt_df = pd.DataFrame({'Irt': irt[:]}, index = pd.to_datetime(time, unit = 's'))
-            irt_mx = irt_df.resample("20min", origin = 'start', closed = 'left', label = 'left').max()
-            irt_mx.index = irt_mx.index + to_offset('10min')
-            irt_mx = df_interp(irt_mx, irt_df.index) 
-            index[(irt_mx['Irt'] > 233.15) & (tb_mx['Tb'] > .2)] = 1            
-            index[np.isnan(irt_mx['Irt']) | np.isnan(tb_mx['Tb'])] = 2
+            irt_mx = irt_df.rolling('20min', center = True, min_periods = 300).max()
+            index[(irt_mx['Irt'] > 233.15) & (tb_mx['Tb'] > .3)] = 1            
             status[:] = 0
         else:
-            index[(tb_mx['Tb'] > .2)] = 1
-            index[np.isnan(tb_mx['Tb'])] = 2
+            index[(tb_mx['Tb'] > .3)] = 1
+
+        df = pd.DataFrame({'index': index}, index = pd.to_datetime(time, unit = 's'))    
+        df = df.fillna(method = 'bfill', limit = 600)
+        df = df.fillna(method = 'ffill', limit = 600)
+        index = np.array(df['index'])
+        index[(tb_mx['Tb'] < .3) & (index != 1.)] = 0.
+        index[(lev1['ele'][ix] < 89.) & (index != 1.)] = 2.
         
-    return index, status
+    return np.nan_to_num(index, nan = 2).astype(int), status
         
                 
 def _add_blb(brt: dict,
@@ -295,10 +289,12 @@ def _add_blb(brt: dict,
 
     time_bnds_add = add_time_bounds(time_add, np.floor(params['scan_time'] / (blb.header['_n_ang'] - 1)))
     pointing_flag_add = np.ones(len(time_add), np.int32)
+    liquid_cloud_flag_add = np.ones(len(time_add), np.int32) * 2
+    liquid_cloud_flag_status_add = np.ones(len(time_add), np.int32) * Fill_Value_Int
     brt.data['time'] = np.concatenate((brt.data['time'], time_add))    
     ind = np.argsort(brt.data['time'])
     brt.data['time'] = brt.data['time'][ind]
-    names = ['time_bnds', 'ele', 'azi', 'rain', 'tb', 'pointing_flag']
+    names = ['time_bnds', 'ele', 'azi', 'rain', 'tb', 'pointing_flag', 'liquid_cloud_flag', 'liquid_cloud_flag_status']
     for var in names:
         brt.data[var] = np.concatenate((brt.data[var], eval(var + '_add')))
         if brt.data[var].ndim > 1:
@@ -320,17 +316,19 @@ def _azi_correction(brt: dict,
     brt['azi'][brt['azi'][:] < 0] += 360.
     
     
-def _cal_his(params: dict,
-             glob_att: dict) -> None:
+def cal_his(params: dict,
+             glob_att: dict,
+             time0: int) -> dict:
     """Load and add information from ABSCAL.HIS file"""
     
     try:
         file_list_cal = get_file_list(params['path_to_cal'], ' ', ' ', 'HIS')
         rpg_cal = get_rpg_bin(file_list_cal)
-
-        rec_cal = np.where(rpg_cal.data['cal1_t'] + rpg_cal.data['cal1_t'] > 0)[0]
+        rec_cal = np.where((rpg_cal.data['cal1_t'] == 1) & (rpg_cal.data['cal2_t'] == 1) & (epoch2unix(rpg_cal.data['t1'], rpg_cal.header['_time_ref']) < time0))[0]
         if len(rec_cal) > 0:
             glob_att['date_of_last_absolute_calibration'] = datetime.datetime.utcfromtimestamp(epoch2unix(rpg_cal.data['t1'][rec_cal[-1]], rpg_cal.header['_time_ref'])).strftime('%Y%m%d') + glob_att['date_of_last_absolute_calibration']
             
     except:
         print(['No binary files with extension HIS found in directory ' + params['path_to_cal']])                
+        
+    return rpg_cal

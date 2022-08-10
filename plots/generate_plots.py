@@ -385,7 +385,7 @@ def _plot_instrument_data(ax, data: ma.MaskedArray, name: str, product: Optional
     elif product == 'qf':
         _plot_qf(ax, data, time, fig, nc_file)
     elif product == 'mqf':
-        _plot_mqf(ax, data, time)       
+        _plot_mqf(ax, data, time, nc_file)       
     elif product == 'sen':
         _plot_sen(ax, data, name, time, nc_file)
         
@@ -424,9 +424,9 @@ def _plot_irt(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     _set_ax(ax, vmax, variables.ylabel, vmin)
     
     
-def _plot_mqf(ax, data_in: ndarray, time: ndarray):
+def _plot_mqf(ax, data_in: ndarray, time: ndarray, nc_file: str):
     qf = _get_bit_data(data_in, np.arange(6))
-    _plot_segment_data(ax, qf, 'met_quality_flag', (time, np.linspace(.5,5.5,6)))
+    _plot_segment_data(ax, qf, 'met_quality_flag', (time, np.linspace(.5,5.5,6)), nc_file)
     ax.set_yticks(np.arange(6))
     ax.yaxis.set_ticklabels([]) 
     _set_ax(ax, 6, '')  
@@ -477,15 +477,17 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         sc['tb'] = read_nc_fields(nc_file, 'tb')
         sc['receiver_nb'] = read_nc_fields(nc_file, 'receiver_nb')
         sc['receiver'] = read_nc_fields(nc_file, 'receiver')
-        sc['frequency'] = read_nc_fields(nc_file, 'frequency')
-        sc['ele'] = read_nc_fields(nc_file, 'ele')
         sc['time'] = read_nc_fields(nc_file, 'time')
-        sc['pointing_flag'] = np.zeros(len(sc['time']))
         site = _read_location(nc_file)
-        c_list = get_coeff_list(site, 'tbx')
-        _, params = get_site_specs(site, '1C01')
-        quality_flag, _ = spectral_consistency(sc, c_list)        
-        data_in -= sc['tb']
+        global_attributes, params = get_site_specs(site, '1C01')
+        date = datetime.strptime(nc_file[-11:-3],'%Y%m%d')
+        data_out_l1 = params['data_out']+'level1/'+date.strftime('%Y/%m/%d/')
+        lev1_file = data_out_l1+'MWR_1C01_'+global_attributes['wigos_station_id']+'_'+date.strftime('%Y%m%d')+'.nc'
+        quality_flag = read_nc_fields(lev1_file, 'quality_flag')
+        quality_flag = _elevation_filter(lev1_file, quality_flag, [89.,91.])
+        quality_flag = _pointing_filter(lev1_file, quality_flag, [89.,91.], 0)
+        quality_flag[~isbit(quality_flag, 3)] = 0
+        data_in = sc['tb'] - data_in
 
         
     fig.clear()
@@ -493,9 +495,10 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
     fig.subplots_adjust(hspace=.035, wspace=.15)
     if name == 'tb':
         fig.text(.06, .5, 'Brightness Temperature [K]', va='center', rotation='vertical', fontsize=20)
+        fig.text(.445, .09, 'flagged data', va='center', fontsize=20, color='r') 
     else:
         fig.text(.06, .5, 'Brightness Temperature (Observed - Retrieved) [K]', va='center', rotation='vertical', fontsize=20)
-    fig.text(.445, .09, 'flagged data', va='center', fontsize=20, color='r')        
+        fig.text(.37, .085, 'spectral consistency failed', va='center', fontsize=20, color='r') 
     axs[0,0].set_title('K-Band Channels', fontsize=15, color=_COLORS['darkgray'], loc='right')
     axs[0,1].set_title('V-Band Channels', fontsize=15, color=_COLORS['darkgray'], loc='right')
     trans = ScaledTranslation(10/72, -5/72, fig.dpi_scale_trans)
@@ -572,7 +575,7 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         lb = ['K-Band', 'V-Band']
         
         for irec, rec in enumerate(sc['receiver_nb']):
-            tb_m[:, irec] = np.sum(data_in[:, sc['receiver'] == rec], axis=1)/np.ma.median(np.sum(data_in[:, sc['receiver'] == rec], axis=1))
+            tb_m[:, irec] = ma.sum(data_in[:, sc['receiver'] == rec], axis=1)/ma.mean(ma.sum(data_in[:, sc['receiver'] == rec], axis=1))
             axa.plot(time, tb_m[:, irec], 'o', color=cl[irec], markersize=.75, fillstyle='full', label=lb[irec])
             flag = np.where(np.sum(quality_flag[:, sc['receiver'] == rec], axis=1) > 0)[0]
             axa.plot(time[flag], tb_m[flag, irec],'ro', markersize=.75, fillstyle='full')             
@@ -628,7 +631,9 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray):
     ax.plot(time, rolling_mean, color='wheat', linewidth=0.6)
     vmin, vmax = ATTRIBUTES[name].plot_range
     if name == 'iwv':
-        vmin, vmax = np.nanmin(data)-1., np.nanmax(data)+1.   
+        vmin, vmax = np.nanmin(data)-1., np.nanmax(data)+1.  
+    else:
+        vmax = np.min([np.nanmax(data)+.05, 1.])
     _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
     
     

@@ -3,8 +3,10 @@ from level2.lev2_meta_nc import get_data_attributes
 from level1.quality_control import spectral_consistency
 from level2.get_ret_coeff import get_mvr_coeff
 from level2.lwp_offset import correct_lwp_offset
-from utils import rebin_2d, get_coeff_list
+from utils import rebin_2d, get_coeff_list, isbit
 import rpg_mwr
+import os
+from datetime import datetime
 import numpy as np
 from numpy import ma
 import netCDF4 as nc
@@ -19,10 +21,11 @@ and vapor pressure e0 (Pa) at T0 (K)"""
 Rw, e0, T0 = 462., 611., 273.15
 
 
-def lev2_to_nc(site: str,
+def lev2_to_nc(date: str,
+               site: str,
                data_type: str,
                lev1_path: str, 
-               output_file: str) -> dict:
+               lev2_path: str) -> dict:
     """This function reads Level 1 files,
     applies retrieval coefficients for Level 2 products and writes it into a netCDF file.
     
@@ -30,31 +33,45 @@ def lev2_to_nc(site: str,
         site: Name of site.
         data_type: Data type of the netCDF file.
         lev1_path: Path of Level 1 file.
-        output_file: Output file name.
+        lev2_path: Path of Level 2 output directory.
         
     Examples:
         >>> from level2.write_lev2_nc import lev2_to_nc
-        >>> lev2_to_nc('site_name', '2P00', '/path/to/lev1_file/lev1_data.nc', 'lev2_data.nc')
+        >>> lev2_to_nc('date', site_name', '2P00', '/path/to/lev1_file/lev1_data.nc', '/path/to/lev2_file/')
     """
     
     if data_type not in ('2P01', '2P02', '2P03', '2P04', '2P07', '2P08', '2I01', '2I02', '2S02'):
         raise RuntimeError(['Data type '+ data_type +' not supported for file writing.'])
-    global_attributes, params = get_site_specs(site, data_type)
     with nc.Dataset(lev1_path) as lev1:
-        rpg_dat, coeff, index, flag = get_products(site, lev1, data_type, params)
+        if data_type in ('2P04', '2P07', '2P08'):
+            for d_type in ['2P02', '2P03']:
+                global_attributes, params = get_site_specs(site, d_type)
+                if not os.path.isfile(lev2_path+'MWR_'+d_type+'_'+global_attributes['wigos_station_id']+'_'+date+'.nc'):                    
+                    rpg_dat, coeff, index, flag = get_products(site, lev1, d_type, params, global_attributes)
+                    _combine_lev1(lev1, rpg_dat, index)
+                    _mask_flag(rpg_dat, flag)
+                    _add_att(global_attributes, coeff, 0)
+                    hatpro = rpg_mwr.Rpg(rpg_dat)
+                    hatpro.data = get_data_attributes(hatpro.data, d_type)
+                    output_file = lev2_path+'MWR_'+d_type+'_'+global_attributes['wigos_station_id']+'_'+date+'.nc'
+                    rpg_mwr.save_rpg(hatpro, output_file, global_attributes, d_type, params)
+                    
+        global_attributes, params = get_site_specs(site, data_type)
+        rpg_dat, coeff, index, flag = get_products(site, lev1, data_type, params, global_attributes)
         _combine_lev1(lev1, rpg_dat, index)
         _mask_flag(rpg_dat, flag)
-    if data_type in ('2P01', '2P02', '2P03', '2I01', '2I02', '2S02'):
-        _add_att(global_attributes, coeff)
-    hatpro = rpg_mwr.Rpg(rpg_dat)
-    hatpro.data = get_data_attributes(hatpro.data, data_type)
-    rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params)
+        _add_att(global_attributes, coeff, 0)
+        hatpro = rpg_mwr.Rpg(rpg_dat)
+        hatpro.data = get_data_attributes(hatpro.data, data_type)
+        output_file = lev2_path+'MWR_'+data_type+'_'+global_attributes['wigos_station_id']+'_'+date+'.nc'
+        rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params)
     
     
 def get_products(site: str, 
                  lev1: dict, 
                  data_type: str, 
-                 params: dict) -> dict:
+                 params: dict,
+                 global_attributes: dict) -> dict:
     "Derive specified Level 2 products"
     
     rpg_dat = dict()  
@@ -66,7 +83,7 @@ def get_products(site: str,
         
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], coeff['freq'][:, 0], assume_unique = False, return_indices = True)
         index = np.where((lev1['pointing_flag'][:] == 0) & (np.abs((lev1['ele'][:]) - coeff['ele']) < .6))[0]
-        flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0]
+        flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]
 
         if len(index) == 0:
             raise RuntimeError(['No suitable data found for processing for data type: ' + data_type])
@@ -90,7 +107,7 @@ def get_products(site: str,
         
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], coeff['freq'][:, 0], assume_unique = False, return_indices = True)
         index = np.where((lev1['pointing_flag'][:] == 0) & (np.abs((lev1['ele'][:]) - coeff['ele']) < .6))[0]
-        flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0]
+        flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]
         
         if len(index) == 0:
             raise RuntimeError(['No suitable data found for processing for data type: ' + data_type])
@@ -109,7 +126,7 @@ def get_products(site: str,
 
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], coeff['freq'][:, 0], assume_unique = False, return_indices = True)
         index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(coeff['ele']))) * coeff['ele']) - np.transpose(np.ones((len(coeff['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]
-        flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0]
+        flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]
         
         if len(index) == 0:
             raise RuntimeError(['No suitable data found for processing for data type: ' + data_type])
@@ -141,7 +158,7 @@ def get_products(site: str,
         ele, flag = [], []
         for i in range(len(coeff['ele'])):
             ele.append(lev1['ele'][ix0 + i])
-            flag.append(np.sum(lev1['quality_flag'][ix0 + i, freq_ind], axis = 1))
+            flag.append(np.sum(isbit(lev1['quality_flag'][ix0 + i, freq_ind], 3), axis = 1))
         ele = np.stack(ele) * np.ones((len(coeff['ele']), len(lev1['ele'][ix0]))) 
         flag = np.stack(flag) * np.ones((len(coeff['ele']), len(lev1['ele'][ix0]))) 
 
@@ -177,7 +194,7 @@ def get_products(site: str,
 
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], coeff['freq'][:, 0], assume_unique = False, return_indices = True)
         index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(coeff['ele']))) * coeff['ele']) - np.transpose(np.ones((len(coeff['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]
-        flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0]
+        flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]
         
         if (len(index) == 0 | len(freq_ind) == 0):
             raise RuntimeError(['No suitable data found for processing for data type: ' + data_type])
@@ -196,53 +213,62 @@ def get_products(site: str,
              
                 
     elif data_type == '2P04':
-                
-        tem_dat, coeff, index, flag = get_products(site, lev1, '2P02', params)
-        hum_dat, _, ix, flg = get_products(site, lev1, '2P03', params) 
-        for ivars in hum_dat:
-            if hum_dat[ivars].ndim > 1:
-                hum_dat[ivars][flg, :] = ma.masked
-        hum = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr'][:,:], lev1['time'][index])
-        hum_re = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr_random_error'][:,:], lev1['time'][index])
-        hum_se = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr_systematic_error'][:,:], lev1['time'][index])        
 
-        rpg_dat['altitude'] = tem_dat['altitude']
-        rpg_dat['relative_humidity'] = vap_pres(hum[0], tem_dat['temperature'].data) / mpcalc.saturation_vapor_pressure(masked_array(tem_dat['temperature'], data_units='K')).magnitude
-        rpg_dat['relative_humidity_random_error'] = rh_err(tem_dat['temperature'], hum[0], tem_dat['temperature_random_error'], hum_re[0])
-        rpg_dat['relative_humidity_systematic_error'] = rh_err(tem_dat['temperature'], hum[0], tem_dat['temperature_systematic_error'], hum_se[0])     
+        tem_dat = load_product(site, datetime.strptime(lev1.date, '%Y-%m-%d'), '2P02')
+        hum_dat = load_product(site, datetime.strptime(lev1.date, '%Y-%m-%d'), '2P03')
+        coeff, index = dict(), []
+        _add_att(coeff, tem_dat, 1)
+
+        hum = rebin_2d(hum_dat.variables['time'][:], hum_dat.variables['water_vapor_vmr'][:,:], tem_dat.variables['time'][:])
+        hum_re = rebin_2d(hum_dat.variables['time'][:], hum_dat.variables['water_vapor_vmr_random_error'][:,:], tem_dat.variables['time'][:])
+        hum_se = rebin_2d(hum_dat.variables['time'][:], hum_dat.variables['water_vapor_vmr_systematic_error'][:,:], tem_dat.variables['time'][:])     
+        flag = ma.any(np.ma.mask_or(ma.getmask(tem_dat.variables['temperature'][:,:]), ma.getmask(hum[0]), shrink=False), axis=1)
+
+        rpg_dat['altitude'] = tem_dat.variables['altitude']
+        rpg_dat['relative_humidity'] = vap_pres(hum[0], tem_dat.variables['temperature'][:,:]) / mpcalc.saturation_vapor_pressure(masked_array(tem_dat.variables['temperature'][:,:], data_units='K')).magnitude
+        rpg_dat['relative_humidity_random_error'] = rh_err(tem_dat.variables['temperature'][:,:], hum[0], tem_dat.variables['temperature_random_error'], hum_re[0])
+        rpg_dat['relative_humidity_systematic_error'] = rh_err(tem_dat.variables['temperature'][:,:], hum[0], tem_dat.variables['temperature_systematic_error'], hum_se[0])   
+        _combine_lev1(tem_dat.variables, rpg_dat, np.arange(len(tem_dat.variables['time'][:])))
         
         
     elif data_type == '2P07':
         
-        tem_dat, coeff, index, flag = get_products(site, lev1, '2P02', params)      
-        hum_dat, _, ix, flg = get_products(site, lev1, '2P03', params)   
-        for ivars in hum_dat:
-            if hum_dat[ivars].ndim > 1:
-                hum_dat[ivars][flg, :] = ma.masked        
-        hum = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr'][:,:], lev1['time'][index])
-        hum_re = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr_random_error'][:,:], lev1['time'][index])
-        hum_se = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr_systematic_error'][:,:], lev1['time'][index]) 
+        tem_dat = load_product(site, datetime.strptime(lev1.date, '%Y-%m-%d'), '2P02')
+        hum_dat = load_product(site, datetime.strptime(lev1.date, '%Y-%m-%d'), '2P03')
+        coeff, index = dict(), []
+        _add_att(coeff, tem_dat, 1)
 
-        rpg_dat['altitude'] = tem_dat['altitude']
-        p_baro = calc_p_baro(tem_dat['temperature'], hum[0], lev1['air_pressure'][index], rpg_dat['altitude'])
-        rpg_dat['potential_temperature'] = mpcalc.potential_temperature(masked_array(p_baro, data_units='Pa'), masked_array(tem_dat['temperature'], data_units='K')).magnitude
+        hum = rebin_2d(hum_dat.variables['time'][:], hum_dat.variables['water_vapor_vmr'][:,:], tem_dat.variables['time'][:])
+        hum_re = rebin_2d(hum_dat.variables['time'][:], hum_dat.variables['water_vapor_vmr_random_error'][:,:], tem_dat.variables['time'][:])
+        hum_se = rebin_2d(hum_dat.variables['time'][:], hum_dat.variables['water_vapor_vmr_systematic_error'][:,:], tem_dat.variables['time'][:])     
+        flag = ma.any(np.ma.mask_or(ma.getmask(tem_dat.variables['temperature'][:,:]), ma.getmask(hum[0]), shrink=False), axis=1)
+
+        rpg_dat['altitude'] = tem_dat.variables['altitude']
+        pres = np.interp(tem_dat.variables['time'][:], lev1['time'][:], lev1['air_pressure'][:])
+        p_baro = calc_p_baro(tem_dat.variables['temperature'][:,:], hum[0], pres, rpg_dat['altitude'])
+        rpg_dat['potential_temperature'] = mpcalc.potential_temperature(masked_array(p_baro, data_units='Pa'), masked_array(tem_dat.variables['temperature'][:,:], data_units='K')).magnitude
+        _combine_lev1(tem_dat.variables, rpg_dat, np.arange(len(tem_dat.variables['time'][:])))
+        
             
     elif data_type == '2P08':
         
-        tem_dat, coeff, index, flag = get_products(site, lev1, '2P02', params)
-        hum_dat, _, ix, flg = get_products(site, lev1, '2P03', params)   
-        for ivars in hum_dat:
-            if hum_dat[ivars].ndim > 1:
-                hum_dat[ivars][flg, :] = ma.masked   
-        hum = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr'][:,:], lev1['time'][index])
-        hum_re = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr_random_error'][:,:], lev1['time'][index])
-        hum_se = rebin_2d(lev1['time'][ix], hum_dat['water_vapor_vmr_systematic_error'][:,:], lev1['time'][index])        
-        
-        rpg_dat['altitude'] = tem_dat['altitude']
-        p_baro = calc_p_baro(tem_dat['temperature'], hum[0], lev1['air_pressure'][index], rpg_dat['altitude'])
-        Theta = mpcalc.potential_temperature(masked_array(p_baro, data_units='Pa'), masked_array(tem_dat['temperature'], data_units='K')).magnitude
-        e = vap_pres(hum[0], tem_dat['temperature'].data)
-        rpg_dat['equivalent_potential_temperature'] = Theta+(spec_heat(tem_dat['temperature'].data)*.622*e/(p_baro-e)/1004.)*Theta/tem_dat['temperature'].data
+        tem_dat = load_product(site, datetime.strptime(lev1.date, '%Y-%m-%d'), '2P02')
+        hum_dat = load_product(site, datetime.strptime(lev1.date, '%Y-%m-%d'), '2P03')
+        coeff, index = dict(), []
+        _add_att(coeff, tem_dat, 1)
+
+        hum = rebin_2d(hum_dat.variables['time'][:], hum_dat.variables['water_vapor_vmr'][:,:], tem_dat.variables['time'][:])
+        hum_re = rebin_2d(hum_dat.variables['time'][:], hum_dat.variables['water_vapor_vmr_random_error'][:,:], tem_dat.variables['time'][:])
+        hum_se = rebin_2d(hum_dat.variables['time'][:], hum_dat.variables['water_vapor_vmr_systematic_error'][:,:], tem_dat.variables['time'][:])     
+        flag = ma.any(np.ma.mask_or(ma.getmask(tem_dat.variables['temperature'][:,:]), ma.getmask(hum[0]), shrink=False), axis=1)
+
+        rpg_dat['altitude'] = tem_dat.variables['altitude']
+        pres = np.interp(tem_dat.variables['time'][:], lev1['time'][:], lev1['air_pressure'][:])
+        p_baro = calc_p_baro(tem_dat.variables['temperature'][:,:], hum[0], pres, rpg_dat['altitude'])
+        Theta = mpcalc.potential_temperature(masked_array(p_baro, data_units='Pa'), masked_array(tem_dat.variables['temperature'][:,:], data_units='K')).magnitude
+        e = vap_pres(hum[0], tem_dat.variables['temperature'][:,:])
+        rpg_dat['equivalent_potential_temperature'] = Theta+(spec_heat(tem_dat.variables['temperature'][:,:])*.622*e/(p_baro-e)/1004.)*Theta/tem_dat.variables['temperature'][:,:]
+        _combine_lev1(tem_dat.variables, rpg_dat, np.arange(len(tem_dat.variables['time'][:])))
         
         
     elif data_type == '2S02':
@@ -267,11 +293,12 @@ def _combine_lev1(lev1: dict,
                   index: np.ndarray) -> None:
     "add level1 data"    
     lev1_vars = ['time', 'time_bnds', 'station_latitude', 'station_longitude', 'azi', 'ele'] 
-    for ivars in lev1_vars:
-        if lev1[ivars].ndim > 1:
-            rpg_dat[ivars] = lev1[ivars][index, :] 
-        else:
-            rpg_dat[ivars] = lev1[ivars][index]
+    if index != []:
+        for ivars in lev1_vars:
+            if lev1[ivars].ndim > 1:
+                rpg_dat[ivars] = lev1[ivars][index, :] 
+            else:
+                rpg_dat[ivars] = lev1[ivars][index]
 
 
 def _mask_flag(rpg_dat: dict,
@@ -285,11 +312,30 @@ def _mask_flag(rpg_dat: dict,
             
             
 def _add_att(global_attributes: dict, 
-             coeff: dict) -> None:
+             coeff: dict,
+             lev2: int) -> None:
     "add retrieval attributes"
     fields = ['retrieval_type', 'retrieval_elevation_angles', 'retrieval_frequencies', 'retrieval_auxiliary_input', 'retrieval_description']
     for name in fields:
-        global_attributes[name] = coeff[name]            
+        if lev2:
+            global_attributes[name] = eval('coeff.' + name)
+        else:
+            global_attributes[name] = coeff[name]       
+        
+        
+def load_product(site: str,
+                 date: str,
+                 prod: str):
+    "load existing lev2 file for deriving other products"
+    file = []
+    global_attributes, params = get_site_specs(site, '1C01')
+    ID = global_attributes['wigos_station_id']
+    data_out_l2 = params['data_out']+'level2/'+date.strftime('%Y/%m/%d/')    
+    file_name = data_out_l2+'MWR_'+prod+'_'+ID+'_'+date.strftime('%Y%m%d')+'.nc'
+    
+    if os.path.isfile(file_name):
+        file = nc.Dataset(file_name)
+    return file        
 
 
 "specific heat for evaporation (J/kg)"
@@ -327,7 +373,8 @@ def calc_p_baro(T: np.ndarray,
     
     Tv = T*(1.+0.608*qs)
     p_baro = ma.masked_all(T.shape) 
-    p_baro[(~qs.mask.any(axis=1)) & (~T.mask.any(axis=1)), 0] = p[(~qs.mask.any(axis=1)) & (~T.mask.any(axis=1))] * 100.
+    # p_baro[(~qs.mask.any(axis=1)) & (~T.mask.any(axis=1)), 0] = p[(~qs.mask.any(axis=1)) & (~T.mask.any(axis=1))] * 100.
+    p_baro[(~ma.getmaskarray(qs).any(axis=1)) & (~ma.getmaskarray(T).any(axis=1)), 0] = p[(~ma.getmaskarray(qs).any(axis=1)) & (~ma.getmaskarray(T).any(axis=1))] * 100.
     for ialt in (np.arange(len(z) - 1) + 1): 
         p_baro[:, ialt] = p_baro[:, ialt-1] * np.exp(-9.81*(z[ialt] - z[ialt-1]) / (287. * (Tv[:, ialt] + Tv[:, ialt-1]) / 2.))
         

@@ -121,19 +121,6 @@ def setbit(array: np.ndarray,
     return array
 
 
-def df_interp(df, new_index):
-    """Return a new DataFrame with all columns values interpolated
-    to the new_index values."""
-    
-    df_out = pd.DataFrame(index=new_index)
-    df_out.index.name = df.index.name
-
-    for colname, col in df.iteritems():
-        df_out[colname] = np.interp(new_index, df.index, col)
-
-    return df_out
-
-
 def binvec(x: Union[np.ndarray, list]) -> np.ndarray:
     """Converts 1-D center points to bins with even spacing.
     Args:

@@ -96,7 +96,7 @@ ATTRIBUTES = {
         name='Retrieved column-integrated liquid water path',
         cbar='Blues',
         ylabel=_KGM2,
-        plot_range=(-.05, 1),
+        plot_range=(-.03, 1.),
         plot_type='bar',
         source='int',
     ),  
@@ -198,7 +198,7 @@ ATTRIBUTES = {
         source='tb',
     ), 
     'tb_spectrum': PlotMeta(
-        name='Brightness temperature spectrum',
+        name='Microwave brightness temperature spectrum',
         ylabel=_K,
         plot_type='bar',
         source='tb',
