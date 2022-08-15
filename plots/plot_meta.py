@@ -96,7 +96,7 @@ ATTRIBUTES = {
         name='Retrieved column-integrated liquid water path',
         cbar='Blues',
         ylabel=_KGM2,
-        plot_range=(-.03, 1.),
+        plot_range=(-.05, 1.),
         plot_type='bar',
         source='int',
     ),  
@@ -112,9 +112,10 @@ ATTRIBUTES = {
         name='Retrieved water vapour profile',
         cbar='Spectral_r',
         clabel=_KGM3,
-        plot_range=(0., .015),
+        plot_range=(0., .026),
         plot_type='mesh',
         cbar_ext='max',
+        nlev=14,
     ),
     'temperature': PlotMeta(
         # name='Retrieved temperature profile',
@@ -136,10 +137,10 @@ ATTRIBUTES = {
     'equivalent_potential_temperature': PlotMeta(
         cbar='turbo',
         clabel=_K,
-        plot_range=(275., 335.),
+        plot_range=(275., 350.),
         plot_type='mesh',
         cbar_ext='both',
-        nlev=31,
+        nlev=26,
     ),     
     'relative_humidity': PlotMeta(
         name='Relative Humidity',

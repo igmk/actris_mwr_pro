@@ -29,12 +29,13 @@ def correct_lwp_offset(lev1: dict,
      
     lwcl_i, _ = find_lwcl_free(lev1, index)      
     lwp = np.copy(lwp_org)
-    lwp[(lwcl_i != 0) | (lwp > .03)] = np.nan
+    lwp[(lwcl_i != 0) | (lwp > .05)] = np.nan
     time = lev1['time'][index] 
     lwp_df = pd.DataFrame({'Lwp': lwp}, index = pd.to_datetime(time, unit = 's'))
-    lwp_std = lwp_df.rolling('2min', center = True, min_periods = 30).std()
-    lwp_mx = lwp_std.rolling('20min', center = True, min_periods = 300).max()    
-    lwp_df[lwp_mx > .002] = np.nan
+    lwp_std = lwp_df.rolling('2min', center = True, min_periods = 10).std()
+    lwp_mx = lwp_std.rolling('20min', center = True, min_periods = 100).max()    
+    lwp_df[lwp_mx > .0025] = np.nan
+    
     lwp_offset = lwp_df.resample('20min', origin = 'start', closed = 'left', label = 'left', offset = '10min').mean()
     lwp_offset = lwp_offset.reindex(lwp_df.index, method = 'pad')
 
@@ -54,12 +55,12 @@ def correct_lwp_offset(lev1: dict,
     off = off.drop_duplicates(subset=['date'])
     off.to_csv('site_config/' + site + '/lwp_offset_' + str(t1[0]) + '.csv', index = False)
 
-    off_ind = np.where((off['date'].values < time[0]) & (time[0] - off['date'].values < 48.*3600.))[0]
+    off_ind = np.where((off['date'].values < time[0]) & (time[0] - off['date'].values < 2.*3600.))[0]
     if off_ind.size == 1:
         off_ind = np.array([int(off_ind), int(off_ind)])
     if (off_ind.size > 1) & (np.isnan(lwp_offset['Lwp'][0])):
         lwp_offset['Lwp'][0] = off['offset'][off_ind[-1]]
-    off_ind = np.where((off['date'].values > time[-1]) & (off['date'].values - time[-1] < 48.*3600.))[0]
+    off_ind = np.where((off['date'].values > time[-1]) & (off['date'].values - time[-1] < 2.*3600.))[0]
     if off_ind.size == 1:
         off_ind = np.array([int(off_ind), int(off_ind)])
     if (off_ind.size > 1) & (np.isnan(lwp_offset['Lwp'][-1])):
@@ -69,5 +70,5 @@ def correct_lwp_offset(lev1: dict,
     lwp_offset = lwp_offset.fillna(method = 'bfill')
     lwp_offset['Lwp'][np.isnan(lwp_offset['Lwp'])] = 0
     lwp_org -= lwp_offset['Lwp'].values
-    
+
     return lwp_org, lwp_offset['Lwp'].values

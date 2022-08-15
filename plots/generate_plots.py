@@ -417,8 +417,9 @@ def _plot_irt(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     ir_wavelength = read_nc_fields(nc_file, 'ir_wavelength')
     if not data_in[:, 0].mask.all():
         ax.plot(time, data_in[:,0],'o', markersize=.75, fillstyle='full', color='sienna', label=str(ir_wavelength[0])+' µm')
-    if not data_in[:, 1].mask.all():    
-        ax.plot(time, data_in[:,1],'o', markersize=.75, fillstyle='full', color=_COLORS['shockred'], label=str(ir_wavelength[1])+' µm')
+    if data_in.shape[1] > 1:
+        if not data_in[:, 1].mask.all():    
+            ax.plot(time, data_in[:,1],'o', markersize=.75, fillstyle='full', color=_COLORS['shockred'], label=str(ir_wavelength[1])+' µm')
     ax.set_ylim((vmin, vmax))
     ax.legend(loc='upper right')
     _set_ax(ax, vmax, variables.ylabel, vmin)
@@ -564,7 +565,7 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         axaK.set_ylabel('Brightness Temperature [K]', fontsize=12)
         axaV.text(-.08, .9, 'TB daily means +/- standard deviation', fontsize=13, horizontalalignment='center', transform=axaV.transAxes, color=_COLORS['darkgray'], fontweight='bold')
         axaV.text(-.08, -.35, 'Frequency [GHz]', fontsize=13, horizontalalignment='center', transform=axaV.transAxes)
-        
+
     else:
         tb_m = np.ones((len(sc['time']), len(sc['receiver_nb']))) * np.nan
         data_in = np.abs(data_in)
@@ -573,15 +574,15 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         axa.set_facecolor(_COLORS['lightgray'])
         cl = [_COLORS['darksky'], _COLORS['darkgreen']]
         lb = ['K-Band', 'V-Band']
-        
+
         for irec, rec in enumerate(sc['receiver_nb']):
-            tb_m[:, irec] = ma.sum(data_in[:, sc['receiver'] == rec], axis=1)/ma.mean(ma.sum(data_in[:, sc['receiver'] == rec], axis=1))
+            tb_m[:, irec] = ma.mean(data_in[:, sc['receiver'] == rec], axis=1)
             axa.plot(time, tb_m[:, irec], 'o', color=cl[irec], markersize=.75, fillstyle='full', label=lb[irec])
             flag = np.where(np.sum(quality_flag[:, sc['receiver'] == rec], axis=1) > 0)[0]
-            axa.plot(time[flag], tb_m[flag, irec],'ro', markersize=.75, fillstyle='full')             
+            axa.plot(time[flag], tb_m[flag, irec],'ro', markersize=.75, fillstyle='full')           
            
         axa.legend(loc='upper right')
-        axa.set_ylabel('Relative Deviation []', fontsize=12)
+        axa.set_ylabel('Mean absolute difference [K]', fontsize=12)
         axa.set_xlabel('Time (UTC)', fontsize=12)
         ticks_x_labels = _get_standard_time_ticks()
         axa.set_xticks(np.arange(0, 25, 4, dtype=int))
@@ -591,7 +592,7 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         if len(no_flag) == 0:
             no_flag = np.arange(len(sc['time']))
         axa.set_ylim([0, np.nanmax(tb_m[no_flag, :])+.5])
-        axa.text(.5, .9, 'Total relative deviations retrieved from observed TB', fontsize=13, horizontalalignment='center', transform=axa.transAxes, color=_COLORS['darkgray'], fontweight='bold')
+        # axa.text(.5, .9, '', fontsize=13, horizontalalignment='center', transform=axa.transAxes, color=_COLORS['darkgray'], fontweight='bold')
     
     
 def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
@@ -633,7 +634,8 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray):
     if name == 'iwv':
         vmin, vmax = np.nanmin(data)-1., np.nanmax(data)+1.  
     else:
-        vmax = np.min([np.nanmax(data)+.05, 1.])
+        vmax = np.min([np.nanmax(data)+.05, vmax])
+        vmin = np.max([np.nanmin(data)-.05, vmin])
     _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
     
     

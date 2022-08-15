@@ -39,11 +39,12 @@ def stack_files(file_list):
                 target[name] = (fun(target[name], value)
                                 if name in target else value)  
             else:
-                target[name] = value                                
-    
-    if str(file_list[0][-3:]) not in ('brt', 'irt', 'met', 'hkd', 'blb', 'spc', 'HIS'):
-        raise RuntimeError(['Error: no reader for file type ' + str(file_list[0][-3:])])
-    reader_name = str('read_' + file_list[0][-3:])
+                target[name] = value       
+
+    ext = str(file_list[0][-3:]).lower()
+    if ext not in ('brt', 'irt', 'met', 'hkd', 'blb', 'spc', 'his'):
+        raise RuntimeError(['Error: no reader for file type ' + ext])
+    reader_name = str('read_' + ext)
     data, header = {}, {}
     
     for file in file_list:    
@@ -65,6 +66,7 @@ class RpgBin:
         self.date = self._get_date()
         self.data = {}
         self._init_data()
+        self.find_valid_times()
         
     def _init_data(self):
         for key in self.raw_data:
@@ -72,7 +74,44 @@ class RpgBin:
         
     def _get_date(self):
         time_median = float(np.ma.median(self.raw_data['time']))
-        return datetime.datetime.utcfromtimestamp(utils.epoch2unix(time_median, self.header['_time_ref'])).strftime('%Y %m %d').split()    
+        date = datetime.datetime.utcfromtimestamp(utils.epoch2unix(time_median, self.header['_time_ref'])).strftime('%Y %m %d').split() 
+        today = float(datetime.datetime.today().strftime('%Y'))
+        if float(date[0]) > today:
+            date = datetime.datetime.utcfromtimestamp(utils.epoch2unix(time_median, self.header['_time_ref'], (1970,1,1))).strftime('%Y %m %d').split() 
+        return date   
+    
+    def find_valid_times(self):
+        # sort timestamps
+        time = self.data['time']
+        ind = time.argsort()
+        self._screen(ind)
+                
+        # remove duplicate timestamps
+        time = self.data['time']
+        _, ind = np.unique(time, return_index=True)
+        self._screen(ind)
+                
+        # find valid date        
+        time = self.data['time']
+        ind = np.zeros(len(time), dtype=np.int32)
+        for i, t in enumerate(time):
+            if utils.seconds2date(t)[:3] == self.date:
+                ind[i] = 1
+        self._screen(np.where(ind == 1)[0])     
+        
+    def _screen(self, 
+                ind: np.ndarray):
+        if len(ind) < 1:
+            raise RuntimeError(['Error: no valid data for date: ' + self.date])       
+        n_time = len(self.data['time'])
+        for key, array in self.data.items():
+            data = array
+            if data.ndim > 0 and data.shape[0] == n_time:
+                if data.ndim == 1:
+                    screened_data = data[ind]
+                else:
+                    screened_data = data[ind, :]
+                self.data[key] = screened_data         
 
 
 def read_brt(file_name: str) -> dict:    
@@ -514,7 +553,7 @@ def read_spc(file_name: str) -> dict:
         return header, data
             
             
-def read_HIS(file_name: str) -> dict:    
+def read_his(file_name: str) -> dict:    
     """ This function reads RPG MWR ABSCAL.HIS binary files. """
 
     with open(file_name, "rb") as file :

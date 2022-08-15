@@ -82,19 +82,23 @@ def get_products(site: str,
         offset, lin, quad, coeff, ran_err, sys_err = get_mvr_coeff(site, 'lwp', lev1['frequency'][:])
         
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], coeff['freq'][:, 0], assume_unique = False, return_indices = True)
-        index = np.where((lev1['pointing_flag'][:] == 0) & (np.abs((lev1['ele'][:]) - coeff['ele']) < .6))[0]
-        flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]
+        index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(coeff['ele']))) * coeff['ele']) - np.transpose(np.ones((len(coeff['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]
+        if params['flag_status'][3] == 1:
+            flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]   
+        else:
+            flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0] 
 
         if len(index) == 0:
             raise RuntimeError(['No suitable data found for processing for data type: ' + data_type])
-            
+
         coeff_offset = offset(lev1['ele'][index])
         coeff_lin = lin(lev1['ele'][index])
         coeff_quad = quad(lev1['ele'][index])        
-        lwp = coeff_offset + np.sum(coeff_lin.T * lev1['tb'][index, :], axis = 1) + np.sum(coeff_quad.T * lev1['tb'][index, :] **2, axis = 1)
+
+        lwp = coeff_offset + np.sum(coeff_lin * lev1['tb'][index, :], axis = 1) + np.sum(coeff_quad * lev1['tb'][index, :] **2, axis = 1)
         rpg_dat['lwp_random_error'] = ran_err(lev1['ele'][index])
         rpg_dat['lwp_systematic_error'] = sys_err(lev1['ele'][index])
-        freq_31 = np.where(lev1['frequency'][:] == 31.4)[0]
+        freq_31 = np.where(np.round(lev1['frequency'][:], 1) == 31.4)[0]
         if len(freq_31) != 1:
             rpg_dat['lwp'], rpg_dat['lwp_offset'] = lwp, np.ones(len(index)) * Fill_Value_Float
         else:
@@ -106,8 +110,11 @@ def get_products(site: str,
         offset, lin, quad, coeff, ran_err, sys_err = get_mvr_coeff(site, 'iwv', lev1['frequency'][:])
         
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], coeff['freq'][:, 0], assume_unique = False, return_indices = True)
-        index = np.where((lev1['pointing_flag'][:] == 0) & (np.abs((lev1['ele'][:]) - coeff['ele']) < .6))[0]
-        flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]
+        index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(coeff['ele']))) * coeff['ele']) - np.transpose(np.ones((len(coeff['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]        
+        if params['flag_status'][3] == 1:
+            flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]   
+        else:
+            flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0] 
         
         if len(index) == 0:
             raise RuntimeError(['No suitable data found for processing for data type: ' + data_type])
@@ -115,7 +122,7 @@ def get_products(site: str,
         coeff_offset = offset(lev1['ele'][index])
         coeff_lin = lin(lev1['ele'][index])
         coeff_quad = quad(lev1['ele'][index])        
-        rpg_dat['iwv'] = coeff_offset + np.sum(coeff_lin.T * lev1['tb'][index, :], axis = 1) + np.sum(coeff_quad.T * lev1['tb'][index, :] **2, axis = 1)
+        rpg_dat['iwv'] = coeff_offset + np.sum(coeff_lin * lev1['tb'][index, :], axis = 1) + np.sum(coeff_quad * lev1['tb'][index, :] **2, axis = 1)
         rpg_dat['iwv_random_error'] = ran_err(lev1['ele'][index])
         rpg_dat['iwv_systematic_error'] = sys_err(lev1['ele'][index])        
             
@@ -126,7 +133,10 @@ def get_products(site: str,
 
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], coeff['freq'][:, 0], assume_unique = False, return_indices = True)
         index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(coeff['ele']))) * coeff['ele']) - np.transpose(np.ones((len(coeff['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]
-        flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]
+        if params['flag_status'][3] == 1:
+            flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]   
+        else:
+            flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0] 
         
         if len(index) == 0:
             raise RuntimeError(['No suitable data found for processing for data type: ' + data_type])
@@ -194,7 +204,10 @@ def get_products(site: str,
 
         _, freq_ind, _ = np.intersect1d(lev1['frequency'][:], coeff['freq'][:, 0], assume_unique = False, return_indices = True)
         index = np.where((lev1['pointing_flag'][:] == 0) & np.any(np.abs((np.ones((len(lev1['ele'][:]), len(coeff['ele']))) * coeff['ele']) - np.transpose(np.ones((len(coeff['ele']), len(lev1['ele'][:]))) * lev1['ele'][:])) < .6, axis = 1))[0]
-        flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]
+        if params['flag_status'][3] == 1:
+            flag = np.where(np.sum(isbit(lev1['quality_flag'][index, freq_ind], 3), axis = 1) > 0)[0]   
+        else:
+            flag = np.where(np.sum(lev1['quality_flag'][index, freq_ind], axis = 1) > 0)[0] 
         
         if (len(index) == 0 | len(freq_ind) == 0):
             raise RuntimeError(['No suitable data found for processing for data type: ' + data_type])

@@ -31,40 +31,32 @@ def get_mvr_coeff(site: str,
         
         cf['ele'] = np.ones(len(c_list)) * Fill_Value_Float    
         cf['freq'] = np.ones([len(freq), len(c_list)]) * Fill_Value_Float
-        cf['coeff_lin'] = np.zeros([len(freq), len(c_list)])
-        cf['coeff_quad'] = np.zeros([len(freq), len(c_list)])
+        cf['coeff_lin'] = np.zeros([len(c_list), len(freq)])
+        cf['coeff_quad'] = np.zeros([len(c_list), len(freq)])
         cf['offset'] = np.zeros(len(c_list))
         cf['err_ran'] = np.ones(len(c_list)) * Fill_Value_Float
         cf['err_sys'] = np.ones(len(c_list)) * Fill_Value_Float
-
+        
         for i, file in enumerate(c_list):
             coeff = nc.Dataset(file)
-            cf['ele'][i] = coeff['elevation_predictor'][0]
+            cf['ele'][i] = coeff['elevation_predictor'][i]
             _, freq_ind, freq_cf = np.intersect1d(freq[:], coeff['freq'][:], assume_unique = False, return_indices = True)
             if len(freq_ind) == 0:
                 raise RuntimeError(['Instrument and retrieval frequencies do not match.']) 
                 
             cf['freq'][freq_ind, i] = coeff['freq'][freq_cf]
-            cf['coeff_lin'][freq_ind, i] = coeff['coefficient_mvr'][freq_cf]
-            cf['coeff_quad'][freq_ind, i] = coeff['coefficient_mvr'][freq_cf + len(freq_cf)]
+            cf['coeff_lin'][i, freq_ind] = coeff['coefficient_mvr'][freq_cf]
+            if coeff.regression_type == 'quadratic':
+                cf['coeff_quad'][i, freq_ind] = coeff['coefficient_mvr'][freq_cf + len(freq_cf)]
             cf['offset'][i] = coeff['offset_mvr'][0]
-            cf['err_ran'][i] = coeff['predictand_err'][0]
-            cf['err_sys'][i] = coeff['predictand_err_sys'][0]
-
-        if len(c_list) > 1:            
-            f_offset = interp1d(cf['ele'], cf['offset'])
-            f_lin = interp1d(cf['ele'], cf['coeff_lin'])
-            f_quad = interp1d(cf['ele'], cf['coeff_quad'])
-            e_ran = interp1d(cf['ele'], cf['err_ran'])
-            e_sys = interp1d(cf['ele'], cf['err_sys'])
-
-        else:
-            def f_offset(x): return cf['offset']
-            def f_lin(x): return cf['coeff_lin']  
-            def f_quad(x): return cf['coeff_quad']     
-            def e_ran(x): return np.ones(len(x)) * cf['err_ran']
-            def e_sys(x): return np.ones(len(x)) * cf['err_sys']    
-        
+            cf['err_ran'][i] = coeff['predictand_err'][0]  
+            cf['err_sys'][i] = coeff['predictand_err_sys'][0]         
+            
+        def f_offset(x): return np.array([cf['offset'][(np.abs(cf['ele']-v)).argmin()] for v in x])
+        def f_lin(x): return np.array([cf['coeff_lin'][(np.abs(cf['ele']-v)).argmin(), :] for v in x])
+        def f_quad(x): return np.array([cf['coeff_quad'][(np.abs(cf['ele']-v)).argmin(), :] for v in x])
+        def e_ran(x): return np.array([cf['err_ran'][(np.abs(cf['ele']-v)).argmin()] for v in x])
+        def e_sys(x): return np.array([cf['err_sys'][(np.abs(cf['ele']-v)).argmin()] for v in x])         
             
     elif prefix in ('tze', 'hze'):
         

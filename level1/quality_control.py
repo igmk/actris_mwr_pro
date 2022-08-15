@@ -5,7 +5,6 @@ from utils import setbit, get_coeff_list
 import datetime
 import ephem
 import netCDF4 as nc
-from pandas.tseries.frequencies import to_offset
 
 Fill_Value_Float = -999.
 Fill_Value_Int = -99
@@ -34,8 +33,9 @@ def apply_qc(site: str,
     data['quality_flag'] = np.zeros(data['tb'].shape, dtype = np.int32)
     data['quality_flag_status'] = np.zeros(data['tb'].shape, dtype = np.int32)
     data['tb'][data['tb'] == 0.] = Fill_Value_Float
-    c_list = get_coeff_list(site, 'tbx')
-    ind_bit4, _ = spectral_consistency(data, c_list)
+    if params['flag_status'][3] == 0:
+        c_list = get_coeff_list(site, 'tbx')
+        ind_bit4, _ = spectral_consistency(data, c_list)
     ind_bit6 = np.where(data['rain'] == 1)
     ind_bit7 = orbpos(data, params)
 
@@ -151,7 +151,7 @@ def spectral_consistency(data: dict,
             if (ele_ind.size > 0) & (freq_ind.size > 0):
                 tb_ret[:, ifreq] = coeff['offset_mvr'][:] + np.sum(coeff['coefficient_mvr'][coeff_ind].T * data['tb'][:, freq_ind], axis = 1) + np.sum(coeff['coefficient_mvr'][coeff_ind + (len(data['frequency']) - 1)].T * data['tb'][:, freq_ind]**2, axis = 1)
                 tb_df = pd.DataFrame({'Tb': (data['tb'][ele_ind, ifreq]-tb_ret[ele_ind, ifreq])}, index = pd.to_datetime(data['time'][ele_ind], unit = 's'))
-                tb_med = tb_df.resample("10min", origin = 'start', closed = 'left', label = 'left', offset = '5min').mean()
+                tb_med = tb_df.resample("20min", origin = 'start', closed = 'left', label = 'left', offset = '10min').mean()
                 org = pd.DataFrame({'Tb': tb_ret[:, ifreq]}, index = pd.to_datetime(data['time'][:], unit = 's'))
                 tb_df = tb_df.reindex(org.index, method = 'pad')
                 tb_med = tb_med.reindex(org.index, method = 'pad')      
@@ -160,13 +160,14 @@ def spectral_consistency(data: dict,
                 flag_tmp[ele_ind[(np.abs(tb_df['Tb'].values[ele_ind] - tb_med['Tb'].values[ele_ind]) > coeff['predictand_err'][:]*fact[data['receiver'][ifreq]])]] = 1
                 tb_tot[ele_ind, ifreq] = np.abs(tb_df['Tb'].values[ele_ind])
     
+    th_rec = [np.nan, 1., 2.]
     for _, rec in enumerate(data['receiver_nb']):
-        flag_tmp[np.ix_(ma.sum(tb_tot[:, data['receiver'] == rec], axis=1)/ma.mean(ma.sum(tb_tot[:, data['receiver'] == rec], axis=1)) > 1.75, data['receiver'] == rec)] = 1   
+        flag_tmp[np.ix_(ma.mean(tb_tot[:, data['receiver'] == rec], axis=1) > th_rec[rec], data['receiver'] == rec)] = 1
 
     for ifreq, _ in enumerate(data['frequency']):
 	    df = pd.DataFrame({'Flag': flag_tmp[:, ifreq]}, index = pd.to_datetime(data['time'][:], unit = 's'))
-	    df = df.fillna(method = 'bfill', limit = 120)
-	    df = df.fillna(method = 'ffill', limit = 120)    
+	    df = df.fillna(method = 'bfill', limit = 300)
+	    df = df.fillna(method = 'ffill', limit = 300)    
 	    flag_ind[((df['Flag'].values == 1)), ifreq] = 1
 
     return flag_ind, tb_ret

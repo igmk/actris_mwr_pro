@@ -11,6 +11,7 @@ import pandas as pd
 from pandas.tseries.frequencies import to_offset
 from typing import Optional
 import glob
+import os
 import datetime
 from itertools import groupby
 
@@ -47,7 +48,8 @@ def lev1_to_nc(site: str,
     if data_type in ('1B01', '1C01'):
         apply_qc(site, rpg_bin.data, params)
         rpg_cal = cal_his(params, global_attributes, rpg_bin.data['time'][0])
-        correct_tb_offset(site, rpg_bin.data, params, global_attributes, rpg_cal)
+        if rpg_cal != []:
+            correct_tb_offset(site, rpg_bin.data, params, global_attributes, rpg_cal)
     if data_type in ('1B21', '1C01'):
         apply_met_qc(rpg_bin.data, params)
     hatpro = rpg_mwr.Rpg(rpg_bin.data)
@@ -60,10 +62,16 @@ def get_file_list(path_to_files: str,
                   path_to_prev: str,
                   path_to_next: str,
                   extension: str):
-    
+   
     f_list = sorted(glob.glob(path_to_files + '*.' + extension))
+    if len(f_list) == 0:
+        f_list = sorted(glob.glob(path_to_files + '*.' + extension.upper()))
     f_list_p = sorted(glob.glob(path_to_prev + '*.' + extension))
+    if len(f_list_p) == 0:
+        f_list_p = sorted(glob.glob(path_to_prev + '*.' + extension.upper()))
     f_list_n = sorted(glob.glob(path_to_next + '*.' + extension))
+    if len(f_list_n) == 0:
+        f_list_n = sorted(glob.glob(path_to_next + '*.' + extension.upper()))
 
     if len(f_list) == 0:
         raise RuntimeError(['Error: no binary files with extension ' + extension + ' found in directory ' + path_to_files])
@@ -94,12 +102,15 @@ def prepare_data(path_to_files: str,
         rpg_bin.data['time_bnds'] = add_time_bounds(rpg_bin.data['time'], params['int_time'])
         rpg_bin.data['pointing_flag'] = np.zeros(len(rpg_bin.data['time']), np.int32)
         rpg_bin.data['liquid_cloud_flag'], rpg_bin.data['liquid_cloud_flag_status'] = find_lwcl_free(rpg_bin.data, np.arange(len(rpg_bin.data['time'])))
-
-        file_list_blb = get_file_list(path_to_files, path_to_prev, path_to_next, 'blb')
+        
         file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, 'hkd')
         rpg_hkd = get_rpg_bin(file_list_hkd)
-        rpg_blb = get_rpg_bin(file_list_blb)
-        _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)         
+        try:
+            file_list_blb = get_file_list(path_to_files, path_to_prev, path_to_next, 'blb')        
+            rpg_blb = get_rpg_bin(file_list_blb)
+            _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)         
+        except:
+            print(['No binary files with extension blb found in directory ' + path_to_files])
 
         if params['azi_cor'] != Fill_Value_Float:
             _azi_correction(rpg_bin.data, params)
@@ -116,20 +127,23 @@ def prepare_data(path_to_files: str,
                 _add_interpol1(rpg_bin.data, rpg_irt.data['ir_ele'], rpg_irt.data['time'], 'ir_ele')
                 _add_interpol1(rpg_bin.data, rpg_irt.data['ir_azi'], rpg_irt.data['time'], 'ir_azi')
             except:
-                print(['No binary files with extension irt found in directory ' + path_to_files])                
+                print(['No binary files with extension irt found in directory ' + path_to_files])                    
 
-            file_list_met = get_file_list(path_to_files, path_to_prev, path_to_next, 'met')                  
-            rpg_met = get_rpg_bin(file_list_met)
-            _add_interpol1(rpg_bin.data, rpg_met.data['air_temperature'], rpg_met.data['time'], 'air_temperature')
-            _add_interpol1(rpg_bin.data, rpg_met.data['relative_humidity'], rpg_met.data['time'], 'relative_humidity')
-            _add_interpol1(rpg_bin.data, rpg_met.data['air_pressure'], rpg_met.data['time'], 'air_pressure')
-            if (int(rpg_met.header['_n_sen'],2) & 1) != 0:
-                _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,0], rpg_met.data['time'], 'wind_speed')
-                rpg_bin.data['wind_speed'] = rpg_bin.data['wind_speed'] / 3.6
-            if (int(rpg_met.header['_n_sen'],2) & 2) != 0:
-                _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,1], rpg_met.data['time'], 'wind_direction')
-            if (int(rpg_met.header['_n_sen'],2) & 4) != 0:
-                _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,2], rpg_met.data['time'], 'rain_rate')
+            try:
+                file_list_met = get_file_list(path_to_files, path_to_prev, path_to_next, 'met')                  
+                rpg_met = get_rpg_bin(file_list_met)
+                _add_interpol1(rpg_bin.data, rpg_met.data['air_temperature'], rpg_met.data['time'], 'air_temperature')
+                _add_interpol1(rpg_bin.data, rpg_met.data['relative_humidity'], rpg_met.data['time'], 'relative_humidity')
+                _add_interpol1(rpg_bin.data, rpg_met.data['air_pressure'], rpg_met.data['time'], 'air_pressure')
+                if (int(rpg_met.header['_n_sen'],2) & 1) != 0:
+                    _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,0], rpg_met.data['time'], 'wind_speed')
+                    rpg_bin.data['wind_speed'] = rpg_bin.data['wind_speed'] / 3.6
+                if (int(rpg_met.header['_n_sen'],2) & 2) != 0:
+                    _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,1], rpg_met.data['time'], 'wind_direction')
+                if (int(rpg_met.header['_n_sen'],2) & 4) != 0:
+                    _add_interpol1(rpg_bin.data, rpg_met.data['adds'][:,2], rpg_met.data['time'], 'rain_rate')
+            except:
+                print(['No binary files with extension met found in directory ' + path_to_files])
         
     elif data_type == '1B11':
         file_list_irt = get_file_list(path_to_files, path_to_prev, path_to_next, 'irt') 
@@ -229,29 +243,29 @@ def find_lwcl_free(lev1: dict,
                    ix: np.ndarray) -> tuple:
     
     index = np.ones(len(ix)) * np.nan
-    status = np.ones(len(ix), dtype=int)
-    freq_31 = np.where(lev1['frequency'][:] == 31.4)[0]
+    status = np.ones(len(ix), dtype=np.int32)
+    freq_31 = np.where(np.round(lev1['frequency'][:], 1) == 31.4)[0]
     if len(freq_31) == 1:
         time = lev1['time'][ix]
         tb = np.squeeze(lev1['tb'][ix, freq_31])      
         tb[(lev1['pointing_flag'][ix] == 1) | (lev1['ele'][ix] < 89.)] = np.nan
         tb_df = pd.DataFrame({'Tb': tb}, index = pd.to_datetime(time, unit = 's'))
-        tb_std = tb_df.rolling('2min', center = True, min_periods = 30).std()
-        tb_mx = tb_std.rolling('20min', center = True, min_periods = 300).max()
+        tb_std = tb_df.rolling('2min', center = True, min_periods = 10).std()
+        tb_mx = tb_std.rolling('20min', center = True, min_periods = 100).max()
 
         if 'irt' in lev1:
             irt = lev1['irt'][ix, 0]
             irt[(lev1['pointing_flag'][ix] == 1) | (lev1['ele'][ix] < 89.)] = np.nan
             irt_df = pd.DataFrame({'Irt': irt[:]}, index = pd.to_datetime(time, unit = 's'))
-            irt_mx = irt_df.rolling('20min', center = True, min_periods = 300).max()
+            irt_mx = irt_df.rolling('20min', center = True, min_periods = 100).max()
             index[(irt_mx['Irt'] > 233.15) & (tb_mx['Tb'] > .3)] = 1            
             status[:] = 0
         else:
             index[(tb_mx['Tb'] > .3)] = 1
 
         df = pd.DataFrame({'index': index}, index = pd.to_datetime(time, unit = 's'))    
-        df = df.fillna(method = 'bfill', limit = 600)
-        df = df.fillna(method = 'ffill', limit = 600)
+        df = df.fillna(method = 'bfill', limit = 120)
+        df = df.fillna(method = 'ffill', limit = 120)
         index = np.array(df['index'])
         index[(tb_mx['Tb'] < .3) & (index != 1.)] = 0.
         index[(lev1['ele'][ix] < 89.) & (index != 1.)] = 2.
@@ -320,7 +334,7 @@ def cal_his(params: dict,
              glob_att: dict,
              time0: int) -> dict:
     """Load and add information from ABSCAL.HIS file"""
-    
+    rpg_cal = []
     try:
         file_list_cal = get_file_list(params['path_to_cal'], ' ', ' ', 'HIS')
         rpg_cal = get_rpg_bin(file_list_cal)
