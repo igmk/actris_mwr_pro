@@ -28,8 +28,8 @@ def correct_tb_offset(site: str,
        
     """   
 
-    if global_attributes['date_of_last_absolute_calibration'] != '':
-        cal_s = int(time.mktime(datetime.datetime.strptime(global_attributes['date_of_last_absolute_calibration'], "%Y%m%d").timetuple()))
+    if global_attributes['instrument_calibration_status'] == 'calibrated':
+        cal_s = int(time.mktime(datetime.datetime.strptime(global_attributes['receiver1_date_of_last_absolute_calibration'], "%Y%m%d").timetuple()))
         cal_e = cal_nex(params, data['time'][-1], rpg_cal)
         
         # if cal_s < cal_e:

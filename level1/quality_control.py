@@ -156,19 +156,19 @@ def spectral_consistency(data: dict,
                 tb_df = tb_df.reindex(org.index, method = 'pad')
                 tb_med = tb_med.reindex(org.index, method = 'pad')      
 
-                fact = [np.nan, 2., 3.]
-                flag_tmp[ele_ind[(np.abs(tb_df['Tb'].values[ele_ind] - tb_med['Tb'].values[ele_ind]) > coeff['predictand_err'][:]*fact[data['receiver'][ifreq]])]] = 1
+                fact = [2.5, 3.5]
+                flag_tmp[ele_ind[(np.abs(tb_df['Tb'].values[ele_ind] - tb_med['Tb'].values[ele_ind]) > coeff['predictand_err'][0]*fact[data['receiver'][ifreq]-1])], ifreq] = 1
                 tb_tot[ele_ind, ifreq] = np.abs(tb_df['Tb'].values[ele_ind])
     
-    th_rec = [np.nan, 1., 2.]
+    th_rec = [.7, 2.]
     for _, rec in enumerate(data['receiver_nb']):
-        flag_tmp[np.ix_(ma.mean(tb_tot[:, data['receiver'] == rec], axis=1) > th_rec[rec], data['receiver'] == rec)] = 1
+        flag_tmp[np.ix_(ma.mean(tb_tot[:, data['receiver'] == rec], axis=1) > th_rec[rec-1], data['receiver'] == rec)] = 1
 
     for ifreq, _ in enumerate(data['frequency']):
 	    df = pd.DataFrame({'Flag': flag_tmp[:, ifreq]}, index = pd.to_datetime(data['time'][:], unit = 's'))
-	    df = df.fillna(method = 'bfill', limit = 300)
-	    df = df.fillna(method = 'ffill', limit = 300)    
-	    flag_ind[((df['Flag'].values == 1)), ifreq] = 1
+	    df = df.fillna(method = 'bfill', limit = 120)
+	    df = df.fillna(method = 'ffill', limit = 120)    
+	    flag_ind[((df['Flag'].values == 1) & (data['pointing_flag'][:] == 0)), ifreq] = 1
 
     return flag_ind, tb_ret
     

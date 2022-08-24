@@ -55,7 +55,7 @@ def stack_files(file_list):
             continue            
         _stack_header(header_tmp, header, np.add)        
         _stack_data(data_tmp,data, np.concatenate)
-
+        
     return header, data
 
 
@@ -177,8 +177,14 @@ def read_brt(file_name: str) -> dict:
 
             elif code == 666000:
                 a_str = str(ang[0])
-                el = float(a_str[0:-5])/100.
-                az = float(a_str[-5:])/100.
+                if a_str[0:-5].isnumeric():
+                    el = float(a_str[0:-5])/100.
+                else:
+                    el = Fill_Value_Float
+                if a_str[-5:].isnumeric():
+                    az = float(a_str[-5:])/100.
+                else:
+                    az = Fill_Value_Float
 
             return el, az
 
@@ -199,7 +205,7 @@ def read_brt(file_name: str) -> dict:
             file.close()
             return data
 
-        header = _get_header()                    
+        header = _get_header()                  
         data = _get_data()   
         return header, data
 
@@ -319,8 +325,15 @@ def read_irt(file_name: str) -> dict:
                     el = 100.+els                    
             elif code == 671112000:
                 a_str = str(ang[0])
-                el = float(a_str[0:-5])/100.
-                az = float(a_str[-5:])/100.
+                if a_str[0:-5].isnumeric():
+                    el = float(a_str[0:-5])/100.
+                else:
+                    el = Fill_Value_Float
+                if a_str[-5:].isnumeric():
+                    az = float(a_str[-5:])/100.
+                else:
+                    az = Fill_Value_Float
+
             return el, az
 
 

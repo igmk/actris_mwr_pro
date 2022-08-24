@@ -44,7 +44,7 @@ def lev1_to_nc(site: str,
 
     file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, 'hkd')
     global_attributes, params = get_site_specs(site, data_type)
-    rpg_bin = prepare_data(path_to_files, path_to_prev, path_to_next, data_type, params)
+    rpg_bin = prepare_data(path_to_files, path_to_prev, path_to_next, data_type, params)  
     if data_type in ('1B01', '1C01'):
         apply_qc(site, rpg_bin.data, params)
         rpg_cal = cal_his(params, global_attributes, rpg_bin.data['time'][0])
@@ -197,7 +197,7 @@ def _append_hkd(file_list_hkd: list,
         _add_interpol1(rpg_bin.data, hkd.data['stab'], hkd.data['time'], 't_sta')
 
         """check time intervals of +-15 min of .HKD data for sanity checks"""
-        rpg_bin.data['status'] = np.zeros([len(rpg_bin.data['time']), len(rpg_bin.data['tb'][:].T)], np.int32)                
+        rpg_bin.data['status'] = np.zeros(rpg_bin.data['tb'].shape, np.int32)                
         for i_time, v_time in enumerate(rpg_bin.data['time']):
             ind = np.where((hkd.data['time'] >= v_time - 900) & (hkd.data['time'] <= v_time + 900))
             status = hkd.data['status'][ind]
@@ -331,18 +331,31 @@ def _azi_correction(brt: dict,
     
     
 def cal_his(params: dict,
-             glob_att: dict,
-             time0: int) -> dict:
+            glob_att: dict,
+            time0: int) -> dict:
     """Load and add information from ABSCAL.HIS file"""
-    rpg_cal = []
+    file_list_cal, rpg_cal = [], []
+    cal_type = ['instrument performs no absolute calibration', 'liquid nitrogen calibration', 'sky tipping calibration']
     try:
-        file_list_cal = get_file_list(params['path_to_cal'], ' ', ' ', 'HIS')
-        rpg_cal = get_rpg_bin(file_list_cal)
-        rec_cal = np.where((rpg_cal.data['cal1_t'] == 1) & (rpg_cal.data['cal2_t'] == 1) & (epoch2unix(rpg_cal.data['t1'], rpg_cal.header['_time_ref']) < time0))[0]
-        if len(rec_cal) > 0:
-            glob_att['date_of_last_absolute_calibration'] = datetime.datetime.utcfromtimestamp(epoch2unix(rpg_cal.data['t1'][rec_cal[-1]], rpg_cal.header['_time_ref'])).strftime('%Y%m%d') + glob_att['date_of_last_absolute_calibration']
-            
+        file_list_cal = get_file_list(params['path_to_cal'], ' ', ' ', 'his')
     except:
-        print(['No binary files with extension HIS found in directory ' + params['path_to_cal']])                
+        print(['No binary files with extension his found in directory ' + params['path_to_cal']])
+        
+    if file_list_cal != []:        
+        rpg_cal = get_rpg_bin(file_list_cal)
+
+        if ((rpg_cal.data['cal1_t'] > 0) & (rpg_cal.data['cal2_t'] > 0) & ((time0 - epoch2unix(rpg_cal.data['t1'], rpg_cal.header['_time_ref'])) / 86400. < 183.)):
+            glob_att['instrument_calibration_status'] = 'calibrated'
+        else:
+            glob_att['instrument_calibration_status'] = 'needs calibration'
+
+        cal_t1 = np.where(epoch2unix(rpg_cal.data['t1'], rpg_cal.header['_time_ref']) < time0)[0]
+        if len(cal_t1) > 0:
+            glob_att['receiver1_date_of_last_absolute_calibration'] = datetime.datetime.utcfromtimestamp(epoch2unix(rpg_cal.data['t1'][cal_t1[-1]], rpg_cal.header['_time_ref'])).strftime('%Y%m%d')
+            glob_att['receiver1_type_of_last_absolute_calibration'] = cal_type[int(rpg_cal.data['cal1_t'])]
+        cal_t2 = np.where(epoch2unix(rpg_cal.data['t2'], rpg_cal.header['_time_ref']) < time0)[0]
+        if len(cal_t2) > 0:
+            glob_att['receiver2_date_of_last_absolute_calibration'] = datetime.datetime.utcfromtimestamp(epoch2unix(rpg_cal.data['t2'][cal_t2[-1]], rpg_cal.header['_time_ref'])).strftime('%Y%m%d')        
+            glob_att['receiver2_type_of_last_absolute_calibration'] = cal_type[int(rpg_cal.data['cal2_t'])]          
         
     return rpg_cal

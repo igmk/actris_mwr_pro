@@ -443,6 +443,7 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
     _plot_segment_data(axs[0], qf, 'quality_flag_0', (time, np.linspace(.5,2.5,3)), nc_file)
     axs[0].set_yticks(np.arange(3))
     axs[0].yaxis.set_ticklabels([]) 
+    axs[0].set_facecolor(_COLORS['lightgray'])
     _set_ax(axs[0], 3, '')  
     axs[0].set_title(ATTRIBUTES['quality_flag_0'].name)
     
@@ -458,6 +459,7 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
     for i in [1,2]:        
         axs[i].set_yticks(range(len(frequency)))
         axs[i].set_yticklabels(frequency)
+        axs[i].set_facecolor(_COLORS['lightgray'])
         for label in axs[i].yaxis.get_majorticklabels():
             label.set_transform(label.get_transform() + offset)        
         _set_ax(axs[i], len(frequency), 'Frequency [GHz]')    
@@ -492,7 +494,7 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
 
         
     fig.clear()
-    fig, axs = plt.subplots(7,2, figsize=(13, 16), facecolor='w', edgecolor='k', sharex=True, dpi=120)
+    fig, axs = plt.subplots(7,2, figsize=(13, 16), facecolor='w', edgecolor='k', sharex='col', dpi=120)
     fig.subplots_adjust(hspace=.035, wspace=.15)
     if name == 'tb':
         fig.text(.06, .5, 'Brightness Temperature [K]', va='center', rotation='vertical', fontsize=20)
@@ -518,7 +520,8 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         ax.set_facecolor(_COLORS['lightgray'])
         dif = np.max(data_in[no_flag,i]) - np.min(data_in[no_flag,i])
         _set_ax(ax, np.max(data_in[no_flag,i])+.25*dif, '', np.min(data_in[no_flag,i])-.25*dif)
-        _set_labels(fig, ax, nc_file)
+        if i in (6, 13):
+            _set_labels(fig, ax, nc_file)
         ax.text(.05,.9,str(frequency[i])+' GHz', transform=ax.transAxes + trans, color=_COLORS['darkgray'], fontweight='bold')
         ax.text(.55,.9,str(round(tb_m[i],2))+' +/- '+str(round(tb_s[i],2))+' K', transform=ax.transAxes+trans, color=_COLORS['darkgray'], fontweight='bold')
 
@@ -568,7 +571,6 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
 
     else:
         tb_m = np.ones((len(sc['time']), len(sc['receiver_nb']))) * np.nan
-        data_in = np.abs(data_in)
         axa = fig.add_subplot(111)
         axa.set_position([.125, -.05, .775, .125])
         axa.set_facecolor(_COLORS['lightgray'])
@@ -576,7 +578,7 @@ def _plot_tb(ax, data_in: ndarray, time: ndarray, fig, nc_file: str, ele_range: 
         lb = ['K-Band', 'V-Band']
 
         for irec, rec in enumerate(sc['receiver_nb']):
-            tb_m[:, irec] = ma.mean(data_in[:, sc['receiver'] == rec], axis=1)
+            tb_m[:, irec] = ma.mean(np.abs(data_in[:, sc['receiver'] == rec]), axis=1)
             axa.plot(time, tb_m[:, irec], 'o', color=cl[irec], markersize=.75, fillstyle='full', label=lb[irec])
             flag = np.where(np.sum(quality_flag[:, sc['receiver'] == rec], axis=1) > 0)[0]
             axa.plot(time[flag], tb_m[flag, irec],'ro', markersize=.75, fillstyle='full')           

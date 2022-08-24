@@ -386,7 +386,6 @@ def calc_p_baro(T: np.ndarray,
     
     Tv = T*(1.+0.608*qs)
     p_baro = ma.masked_all(T.shape) 
-    # p_baro[(~qs.mask.any(axis=1)) & (~T.mask.any(axis=1)), 0] = p[(~qs.mask.any(axis=1)) & (~T.mask.any(axis=1))] * 100.
     p_baro[(~ma.getmaskarray(qs).any(axis=1)) & (~ma.getmaskarray(T).any(axis=1)), 0] = p[(~ma.getmaskarray(qs).any(axis=1)) & (~ma.getmaskarray(T).any(axis=1))] * 100.
     for ialt in (np.arange(len(z) - 1) + 1): 
         p_baro[:, ialt] = p_baro[:, ialt-1] * np.exp(-9.81*(z[ialt] - z[ialt-1]) / (287. * (Tv[:, ialt] + Tv[:, ialt-1]) / 2.))

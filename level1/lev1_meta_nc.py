@@ -105,10 +105,10 @@ DEFINITIONS_1B01 = {
 
 ATTRIBUTES_1B01 = {
     'frequency': MetaData(
-        long_name='Centre frequency of microwave channels',
+        long_name='Nominal centre frequency of microwave channels',
         standard_name='radiation_frequency',
         units='GHz',
-        comment='For more accurate frequency values use frequency+freq_shift.',
+        comment='1) For double-sideband receivers, frequency corresponds to the local oscillator frequency whereas the radio frequency of the upper/lower sideband is frequency+/-sideband_IF_separation. 2) In case of known offset between the real and the nominal frequency of some channels, frequency+freq_shift gives more accurate values.',
     ),
     'receiver_nb': MetaData(
         long_name='Number of the microwave receiver',
@@ -122,7 +122,7 @@ ATTRIBUTES_1B01 = {
     ),
     'n_sidebands': MetaData(
         long_name='Number of sidebands',
-        comment='1: single-sideband or direct detection receivers, 2: double-sideband. The frequency separation of sidebands is indicated in sideband_IF_separation.',
+        comment='0: direct-detection receivers, 1: single-sideband, 2: double-sideband. The frequency separation of sidebands is indicated in sideband_IF_separation.',
     ),
     'sideband_IF_separation': MetaData(
         long_name='For double sideband channels, this is the positive and negative IF range distance of the two band passes around the centre frequency (which is the LO frqeuency)',
@@ -130,11 +130,11 @@ ATTRIBUTES_1B01 = {
         comment='ositive number for IF centre frequency',
     ),
     'beamwidth': MetaData(
-        long_name='Beam width of the microwave radiometer',
+        long_name='Beam width (FWHM) of the microwave radiometer',
         units='degrees',
     ),
     'freq_shift': MetaData(
-        long_name='Hypothetical frequency shift which has been applied to correct TB readings for compensation of assumed biases.',
+        long_name='For more accurate frequency values use frequency+freq_shift.',
         units='GHz',
     ),
     'tb': MetaData(
