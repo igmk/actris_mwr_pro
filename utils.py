@@ -26,29 +26,30 @@ def seconds2hours(time_in_seconds: np.ndarray) -> np.ndarray:
         Excludes leap seconds.
     """
     seconds_since_midnight = np.mod(time_in_seconds, SECONDS_PER_DAY)
-    fraction_hour = seconds_since_midnight/SECONDS_PER_HOUR
+    fraction_hour = seconds_since_midnight / SECONDS_PER_HOUR
     if fraction_hour[-1] == 0:
         fraction_hour[-1] = 24
     return fraction_hour
 
 
-def epoch2unix(epoch_time, time_ref, 
-                 epoch: Optional[tuple] = (2001, 1, 1)):    
+def epoch2unix(epoch_time, time_ref, epoch: Optional[tuple] = (2001, 1, 1)):
     """Converts seconds since (2001,1,1,0,0,0) to unix time in UTC.
-    
+
     Args:
         epoch_time (ndarray): 1-D array of seconds since (2001,1,1,0,0,0)
-        
+
     Returns:
         ndarray: Unix time in seconds since (1970,1,1,0,0,0).
-        
+
     """
 
-    delta = (datetime(*epoch) - datetime(1970,1,1,0,0,0)).total_seconds()
+    delta = (datetime(*epoch) - datetime(1970, 1, 1, 0, 0, 0)).total_seconds()
     unix_time = epoch_time + int(delta)
     if time_ref == 0:
         for index in range(len(unix_time)):
-            unix_time[index] = time.mktime(datetime.fromtimestamp(unix_time[index], timezone.utc).timetuple())
+            unix_time[index] = time.mktime(
+                datetime.fromtimestamp(unix_time[index], timezone.utc).timetuple()
+            )
     return unix_time
 
 
@@ -65,9 +66,9 @@ def isscalar(array: any) -> bool:
         >>> isscalar(np.array([1]))
             True
     """
-    
+
     arr = ma.array(array)
-    if not hasattr(arr, '__len__') or arr.shape == () or len(arr) == 1:
+    if not hasattr(arr, "__len__") or arr.shape == () or len(arr) == 1:
         return True
     return False
 
@@ -90,13 +91,12 @@ def isbit(array: np.ndarray, nth_bit: int) -> np.ndarray:
         utils.setbit()
     """
     if nth_bit < 0:
-        raise ValueError('Negative bit number')
+        raise ValueError("Negative bit number")
     mask = 1 << nth_bit
     return array & mask > 0
 
 
-def setbit(array: np.ndarray, 
-           nth_bit: int) -> int:
+def setbit(array: np.ndarray, nth_bit: int) -> int:
     """Sets nth bit (0, 1, 2..) on number.
     Args:
         array: Integer array.
@@ -113,9 +113,9 @@ def setbit(array: np.ndarray,
     See also:
         utils.isbit()
     """
-    
+
     if nth_bit < 0:
-        raise ValueError('Negative bit number')
+        raise ValueError("Negative bit number")
     mask = 1 << nth_bit
     array |= mask
     return array
@@ -141,7 +141,8 @@ def rebin_2d(
     array: ma.MaskedArray,
     x_new: np.ndarray,
     statistic: str = "mean",
-    n_min: int = 1) -> Tuple[ma.MaskedArray, list]:
+    n_min: int = 1,
+) -> Tuple[ma.MaskedArray, list]:
     """Rebins 2-D data in one dimension.
     Args:
         x_in: 1-D array with shape (n,).
@@ -161,7 +162,9 @@ def rebin_2d(
     for ind, values in enumerate(array_screened.T):
         mask = ~values.mask
         if ma.any(values[mask]):
-            result[:, ind], _, _ = stats.binned_statistic(x_in[mask], values[mask], statistic=statistic, bins=edges)
+            result[:, ind], _, _ = stats.binned_statistic(
+                x_in[mask], values[mask], statistic=statistic, bins=edges
+            )
     result[~np.isfinite(result)] = 0
 
     # Fill bins with not enough profiles
@@ -178,8 +181,7 @@ def rebin_2d(
     return ma.array(result, mask=~masked), empty_indices
 
 
-def seconds2date(time_in_seconds: float, 
-                 epoch: Optional[tuple] = (1970, 1, 1)) -> list:
+def seconds2date(time_in_seconds: float, epoch: Optional[tuple] = (1970, 1, 1)) -> list:
     """Converts seconds since some epoch to datetime (UTC).
     Args:
         time_in_seconds: Seconds since some epoch.
@@ -187,20 +189,32 @@ def seconds2date(time_in_seconds: float,
     Returns:
         [year, month, day, hours, minutes, seconds] formatted as '05' etc (UTC).
     """
-    
+
     epoch_in_seconds = datetime.timestamp(datetime(*epoch, tzinfo=pytz.utc))
     timestamp = time_in_seconds + epoch_in_seconds
-    return datetime.utcfromtimestamp(timestamp).strftime('%Y %m %d %H %M %S').split()
+    return datetime.utcfromtimestamp(timestamp).strftime("%Y %m %d %H %M %S").split()
 
 
-def get_coeff_list(site: str,
-                   prefix: str):
+def get_coeff_list(site: str, prefix: str):
     "Returns list of .nc coefficient file(s)"
-    
-    c_list = sorted(glob.glob('site_config/' + site + '/coefficients/' + prefix + '*.nc'))
-    if len(c_list) < 1:
-        raise RuntimeError(['Error: no coefficient files found in directory ' + 'site_config/' + site + '/coefficients/'])
-    return c_list
+
+    s_list = sorted(
+        [
+            glob.glob("site_config/" + site + "/coefficients/" + prefix.lower() + "*"),
+            glob.glob("site_config/" + site + "/coefficients/" + prefix.upper() + "*"),
+        ]
+    )
+    c_list = [x for x in s_list if x != []]
+    if len(c_list[0]) < 1:
+        raise RuntimeError(
+            [
+                "Error: no coefficient files found in directory "
+                + "site_config/"
+                + site
+                + "/coefficients/"
+            ]
+        )
+    return c_list[0]
 
 
 def read_nc_field_name(nc_file: str, name: str) -> str:
@@ -212,11 +226,13 @@ def read_nc_field_name(nc_file: str, name: str) -> str:
         str
     """
     with netCDF4.Dataset(nc_file) as nc:
-        long_name = nc.variables[name].getncattr('long_name')
-    return long_name    
+        long_name = nc.variables[name].getncattr("long_name")
+    return long_name
 
 
-def read_nc_fields(nc_file: str, names: Union[str, list]) -> Union[ma.MaskedArray, list]:
+def read_nc_fields(
+    nc_file: str, names: Union[str, list]
+) -> Union[ma.MaskedArray, list]:
     """Reads selected variables from a netCDF file.
     Args:
         nc_file: netCDF file name.
@@ -231,7 +247,7 @@ def read_nc_fields(nc_file: str, names: Union[str, list]) -> Union[ma.MaskedArra
     return data[0] if len(data) == 1 else data
 
 
-def convolve2DFFT(slab,kernel,max_missing=0.1,verbose=True):
+def convolve2DFFT(slab, kernel, max_missing=0.1, verbose=True):
     """2D convolution using fft.
     <slab>: 2d array, with optional mask.
     <kernel>: 2d array, convolution kernel.
@@ -247,23 +263,23 @@ def convolve2DFFT(slab,kernel,max_missing=0.1,verbose=True):
                    values at edges drops as the kernel approaches the edge.
     Return <result>: 2d convolution.
     """
-    assert np.ndim(slab)==2, "<slab> needs to be 2D."
-    assert np.ndim(kernel)==2, "<kernel> needs to be 2D."
-    assert kernel.shape[0]<=slab.shape[0], "<kernel> size needs to <= <slab> size."
-    assert kernel.shape[1]<=slab.shape[1], "<kernel> size needs to <= <slab> size."
-    #--------------Get mask for missings--------------
-    slab[slab == 0.] = np.nan
-    slabcount=1-np.isnan(slab)
+    assert np.ndim(slab) == 2, "<slab> needs to be 2D."
+    assert np.ndim(kernel) == 2, "<kernel> needs to be 2D."
+    assert kernel.shape[0] <= slab.shape[0], "<kernel> size needs to <= <slab> size."
+    assert kernel.shape[1] <= slab.shape[1], "<kernel> size needs to <= <slab> size."
+    # --------------Get mask for missings--------------
+    slab[slab == 0.0] = np.nan
+    slabcount = 1 - np.isnan(slab)
     # this is to set np.nan to a float, this won't affect the result as
     # masked values are not used in convolution. Otherwise, nans will
     # affect convolution in the same way as scipy.signal.convolve()
     # and the result will contain nans.
-    slab=np.where(slabcount==1,slab,0)
-    kernelcount=np.where(kernel==0,0,1)
-    result=signal.fftconvolve(slab,kernel,mode='same')
-    result_mask=signal.fftconvolve(slabcount,kernelcount,mode='same')
-    valid_threshold=(1.-max_missing)*np.sum(kernelcount)
-    result/=np.sum(kernel)
-    result[(result_mask<valid_threshold)] = np.nan
+    slab = np.where(slabcount == 1, slab, 0)
+    kernelcount = np.where(kernel == 0, 0, 1)
+    result = signal.fftconvolve(slab, kernel, mode="same")
+    result_mask = signal.fftconvolve(slabcount, kernelcount, mode="same")
+    valid_threshold = (1.0 - max_missing) * np.sum(kernelcount)
+    result /= np.sum(kernel)
+    result[(result_mask < valid_threshold)] = np.nan
 
     return result
