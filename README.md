@@ -1,5 +1,7 @@
 # actris_mwr_pro
 
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 This Python/Jupyter-notebook code to process ground-based Microwave Radiometer 
 data is developed within the [Aerosol Clouds and Trace Gases Research 
 Infrastructure (ACTRIS)](https://actris.eu/).
