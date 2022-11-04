@@ -1,4 +1,4 @@
-from global_nc import GLOBAL_ALL
+# from global_nc import GLOBAL_ALL
 import importlib
 
 
@@ -36,9 +36,7 @@ def add_global_description(site_specs: dict, global_description: dict) -> None:
 
     for key in site_specs:
         if key in global_description:
-            site_specs[key] = (
-                site_specs[key] + "    [" + "".join(global_description[key]) + "]"
-            )
+            site_specs[key] = site_specs[key] + "    [" + "".join(global_description[key]) + "]"
 
 
 def get_global_specs(global_specs: dict, data_type: str) -> dict:
@@ -93,9 +91,7 @@ def get_global_specs(global_specs: dict, data_type: str) -> dict:
         values = vv[0:24] + vv2
 
     else:
-        raise RuntimeError(
-            ["Data type " + data_type + " not supported for file writing."]
-        )
+        raise RuntimeError(["Data type " + data_type + " not supported for file writing."])
 
     specs = {k: v for k, v in zip(keys, values)}
 

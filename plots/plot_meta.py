@@ -1,6 +1,5 @@
 """Metadata for plotting module."""
 from typing import NamedTuple, Optional, Tuple, Union, Sequence
-from enum import Enum
 
 
 class PlotMeta(NamedTuple):
@@ -112,7 +111,7 @@ ATTRIBUTES = {
         name="Retrieved water vapour profile",
         cbar="Spectral_r",
         clabel=_KGM3,
-        plot_range=(0.0, 0.026),
+        plot_range=(-0.00000000000001, 0.026),
         plot_type="mesh",
         cbar_ext="max",
         nlev=14,

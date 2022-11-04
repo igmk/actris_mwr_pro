@@ -2,15 +2,12 @@ import os
 import numpy as np
 import pandas as pd
 from time import gmtime
-from pandas.tseries.frequencies import to_offset
 from level1.write_lev1_nc import find_lwcl_free
 
 Fill_Value_Float = -999.0
 
 
-def correct_lwp_offset(
-    lev1: dict, lwp_org: np.ndarray, index: np.ndarray, site: str
-) -> np.ndarray:
+def correct_lwp_offset(lev1: dict, lwp_org: np.ndarray, index: np.ndarray, site: str) -> np.ndarray:
     """This function corrects Lwp offset using the
     2min standard deviation of the 31.4 GHz channel and IR temperature
 
@@ -51,29 +48,21 @@ def correct_lwp_offset(
     ind = np.where(lwp_offset["Lwp"].values > 0)[0]
     if ind.size > 1:
         off = off.append(
-            pd.DataFrame(
-                {"date": time[ind[0]], "offset": lwp_offset["Lwp"][ind[0]]}, index={0}
-            ),
+            pd.DataFrame({"date": time[ind[0]], "offset": lwp_offset["Lwp"][ind[0]]}, index={0}),
             ignore_index=True,
         )
         off = off.append(
-            pd.DataFrame(
-                {"date": time[ind[-1]], "offset": lwp_offset["Lwp"][ind[-1]]}, index={0}
-            ),
+            pd.DataFrame({"date": time[ind[-1]], "offset": lwp_offset["Lwp"][ind[-1]]}, index={0}),
             ignore_index=True,
         )
     elif ind.size == 1:
         off = off.append(
-            pd.DataFrame(
-                {"date": time[ind], "offset": lwp_offset["Lwp"][int(ind)]}, index={0}
-            ),
+            pd.DataFrame({"date": time[ind], "offset": lwp_offset["Lwp"][int(ind)]}, index={0}),
             ignore_index=True,
         )
     off = off.sort_values(by=["date"])
     off = off.drop_duplicates(subset=["date"])
-    off.to_csv(
-        "site_config/" + site + "/lwp_offset_" + str(t1[0]) + ".csv", index=False
-    )
+    off.to_csv("site_config/" + site + "/lwp_offset_" + str(t1[0]) + ".csv", index=False)
 
     off_ind = np.where(
         (off["date"].values < time[0]) & (time[0] - off["date"].values < 2.0 * 3600.0)

@@ -47,8 +47,8 @@ fi
 
 if [ ! "$DATE" ] ; then
     # Default option is to get the day before yesterdays data 
-    YYYYMMDD=$(date --utc "+%Y%m%d" -d "today-2day")
-    YYYYMMDD_E=$(date --utc "+%Y%m%d" -d "today-1day")
+    YYYYMMDD=$(date --utc "+%Y%m%d" -d "today-1day")
+    YYYYMMDD_E=$(date --utc "+%Y%m%d" -d "today")
 else
     # Check that date is YYYYMMDD (very rudimentary!)
     if [ $(echo "$DATE" | tr -d " "| wc -L) -eq 8 ] ; then

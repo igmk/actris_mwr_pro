@@ -61,9 +61,7 @@ def stack_files(file_list):
 class RpgBin:
     def __init__(self, file_list):
         self.header, self.raw_data = stack_files(file_list)
-        self.raw_data["time"] = utils.epoch2unix(
-            self.raw_data["time"], self.header["_time_ref"]
-        )
+        self.raw_data["time"] = utils.epoch2unix(self.raw_data["time"], self.header["_time_ref"])
         self.date = self._get_date()
         self.data = {}
         self._init_data()
@@ -86,9 +84,7 @@ class RpgBin:
         if float(date[0]) > today:
             date = (
                 datetime.datetime.utcfromtimestamp(
-                    utils.epoch2unix(
-                        time_median, self.header["_time_ref"], (1970, 1, 1)
-                    )
+                    utils.epoch2unix(time_median, self.header["_time_ref"], (1970, 1, 1))
                 )
                 .strftime("%Y %m %d")
                 .split()
@@ -158,8 +154,7 @@ def read_brt(file_name: str) -> dict:
             vrs = {
                 "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
                 "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
-                "tb": np.ones([header["n"], header["_n_f"]], np.float32)
-                * Fill_Value_Float,
+                "tb": np.ones([header["n"], header["_n_f"]], np.float32) * Fill_Value_Float,
                 "ele": np.ones(header["n"], np.float32) * Fill_Value_Float,
                 "azi": np.ones(header["n"], np.float32) * Fill_Value_Float,
             }
@@ -259,8 +254,7 @@ def read_met(file_name: str) -> dict:
                 "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
                 "air_pressure": np.ones(header["n"], np.float32) * Fill_Value_Float,
                 "air_temperature": np.ones(header["n"], np.float32) * Fill_Value_Float,
-                "relative_humidity": np.ones(header["n"], np.float32)
-                * Fill_Value_Float,
+                "relative_humidity": np.ones(header["n"], np.float32) * Fill_Value_Float,
                 "adds": np.ones([header["n"], 3], np.float32) * Fill_Value_Float,
             }
             #'adds' : np.ones( [header['n'], header['_n_sen'].count('1')], np.float32)*Fill_Value_Float}
@@ -275,9 +269,7 @@ def read_met(file_name: str) -> dict:
                 data["rain"][sample] = np.fromfile(file, np.byte, 1)
                 data["air_pressure"][sample] = np.fromfile(file, np.float32, 1)
                 data["air_temperature"][sample] = np.fromfile(file, np.float32, 1)
-                data["relative_humidity"][sample] = (
-                    np.fromfile(file, np.float32, 1) / 100.0
-                )
+                data["relative_humidity"][sample] = np.fromfile(file, np.float32, 1) / 100.0
                 for add in range(header["_n_sen"].count("1")):
                     data["adds"][sample, add] = np.fromfile(file, np.float32, 1)
             file.close()
@@ -322,8 +314,7 @@ def read_irt(file_name: str) -> dict:
             vrs = {
                 "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
                 "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
-                "irt": np.ones([header["n"], header["_n_f"]], np.float32)
-                * Fill_Value_Float,
+                "irt": np.ones([header["n"], header["_n_f"]], np.float32) * Fill_Value_Float,
                 "ir_ele": np.ones(header["n"], np.float32) * Fill_Value_Float,
                 "ir_azi": np.ones(header["n"], np.float32) * Fill_Value_Float,
             }
@@ -431,9 +422,7 @@ def read_blb(file_name: str) -> dict:
             vrs = {
                 "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
                 "rf_mod": np.ones(header["n"], np.byte) * Fill_Value_Int,
-                "tb": np.ones(
-                    [header["n"], header["_n_f"], header["_n_ang"]], np.float32
-                )
+                "tb": np.ones([header["n"], header["_n_f"], header["_n_ang"]], np.float32)
                 * Fill_Value_Float,
             }
             return vrs
@@ -485,8 +474,7 @@ def read_hkd(file_name: str) -> dict:
             vrs = {
                 "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
                 "alarm": np.ones(header["n"], np.byte) * Fill_Value_Int,
-                "station_longitude": np.ones(header["n"], np.float32)
-                * Fill_Value_Float,
+                "station_longitude": np.ones(header["n"], np.float32) * Fill_Value_Float,
                 "station_latitude": np.ones(header["n"], np.float32) * Fill_Value_Float,
                 "temp": np.ones([header["n"], 4], np.float32) * Fill_Value_Float,
                 "stab": np.ones([header["n"], 2], np.float32) * Fill_Value_Float,
@@ -504,12 +492,8 @@ def read_hkd(file_name: str) -> dict:
                 data["time"][sample] = np.fromfile(file, np.int32, 1)
                 data["alarm"][sample] = np.fromfile(file, np.byte, count=1)
                 if header["_sel"] & 1:
-                    data["station_longitude"][sample] = np.fromfile(
-                        file, np.float32, count=1
-                    )
-                    data["station_latitude"][sample] = np.fromfile(
-                        file, np.float32, count=1
-                    )
+                    data["station_longitude"][sample] = np.fromfile(file, np.float32, count=1)
+                    data["station_latitude"][sample] = np.fromfile(file, np.float32, count=1)
                 if header["_sel"] & 2:
                     data["temp"][
                         sample,
@@ -562,8 +546,7 @@ def read_spc(file_name: str) -> dict:
             vrs = {
                 "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
                 "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
-                "tb": np.ones([header["n"], header["_n_f"]], np.float32)
-                * Fill_Value_Float,
+                "tb": np.ones([header["n"], header["_n_f"]], np.float32) * Fill_Value_Float,
                 "ele": np.ones(header["n"], np.float32) * Fill_Value_Float,
                 "azi": np.ones(header["n"], np.float32) * Fill_Value_Float,
             }
@@ -695,9 +678,7 @@ def read_his(file_name: str) -> dict:
                 )
                 data["cal_flag"][
                     sample, 0 : int(data["n_ch1"][sample] + data["n_ch2"][sample])
-                ] = np.fromfile(
-                    file, np.int32, int(data["n_ch1"][sample] + data["n_ch2"][sample])
-                )
+                ] = np.fromfile(file, np.int32, int(data["n_ch1"][sample] + data["n_ch2"][sample]))
                 data["gain"][
                     sample, 0 : int(data["n_ch1"][sample] + data["n_ch2"][sample])
                 ] = np.fromfile(

@@ -1,7 +1,6 @@
 import numpy as np
 from numpy import ma
 from utils import get_coeff_list
-from scipy.interpolate import interp1d
 import netCDF4 as nc
 
 Fill_Value_Float = -999.0
@@ -58,9 +57,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                         if ls[0] == "RT":
                             cf["rt"] = int(ls[1].split("#")[0])
                         if ls[0] == "AG":
-                            cf["ele"][i:N] = np.array(
-                                [float(x) for x in ls[1].split()], np.float32
-                            )
+                            cf["ele"][i:N] = np.array([float(x) for x in ls[1].split()], np.float32)
                         if ls[0] == "FR":
                             freq_ret = np.array(
                                 [float(idx) for idx in ls[1][:].split()], np.float32
@@ -71,11 +68,9 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                 assume_unique=False,
                                 return_indices=True,
                             )
-                            if len(freq_ind) == 0:
+                            if len(freq_cf) < len(coeff["freq"][:]):
                                 raise RuntimeError(
-                                    [
-                                        "Instrument and retrieval frequencies do not match."
-                                    ]
+                                    ["Instrument and retrieval frequencies do not match."]
                                 )
                             cf["freq"][freq_ind, i:N] = np.resize(
                                 freq_ret[freq_cf], (len(freq_cf), N)
@@ -103,10 +98,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                     else:
                                         cll = lines[il + jj].split("=")
                                     cf["coeff_lin"][i + jj, freq_ind] = np.array(
-                                        [
-                                            float(idx)
-                                            for idx in cll[1].split()[0 : len(freq_cf)]
-                                        ],
+                                        [float(idx) for idx in cll[1].split()[0 : len(freq_cf)]],
                                         np.float32,
                                     )
                             if (ls[0] == "TQ") & (cf["rt"] == 1):
@@ -116,10 +108,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                     else:
                                         cll = lines[il + jj].split("=")
                                     cf["coeff_quad"][i + jj, freq_ind] = np.array(
-                                        [
-                                            float(idx)
-                                            for idx in cll[1].split()[0 : len(freq_cf)]
-                                        ],
+                                        [float(idx) for idx in cll[1].split()[0 : len(freq_cf)]],
                                         np.float32,
                                     )
 
@@ -150,57 +139,39 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                 if not "np" in cf:
                                     cf["np"] = float(ls[1][:].split()[0])
                                 else:
-                                    cf["np"] = np.hstack(
-                                        (cf["np"], float(ls[1][:].split()[0]))
-                                    )
+                                    cf["np"] = np.hstack((cf["np"], float(ls[1][:].split()[0])))
                             if ls[0] == "NS":
                                 cll = ls[1].split()
                                 if not "op_os" in cf:
-                                    cf["in_os"] = np.array(
-                                        [float(idx) for idx in cll], np.float32
-                                    )
+                                    cf["in_os"] = np.array([float(idx) for idx in cll], np.float32)
                                     cll = lines[il + 1].split(":")[1].split()
-                                    cf["in_sc"] = np.array(
-                                        [float(idx) for idx in cll], np.float32
-                                    )
-                                    cf["op_os"] = float(
-                                        lines[il + 2].split(":")[1].split()[0]
-                                    )
-                                    cf["op_sc"] = float(
-                                        lines[il + 3].split(":")[1].split()[0]
-                                    )
+                                    cf["in_sc"] = np.array([float(idx) for idx in cll], np.float32)
+                                    cf["op_os"] = float(lines[il + 2].split(":")[1].split()[0])
+                                    cf["op_sc"] = float(lines[il + 3].split(":")[1].split()[0])
                                 else:
                                     cf["in_os"] = np.vstack(
                                         (
                                             cf["in_os"],
-                                            np.array(
-                                                [float(idx) for idx in cll], np.float32
-                                            ),
+                                            np.array([float(idx) for idx in cll], np.float32),
                                         )
                                     )
                                     cll = lines[il + 1].split(":")[1].split()
                                     cf["in_sc"] = np.vstack(
                                         (
                                             cf["in_sc"],
-                                            np.array(
-                                                [float(idx) for idx in cll], np.float32
-                                            ),
+                                            np.array([float(idx) for idx in cll], np.float32),
                                         )
                                     )
                                     cf["op_os"] = np.vstack(
                                         (
                                             cf["op_os"],
-                                            float(
-                                                lines[il + 2].split(":")[1].split()[0]
-                                            ),
+                                            float(lines[il + 2].split(":")[1].split()[0]),
                                         )
                                     )
                                     cf["op_sc"] = np.vstack(
                                         (
                                             cf["op_sc"],
-                                            float(
-                                                lines[il + 3].split(":")[1].split()[0]
-                                            ),
+                                            float(lines[il + 3].split(":")[1].split()[0]),
                                         )
                                     )
                                     # cf['ns_ta'] = np.vstack((cf['ns_ta'], np.array([float(lines[il+2].split(':')[1].split()[0]), float(lines[il+3].split(':')[1].split()[0])])))
@@ -220,10 +191,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                     for jj in range(nn - 1):
                                         cll = lines[il + jj + 1].split(":")[1].split()
                                         cf["w1"][jj + 1, :] = np.array(
-                                            [
-                                                float(idx)
-                                                for idx in cll[0 : cf["nd"][0]]
-                                            ],
+                                            [float(idx) for idx in cll[0 : cf["nd"][0]]],
                                             np.float32,
                                         )
                                 elif cf["w1"].ndim < 3:
@@ -235,10 +203,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                     for jj in range(nn - 1):
                                         cll = lines[il + jj + 1].split(":")[1].split()
                                         w1[jj + 1, :] = np.array(
-                                            [
-                                                float(idx)
-                                                for idx in cll[0 : cf["nd"][0]]
-                                            ],
+                                            [float(idx) for idx in cll[0 : cf["nd"][0]]],
                                             np.float32,
                                         )
                                     cf["w1"] = np.stack((cf["w1"], w1))
@@ -251,15 +216,10 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                     for jj in range(nn - 1):
                                         cll = lines[il + jj + 1].split(":")[1].split()
                                         w1[jj + 1, :] = np.array(
-                                            [
-                                                float(idx)
-                                                for idx in cll[0 : cf["nd"][0]]
-                                            ],
+                                            [float(idx) for idx in cll[0 : cf["nd"][0]]],
                                             np.float32,
                                         )
-                                    cf["w1"] = np.vstack(
-                                        (cf["w1"], w1[np.newaxis, ...])
-                                    )
+                                    cf["w1"] = np.vstack((cf["w1"], w1[np.newaxis, ...]))
                             if ls[0] == "W2":
                                 cll = ls[1].split()
                                 if not "w2" in cf:
@@ -272,10 +232,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                         (
                                             cf["w2"],
                                             np.array(
-                                                [
-                                                    float(idx)
-                                                    for idx in cll[0 : cf["nd"][0]]
-                                                ],
+                                                [float(idx) for idx in cll[0 : cf["nd"][0]]],
                                                 np.float32,
                                             ),
                                         )
@@ -290,17 +247,13 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                 _, freq_ind, freq_cf = np.intersect1d(
                     freq[:], coeff["freq"][:], assume_unique=False, return_indices=True
                 )
-                if len(freq_ind) == 0:
-                    raise RuntimeError(
-                        ["Instrument and retrieval frequencies do not match."]
-                    )
+                if len(freq_cf) < len(coeff["freq"][:]):
+                    raise RuntimeError(["Instrument and retrieval frequencies do not match."])
 
                 cf["freq"][freq_ind, i] = coeff["freq"][freq_cf]
                 cf["coeff_lin"][i, freq_ind] = coeff["coefficient_mvr"][freq_cf]
                 if coeff.regression_type == "quadratic":
-                    cf["coeff_quad"][i, freq_ind] = coeff["coefficient_mvr"][
-                        freq_cf + len(freq_cf)
-                    ]
+                    cf["coeff_quad"][i, freq_ind] = coeff["coefficient_mvr"][freq_cf + len(freq_cf)]
                 cf["offset"][i] = coeff["offset_mvr"][0]
                 cf["err_ran"][i] = coeff["predictand_err"][0]
                 cf["err_sys"][i] = coeff["predictand_err_sys"][0]
@@ -308,56 +261,36 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
         if cf["rt"] < 2:
 
             def f_offset(x):
-                return np.array(
-                    [cf["offset"][(np.abs(cf["ele"] - v)).argmin()] for v in x]
-                )
+                return np.array([cf["offset"][(np.abs(cf["ele"] - v)).argmin()] for v in x])
 
             def f_lin(x):
-                return np.array(
-                    [cf["coeff_lin"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x]
-                )
+                return np.array([cf["coeff_lin"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x])
 
             def f_quad(x):
-                return np.array(
-                    [cf["coeff_quad"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x]
-                )
+                return np.array([cf["coeff_quad"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x])
 
             def e_ran(x):
-                return np.array(
-                    [cf["err_ran"][(np.abs(cf["ele"] - v)).argmin()] for v in x]
-                )
+                return np.array([cf["err_ran"][(np.abs(cf["ele"] - v)).argmin()] for v in x])
 
             def e_sys(x):
-                return np.array(
-                    [cf["err_sys"][(np.abs(cf["ele"] - v)).argmin()] for v in x]
-                )
+                return np.array([cf["err_sys"][(np.abs(cf["ele"] - v)).argmin()] for v in x])
 
         else:
 
             def ns_ta(x):
-                return np.array(
-                    [cf["ns_ta"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x]
-                )
+                return np.array([cf["ns_ta"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x])
 
             def ns_sc(x):
-                return np.array(
-                    [cf["ns_sc"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x]
-                )
+                return np.array([cf["ns_sc"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x])
 
             def ns_os(x):
-                return np.array(
-                    [cf["ns_os"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x]
-                )
+                return np.array([cf["ns_os"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x])
 
             def w1(x):
-                return np.array(
-                    [cf["w1"][(np.abs(cf["ele"] - v)).argmin(), :, :] for v in x]
-                )
+                return np.array([cf["w1"][(np.abs(cf["ele"] - v)).argmin(), :, :] for v in x])
 
             def w2(x):
-                return np.array(
-                    [cf["w2"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x]
-                )
+                return np.array([cf["w2"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x])
 
             def pn(x):
                 return np.array([cf["np"][(np.abs(cf["ele"] - v)).argmin()] for v in x])
@@ -384,10 +317,8 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                 _, freq_ind, freq_cf = np.intersect1d(
                     freq[:], coeff["freq"][:], assume_unique=False, return_indices=True
                 )
-                if len(freq_ind) == 0:
-                    raise RuntimeError(
-                        ["Instrument and retrieval frequencies do not match."]
-                    )
+                if len(freq_cf) < len(coeff["freq"][:]):
+                    raise RuntimeError(["Instrument and retrieval frequencies do not match."])
 
                 cf["freq"][freq_ind, i] = coeff["freq"][freq_cf]
                 cf["coeff_lin"][i, :, freq_ind] = coeff["coefficient_mvr"][freq_cf, :]
@@ -400,9 +331,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                 cf["err_sys"][:, i] = coeff["predictand_err_sys"][:]
 
             def f_offset(x):
-                return np.array(
-                    [cf["offset"][:, (np.abs(cf["ele"] - v)).argmin()] for v in x]
-                )
+                return np.array([cf["offset"][:, (np.abs(cf["ele"] - v)).argmin()] for v in x])
 
             def f_lin(x):
                 return np.array(
@@ -411,21 +340,14 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
 
             def f_quad(x):
                 return np.array(
-                    [
-                        cf["coeff_quad"][(np.abs(cf["ele"] - v)).argmin(), :, :]
-                        for v in x
-                    ]
+                    [cf["coeff_quad"][(np.abs(cf["ele"] - v)).argmin(), :, :] for v in x]
                 )
 
             def e_ran(x):
-                return np.array(
-                    [cf["err_ran"][:, (np.abs(cf["ele"] - v)).argmin()] for v in x]
-                )
+                return np.array([cf["err_ran"][:, (np.abs(cf["ele"] - v)).argmin()] for v in x])
 
             def e_sys(x):
-                return np.array(
-                    [cf["err_sys"][:, (np.abs(cf["ele"] - v)).argmin()] for v in x]
-                )
+                return np.array([cf["err_sys"][:, (np.abs(cf["ele"] - v)).argmin()] for v in x])
 
     elif prefix == "tel":
 
@@ -433,7 +355,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
         _, freq_ind, freq_cf = np.intersect1d(
             freq[:], coeff["freq"][:], assume_unique=False, return_indices=True
         )
-        if len(freq_ind) == 0:
+        if len(freq_cf) < len(coeff["freq"][:]):
             raise RuntimeError(["Instrument and retrieval frequencies do not match."])
 
         cf["ele"] = coeff["elevation_predictor"][:]
@@ -447,8 +369,9 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
         e_sys = coeff["predictand_err_sys"][:]
 
     elif prefix == "tbx":
-
+        cf["ele"] = np.ones((N, 1)) * Fill_Value_Float
         coeff = nc.Dataset(c_list[0])
+
         cf["ele"] = coeff["elevation_predictor"][:]
         cf["freq"] = freq[:]
         e_ran = coeff["predictand_err"][:]
@@ -478,10 +401,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
     else:
         cf["retrieval_type"] = coeff.regression_type
         cf["retrieval_elevation_angles"] = str(cf["ele"])
-        if prefix == "tel":
-            cf["retrieval_frequencies"] = str(coeff["freq_bl"][:])
-        else:
-            cf["retrieval_frequencies"] = str(coeff["freq"][:])
+        cf["retrieval_frequencies"] = str(coeff["freq"][:])
         cf["retrieval_auxiliary_input"] = coeff.surface_mode
         cf["retrieval_description"] = coeff.retrieval_version
 

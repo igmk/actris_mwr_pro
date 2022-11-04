@@ -5,9 +5,9 @@ import time
 import pytz
 from numpy import ma
 import numpy as np
-import pandas as pd
 from typing import Optional, Tuple, Union
 import glob
+import re
 import netCDF4
 from scipy import signal, stats
 
@@ -195,6 +195,15 @@ def seconds2date(time_in_seconds: float, epoch: Optional[tuple] = (1970, 1, 1)) 
     return datetime.utcfromtimestamp(timestamp).strftime("%Y %m %d %H %M %S").split()
 
 
+def add_time_bounds(time: np.ndarray, int_time: int) -> np.ndarray:
+
+    time_bounds = np.ones([len(time), 2], np.int32) * -99
+    time_bounds[:, 0] = time - int_time
+    time_bounds[:, 1] = time
+
+    return time_bounds
+
+
 def get_coeff_list(site: str, prefix: str):
     "Returns list of .nc coefficient file(s)"
 
@@ -217,6 +226,28 @@ def get_coeff_list(site: str, prefix: str):
     return c_list[0]
 
 
+def get_ret_ang(nc_file: str) -> np.ndarray:
+    """Returns highest elevation angle used in retrieval."""
+    with netCDF4.Dataset(nc_file) as nc:
+        ang = []
+        ang_str = re.split(r"[^0-9.]", nc.retrieval_elevation_angles)
+        for ii in ang_str:
+            if ii != "":
+                ang.append(float(ii))
+    return ang
+
+
+def get_ret_freq(nc_file: str) -> np.ndarray:
+    """Returns frequencies used in retrieval."""
+    with netCDF4.Dataset(nc_file) as nc:
+        freq = []
+        freq_str = re.split(r"[^0-9.]", nc.retrieval_frequencies)
+        for ii in freq_str:
+            if ii != "":
+                freq.append(float(ii))
+    return np.array(freq, dtype=np.float32)
+
+
 def read_nc_field_name(nc_file: str, name: str) -> str:
     """Reads selected variable name from a netCDF file.
     Args:
@@ -230,9 +261,7 @@ def read_nc_field_name(nc_file: str, name: str) -> str:
     return long_name
 
 
-def read_nc_fields(
-    nc_file: str, names: Union[str, list]
-) -> Union[ma.MaskedArray, list]:
+def read_nc_fields(nc_file: str, names: Union[str, list]) -> Union[ma.MaskedArray, list]:
     """Reads selected variables from a netCDF file.
     Args:
         nc_file: netCDF file name.

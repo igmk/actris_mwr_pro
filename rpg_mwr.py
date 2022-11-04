@@ -188,9 +188,7 @@ def save_rpg(
             "frequency": len(rpg.data["tb_spectrum"][:].T),
         }
     else:
-        raise RuntimeError(
-            ["Data type " + data_type + " not supported for file writing."]
-        )
+        raise RuntimeError(["Data type " + data_type + " not supported for file writing."])
 
     with init_file(output_file, dims, rpg.data, att) as rootgrp:
         setattr(rootgrp, "date", rpg.date)
@@ -207,7 +205,6 @@ def init_file(
         rpg_arrays: Dictionary containing :class:`RpgArray` instances.
         att_global: Dictionary containing site specific global attributes
         date: Date string of file
-
     """
 
     nc = netCDF4.Dataset(file_name, "w", format="NETCDF4_CLASSIC")

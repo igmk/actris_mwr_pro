@@ -3,15 +3,13 @@ from level1.rpg_bin import get_rpg_bin
 from level1.lev1_meta_nc import get_data_attributes
 from level1.quality_control import apply_qc
 from level1.met_quality_control import apply_met_qc
-from level1.tb_offset import correct_tb_offset
-from utils import isbit, epoch2unix
+
+# from level1.tb_offset import correct_tb_offset
+from utils import isbit, epoch2unix, add_time_bounds
 import rpg_mwr
 import numpy as np
 import pandas as pd
-from pandas.tseries.frequencies import to_offset
-from typing import Optional
 import glob
-import os
 import datetime
 from itertools import groupby
 
@@ -59,9 +57,7 @@ def lev1_to_nc(
     rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params)
 
 
-def get_file_list(
-    path_to_files: str, path_to_prev: str, path_to_next: str, extension: str
-):
+def get_file_list(path_to_files: str, path_to_prev: str, path_to_next: str, extension: str):
 
     f_list = sorted(glob.glob(path_to_files + "*." + extension))
     if len(f_list) == 0:
@@ -115,9 +111,7 @@ def prepare_data(
         ]
         for name in fields:
             rpg_bin.data[name] = params[name]
-        rpg_bin.data["time_bnds"] = add_time_bounds(
-            rpg_bin.data["time"], params["int_time"]
-        )
+        rpg_bin.data["time_bnds"] = add_time_bounds(rpg_bin.data["time"], params["int_time"])
         rpg_bin.data["pointing_flag"] = np.zeros(len(rpg_bin.data["time"]), np.int32)
         (
             rpg_bin.data["liquid_cloud_flag"],
@@ -126,54 +120,32 @@ def prepare_data(
 
         file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, "hkd")
         rpg_hkd = get_rpg_bin(file_list_hkd)
-        try:
-            file_list_blb = get_file_list(
-                path_to_files, path_to_prev, path_to_next, "blb"
-            )
-            rpg_blb = get_rpg_bin(file_list_blb)
-            _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)
-        except:
-            print(
-                [
-                    "No binary files with extension blb found in directory "
-                    + path_to_files
-                ]
-            )
+        # try:
+        file_list_blb = get_file_list(path_to_files, path_to_prev, path_to_next, "blb")
+        rpg_blb = get_rpg_bin(file_list_blb)
+        _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)
+        # except:
+        #     print(["No binary files with extension blb found in directory " + path_to_files])
 
         if params["azi_cor"] != Fill_Value_Float:
             _azi_correction(rpg_bin.data, params)
 
         if data_type == "1C01":
             try:
-                file_list_irt = get_file_list(
-                    path_to_files, path_to_prev, path_to_next, "irt"
-                )
+                file_list_irt = get_file_list(path_to_files, path_to_prev, path_to_next, "irt")
                 rpg_irt = get_rpg_bin(file_list_irt)
                 rpg_irt.data["irt"][rpg_irt.data["irt"] < 150.0] = Fill_Value_Float
                 rpg_bin.data["ir_wavelength"] = rpg_irt.header["_f"]
                 rpg_bin.data["ir_bandwidth"] = params["ir_bandwidth"]
                 rpg_bin.data["ir_beamwidth"] = params["ir_beamwidth"]
-                _add_interpol1(
-                    rpg_bin.data, rpg_irt.data["irt"], rpg_irt.data["time"], "irt"
-                )
-                _add_interpol1(
-                    rpg_bin.data, rpg_irt.data["ir_ele"], rpg_irt.data["time"], "ir_ele"
-                )
-                _add_interpol1(
-                    rpg_bin.data, rpg_irt.data["ir_azi"], rpg_irt.data["time"], "ir_azi"
-                )
+                _add_interpol1(rpg_bin.data, rpg_irt.data["irt"], rpg_irt.data["time"], "irt")
+                _add_interpol1(rpg_bin.data, rpg_irt.data["ir_ele"], rpg_irt.data["time"], "ir_ele")
+                _add_interpol1(rpg_bin.data, rpg_irt.data["ir_azi"], rpg_irt.data["time"], "ir_azi")
             except:
-                print(
-                    [
-                        "No binary files with extension irt found in directory "
-                        + path_to_files
-                    ]
-                )
+                print(["No binary files with extension irt found in directory " + path_to_files])
 
             try:
-                file_list_met = get_file_list(
-                    path_to_files, path_to_prev, path_to_next, "met"
-                )
+                file_list_met = get_file_list(path_to_files, path_to_prev, path_to_next, "met")
                 rpg_met = get_rpg_bin(file_list_met)
                 _add_interpol1(
                     rpg_bin.data,
@@ -216,12 +188,7 @@ def prepare_data(
                         "rain_rate",
                     )
             except:
-                print(
-                    [
-                        "No binary files with extension met found in directory "
-                        + path_to_files
-                    ]
-                )
+                print(["No binary files with extension met found in directory " + path_to_files])
 
     elif data_type == "1B11":
         file_list_irt = get_file_list(path_to_files, path_to_prev, path_to_next, "irt")
@@ -241,9 +208,7 @@ def prepare_data(
             rpg_bin.data["rain_rate"] = rpg_bin.data["adds"][:, 2]
 
     else:
-        raise RuntimeError(
-            ["Data type " + data_type + " not supported for file writing."]
-        )
+        raise RuntimeError(["Data type " + data_type + " not supported for file writing."])
 
     file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, "hkd")
     _append_hkd(file_list_hkd, rpg_bin, data_type, params)
@@ -254,9 +219,7 @@ def prepare_data(
     return rpg_bin
 
 
-def _append_hkd(
-    file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
-) -> None:
+def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict) -> None:
     """Append hkd data on same time grid and perform TB sanity check"""
 
     hkd = get_rpg_bin(file_list_hkd)
@@ -293,20 +256,14 @@ def _append_hkd(
         )
 
     if data_type in ("1B01", "1C01"):
-        _add_interpol1(
-            rpg_bin.data, hkd.data["temp"][:, 0:2], hkd.data["time"], "t_amb"
-        )
-        _add_interpol1(
-            rpg_bin.data, hkd.data["temp"][:, 2:4], hkd.data["time"], "t_rec"
-        )
+        _add_interpol1(rpg_bin.data, hkd.data["temp"][:, 0:2], hkd.data["time"], "t_amb")
+        _add_interpol1(rpg_bin.data, hkd.data["temp"][:, 2:4], hkd.data["time"], "t_rec")
         _add_interpol1(rpg_bin.data, hkd.data["stab"], hkd.data["time"], "t_sta")
 
         """check time intervals of +-15 min of .HKD data for sanity checks"""
         rpg_bin.data["status"] = np.zeros(rpg_bin.data["tb"].shape, np.int32)
         for i_time, v_time in enumerate(rpg_bin.data["time"]):
-            ind = np.where(
-                (hkd.data["time"] >= v_time - 900) & (hkd.data["time"] <= v_time + 900)
-            )
+            ind = np.where((hkd.data["time"] >= v_time - 900) & (hkd.data["time"] <= v_time + 900))
             status = hkd.data["status"][ind]
             for bit in range(7):
                 # status flags for channel 1 to 7 of the humidity profiler receiver
@@ -333,29 +290,16 @@ def _append_hkd(
                 rpg_bin.data["status"][i_time, 7:13] = 1
 
 
-def _add_interpol1(
-    data0: dict, data1: np.ndarray, time1: np.ndarray, output_name: str
-) -> None:
+def _add_interpol1(data0: dict, data1: np.ndarray, time1: np.ndarray, output_name: str) -> None:
 
     if data1.ndim > 1:
         data0[output_name] = (
             np.ones([len(data0["time"]), data1.shape[1]], np.float32) * Fill_Value_Float
         )
         for ndim in range(data1.shape[1]):
-            data0[output_name][:, ndim] = np.interp(
-                data0["time"], time1, data1[:, ndim]
-            )
+            data0[output_name][:, ndim] = np.interp(data0["time"], time1, data1[:, ndim])
     else:
         data0[output_name] = np.interp(data0["time"], time1, data1)
-
-
-def add_time_bounds(time: np.ndarray, int_time: int) -> np.ndarray:
-
-    time_bounds = np.ones([len(time), 2]) * Fill_Value_Int
-    time_bounds[:, 0] = time - int_time
-    time_bounds[:, 1] = time
-
-    return time_bounds
 
 
 def find_lwcl_free(lev1: dict, ix: np.ndarray) -> tuple:
@@ -401,10 +345,7 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
         [],
         [],
     )
-    seqs = [
-        (key, len(list(val)))
-        for key, val in groupby(hkd.data["status"][:] & 2**18 > 0)
-    ]
+    seqs = [(key, len(list(val))) for key, val in groupby(hkd.data["status"][:] & 2**18 > 0)]
     seqs = np.array(
         [
             (key, sum(s[1] for s in seqs[:i]), len)
@@ -414,9 +355,7 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
     )
 
     for time_ind, time_blb in enumerate(blb.data["time"]):
-        seqi = np.where(
-            np.abs(hkd.data["time"][seqs[:, 1] + seqs[:, 2] - 1] - time_blb) < 2
-        )[0]
+        seqi = np.where(np.abs(hkd.data["time"][seqs[:, 1] + seqs[:, 2] - 1] - time_blb) < 2)[0]
 
         if len(seqi) == 1:
             sq = 0.0  # scan quadrant, 0: 1st, 180: 2nd
@@ -430,16 +369,30 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
                     time_add,
                     np.squeeze(
                         np.linspace(
-                            hkd.data["time"][seqs[seqi, 1]],
                             hkd.data["time"][seqs[seqi, 1]]
-                            + int(np.floor(seqs[seqi, 2] / blb.header["_n_ang"]))
-                            * blb.header["_n_ang"],
-                            blb.header["_n_ang"],
+                            + int(
+                                np.floor(
+                                    ((time_blb - 2) - hkd.data["time"][seqs[seqi, 1]])
+                                    / (blb.header["_n_ang"] - 1)
+                                )
+                            ),
+                            hkd.data["time"][seqs[seqi, 1]]
+                            + (blb.header["_n_ang"] - 1)
+                            * int(
+                                np.floor(
+                                    ((time_blb - 2) - hkd.data["time"][seqs[seqi, 1]])
+                                    / (blb.header["_n_ang"] - 1)
+                                )
+                            ),
+                            blb.header["_n_ang"] - 1,
                             dtype=np.int32,
                         )
                     ),
                 )
             )
+            time_add = np.append(time_add, time_blb - 1)
+            # time_add = np.append(time_add, hkd.data['time'][seqs[seqi, 1] + seqs[seqi, 2]])
+
             azi_add = np.concatenate(
                 (
                     azi_add,
@@ -461,7 +414,10 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
                     tb_add = np.vstack((tb_add, blb.data["tb"][time_ind, :, ang]))
 
     time_bnds_add = add_time_bounds(
-        time_add, np.floor(params["scan_time"] / (blb.header["_n_ang"] - 1))
+        time_add[0:-1], int(np.floor(params["scan_time"] / (blb.header["_n_ang"] - 1)))
+    )
+    time_bnds_add = np.concatenate(
+        (time_bnds_add, add_time_bounds(np.array(time_add[-1], ndmin=1), params["int_time"]))
     )
     pointing_flag_add = np.ones(len(time_add), np.int32)
     liquid_cloud_flag_add = np.ones(len(time_add), np.int32) * 2
@@ -509,12 +465,7 @@ def cal_his(params: dict, glob_att: dict, time0: int) -> dict:
     try:
         file_list_cal = get_file_list(params["path_to_cal"], " ", " ", "his")
     except:
-        print(
-            [
-                "No binary files with extension his found in directory "
-                + params["path_to_cal"]
-            ]
-        )
+        print(["No binary files with extension his found in directory " + params["path_to_cal"]])
 
     if file_list_cal != []:
         rpg_cal = get_rpg_bin(file_list_cal)
@@ -523,8 +474,7 @@ def cal_his(params: dict, glob_att: dict, time0: int) -> dict:
             (rpg_cal.data["cal1_t"] > 0)
             & (rpg_cal.data["cal2_t"] > 0)
             & (
-                (time0 - epoch2unix(rpg_cal.data["t1"], rpg_cal.header["_time_ref"]))
-                / 86400.0
+                (time0 - epoch2unix(rpg_cal.data["t1"], rpg_cal.header["_time_ref"])) / 86400.0
                 < 183.0
             )
         ):
@@ -532,9 +482,7 @@ def cal_his(params: dict, glob_att: dict, time0: int) -> dict:
         else:
             glob_att["instrument_calibration_status"] = "needs calibration"
 
-        cal_t1 = np.where(
-            epoch2unix(rpg_cal.data["t1"], rpg_cal.header["_time_ref"]) < time0
-        )[0]
+        cal_t1 = np.where(epoch2unix(rpg_cal.data["t1"], rpg_cal.header["_time_ref"]) < time0)[0]
         if len(cal_t1) > 0:
             glob_att[
                 "receiver1_date_of_last_absolute_calibration"
@@ -546,9 +494,7 @@ def cal_his(params: dict, glob_att: dict, time0: int) -> dict:
             glob_att["receiver1_type_of_last_absolute_calibration"] = cal_type[
                 int(rpg_cal.data["cal1_t"])
             ]
-        cal_t2 = np.where(
-            epoch2unix(rpg_cal.data["t2"], rpg_cal.header["_time_ref"]) < time0
-        )[0]
+        cal_t2 = np.where(epoch2unix(rpg_cal.data["t2"], rpg_cal.header["_time_ref"]) < time0)[0]
         if len(cal_t2) > 0:
             glob_att[
                 "receiver2_date_of_last_absolute_calibration"

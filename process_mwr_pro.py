@@ -18,27 +18,23 @@ global_attributes, params = get_site_specs(site, "1C01")
 ID = global_attributes["wigos_station_id"]
 data_out_l1 = params["data_out"] + "level1/" + date.strftime("%Y/%m/%d/")
 data_out_l2 = params["data_out"] + "level2/" + date.strftime("%Y/%m/%d/")
-# product = [('1C01', ''), ('2I01', 'lwp'), ('2I02', 'iwv'), ('2P02', 'temperature'), ('2P03', 'water_vapor_vmr'), ('2P04', 'relative_humidity'), ('2P07', 'potential_temperature'), ('2P08', 'equivalent_potential_temperature'), ('2S02', 'tb_spectrum')]
-# product = [('1C01', '')]
 product = [
+    ("1C01", ""),
+    ("2I01", "lwp"),
+    ("2I02", "iwv"),
+    ("2P02", "temperature"),
+    ("2P03", "water_vapor_vmr"),
     ("2P04", "relative_humidity"),
     ("2P07", "potential_temperature"),
     ("2P08", "equivalent_potential_temperature"),
+    ("2S02", "tb_spectrum"),
 ]
+
 for prod, var in product:
     if prod == "1C01":
         if not os.path.isdir(data_out_l1):
             os.makedirs(data_out_l1)
-        lev1_data = (
-            data_out_l1
-            + "MWR_"
-            + prod
-            + "_"
-            + ID
-            + "_"
-            + date.strftime("%Y%m%d")
-            + ".nc"
-        )
+        lev1_data = data_out_l1 + "MWR_" + prod + "_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"
         lev1_to_nc(
             site,
             prod,
@@ -55,9 +51,7 @@ for prod, var in product:
                 save_path=data_out_l1,
                 image_name="tb",
             )
-            generate_figure(
-                lev1_data, ["ele", "azi"], save_path=data_out_l1, image_name="sen"
-            )
+            generate_figure(lev1_data, ["ele", "azi"], save_path=data_out_l1, image_name="sen")
             generate_figure(
                 lev1_data,
                 ["quality_flag"],
@@ -100,32 +94,21 @@ for prod, var in product:
     else:
         if not os.path.isdir(data_out_l2):
             os.makedirs(data_out_l2)
-        lev1_data = (
-            data_out_l1 + "MWR_1C01_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"
-        )
+        lev1_data = data_out_l1 + "MWR_1C01_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"
         lev2_to_nc(date.strftime("%Y%m%d"), site, prod, lev1_data, data_out_l2)
+        if prod in ("2I01", "2I02"):
+            elevation = [89.0, 91.0]
+        else:
+            elevation = [0.0, 91.0]
         if (do_plot) & (
             os.path.isfile(
-                data_out_l2
-                + "MWR_"
-                + prod
-                + "_"
-                + ID
-                + "_"
-                + date.strftime("%Y%m%d")
-                + ".nc"
+                data_out_l2 + "MWR_" + prod + "_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"
             )
         ):
             generate_figure(
-                data_out_l2
-                + "MWR_"
-                + prod
-                + "_"
-                + ID
-                + "_"
-                + date.strftime("%Y%m%d")
-                + ".nc",
+                data_out_l2 + "MWR_" + prod + "_" + ID + "_" + date.strftime("%Y%m%d") + ".nc",
                 [var],
+                ele_range=elevation,
                 save_path=data_out_l2,
                 image_name=var,
             )

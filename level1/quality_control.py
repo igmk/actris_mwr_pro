@@ -42,74 +42,54 @@ def apply_qc(site: str, data: dict, params: dict) -> None:
 
         """Bit 1: Missing TB-value"""
         if params["flag_status"][0] == 1:
-            data["quality_flag_status"][:, freq] = setbit(
-                data["quality_flag_status"][:, freq], 0
-            )
+            data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 0)
         else:
             ind = np.where(data["tb"][:, freq] == Fill_Value_Float)
             data["quality_flag"][ind, freq] = setbit(data["quality_flag"][ind, freq], 0)
 
         """ Bit 2: TB threshold (lower range) """
         if params["flag_status"][1] == 1:
-            data["quality_flag_status"][:, freq] = setbit(
-                data["quality_flag_status"][:, freq], 1
-            )
+            data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 1)
         else:
             ind = np.where(data["tb"][:, freq] < params["TB_threshold"][0])
             data["quality_flag"][ind, freq] = setbit(data["quality_flag"][ind, freq], 1)
 
         """ Bit 3: TB threshold (upper range) """
         if params["flag_status"][2] == 1:
-            data["quality_flag_status"][:, freq] = setbit(
-                data["quality_flag_status"][:, freq], 2
-            )
+            data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 2)
         else:
             ind = np.where(data["tb"][:, freq] > params["TB_threshold"][1])
             data["quality_flag"][ind, freq] = setbit(data["quality_flag"][ind, freq], 2)
 
         """ Bit 4: Spectral consistency threshold """
         if params["flag_status"][3] == 1:
-            data["quality_flag_status"][:, freq] = setbit(
-                data["quality_flag_status"][:, freq], 3
-            )
+            data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 3)
         else:
             ind = np.where(ind_bit4[:, freq] == 1)
             data["quality_flag"][ind, freq] = setbit(data["quality_flag"][ind, freq], 3)
 
         """ Bit 5: Receiver sanity """
         if params["flag_status"][4] == 1:
-            data["quality_flag_status"][:, freq] = setbit(
-                data["quality_flag_status"][:, freq], 4
-            )
+            data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 4)
         else:
             ind = np.where(data["status"][:, freq] == 1)
             data["quality_flag"][ind, freq] = setbit(data["quality_flag"][ind, freq], 4)
 
         """ Bit 6: Rain flag """
         if params["flag_status"][5] == 1:
-            data["quality_flag_status"][:, freq] = setbit(
-                data["quality_flag_status"][:, freq], 5
-            )
+            data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 5)
         else:
-            data["quality_flag"][ind_bit6, freq] = setbit(
-                data["quality_flag"][ind_bit6, freq], 5
-            )
+            data["quality_flag"][ind_bit6, freq] = setbit(data["quality_flag"][ind_bit6, freq], 5)
 
         """ Bit 7: Solar/Lunar flag """
         if params["flag_status"][6] == 1:
-            data["quality_flag_status"][:, freq] = setbit(
-                data["quality_flag_status"][:, freq], 6
-            )
+            data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 6)
         else:
-            data["quality_flag"][ind_bit7, freq] = setbit(
-                data["quality_flag"][ind_bit7, freq], 6
-            )
+            data["quality_flag"][ind_bit7, freq] = setbit(data["quality_flag"][ind_bit7, freq], 6)
 
         """ Bit 8: TB offset threshold """
         if params["flag_status"][7] == 1:
-            data["quality_flag_status"][:, freq] = setbit(
-                data["quality_flag_status"][:, freq], 7
-            )
+            data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 7)
         # else:
 
 
@@ -133,9 +113,7 @@ def orbpos(data: dict, params: dict) -> np.ndarray:
             data["station_longitude"][ind]
         )
         obs_loc.elevation = data["station_altitude"][ind]
-        obs_loc.date = datetime.datetime.utcfromtimestamp(tim).strftime(
-            "%Y/%m/%d %H:%M:%S"
-        )
+        obs_loc.date = datetime.datetime.utcfromtimestamp(tim).strftime("%Y/%m/%d %H:%M:%S")
         sol.compute(obs_loc)
         sun["ele"][ind] = np.rad2deg(sol.alt)
         sun["azi"][ind] = np.rad2deg(sol.az)
@@ -193,9 +171,7 @@ def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
                         axis=1,
                     )
                     + np.sum(
-                        coeff["coefficient_mvr"][
-                            coeff_ind + (len(data["frequency"]) - 1)
-                        ].T
+                        coeff["coefficient_mvr"][coeff_ind + (len(data["frequency"]) - 1)].T
                         * data["tb"][:, freq_ind] ** 2,
                         axis=1,
                     )
@@ -218,12 +194,8 @@ def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
                 flag_tmp[
                     ele_ind[
                         (
-                            np.abs(
-                                tb_df["Tb"].values[ele_ind]
-                                - tb_med["Tb"].values[ele_ind]
-                            )
-                            > coeff["predictand_err"][0]
-                            * fact[data["receiver"][ifreq] - 1]
+                            np.abs(tb_df["Tb"].values[ele_ind] - tb_med["Tb"].values[ele_ind])
+                            > coeff["predictand_err"][0] * fact[data["receiver"][ifreq] - 1]
                         )
                     ],
                     ifreq,
@@ -246,8 +218,6 @@ def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
         )
         df = df.fillna(method="bfill", limit=120)
         df = df.fillna(method="ffill", limit=120)
-        flag_ind[
-            ((df["Flag"].values == 1)), ifreq
-        ] = 1  # & (data['pointing_flag'][:] == 0)
+        flag_ind[((df["Flag"].values == 1)), ifreq] = 1  # & (data['pointing_flag'][:] == 0)
 
     return flag_ind, tb_ret
