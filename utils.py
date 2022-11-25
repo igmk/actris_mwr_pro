@@ -1,19 +1,22 @@
 """ This module contains general helper functions. """
 
-from datetime import datetime, timezone
-import time
-import pytz
-from numpy import ma
-import numpy as np
-from typing import Optional, Tuple, Union
 import glob
 import re
+import time
+from datetime import datetime, timezone
+from typing import Optional, Union
+
 import netCDF4
-from scipy import signal, stats
+import numpy as np
+import pytz
+from numpy import ma
+from scipy import signal
 
 SECONDS_PER_MINUTE = 60
 SECONDS_PER_HOUR = 3600
 SECONDS_PER_DAY = 86400
+Fill_Value_Float = -999.0
+Fill_Value_Int = -99
 
 
 def seconds2hours(time_in_seconds: np.ndarray) -> np.ndarray:
@@ -46,7 +49,7 @@ def epoch2unix(epoch_time, time_ref, epoch: Optional[tuple] = (2001, 1, 1)):
     delta = (datetime(*epoch) - datetime(1970, 1, 1, 0, 0, 0)).total_seconds()
     unix_time = epoch_time + int(delta)
     if time_ref == 0:
-        for index in range(len(unix_time)):
+        for index, _ in enumerate(unix_time):
             unix_time[index] = time.mktime(
                 datetime.fromtimestamp(unix_time[index], timezone.utc).timetuple()
             )
@@ -96,7 +99,7 @@ def isbit(array: np.ndarray, nth_bit: int) -> np.ndarray:
     return array & mask > 0
 
 
-def setbit(array: np.ndarray, nth_bit: int) -> int:
+def setbit(array: np.ndarray, nth_bit: int) -> np.ndarray:
     """Sets nth bit (0, 1, 2..) on number.
     Args:
         array: Integer array.
@@ -121,64 +124,48 @@ def setbit(array: np.ndarray, nth_bit: int) -> int:
     return array
 
 
-def binvec(x: Union[np.ndarray, list]) -> np.ndarray:
-    """Converts 1-D center points to bins with even spacing.
-    Args:
-        x: 1-D array of N real values.
-    Returns:
-        ndarray: N + 1 edge values.
-    Examples:
-        >>> binvec([1, 2, 3])
-            [0.5, 1.5, 2.5, 3.5]
-    """
-    edge1 = x[0] - (x[1] - x[0]) / 2
-    edge2 = x[-1] + (x[-1] - x[-2]) / 2
-    return np.linspace(edge1, edge2, len(x) + 1)
-
-
-def rebin_2d(
+def interpol_2d(
     x_in: np.ndarray,
     array: ma.MaskedArray,
     x_new: np.ndarray,
-    statistic: str = "mean",
-    n_min: int = 1,
-) -> Tuple[ma.MaskedArray, list]:
-    """Rebins 2-D data in one dimension.
+) -> ma.MaskedArray:
+    """Interpolates 2-D data in one dimension.
     Args:
         x_in: 1-D array with shape (n,).
         array: 2-D input data with shape (n, m).
-        x_new: 1-D target vector (center points) with shape (N,).
-        statistic: Statistic to be calculated. Possible statistics are 'mean', 'std'.
-            Default is 'mean'.
-        n_min: Minimum number of points to have good statistics in a bin. Default is 1.
+        x_new: 1-D target vector with shape (N,).
     Returns:
-        tuple: Rebinned data with shape (N, m) and indices of bins without enough data.
+        array: Interpolated data with shape (N, m).
     Notes:
         0-values are masked in the returned array.
     """
-    edges = binvec(x_new)
     result = np.zeros((len(x_new), array.shape[1]))
     array_screened = ma.masked_invalid(array, copy=True)  # data may contain nan-values
     for ind, values in enumerate(array_screened.T):
         mask = ~values.mask
         if ma.any(values[mask]):
-            result[:, ind], _, _ = stats.binned_statistic(
-                x_in[mask], values[mask], statistic=statistic, bins=edges
-            )
+            result[:, ind] = np.interp(x_new, x_in[mask], values[mask])
     result[~np.isfinite(result)] = 0
-
-    # Fill bins with not enough profiles
-    empty_indices = []
-    for ind in range(len(edges) - 1):
-        is_data = np.where((x_in > edges[ind]) & (x_in <= edges[ind + 1]))[0]
-        if len(is_data) < n_min:
-            result[ind, :] = 0
-            empty_indices.append(ind)
-    # if len(empty_indices) > 0:
-    #     logging.info(f"No data in {len(empty_indices)} bins")
     masked = ma.make_mask(result)
 
-    return ma.array(result, mask=~masked), empty_indices
+    return ma.array(result, mask=~masked), []
+
+
+def add_interpol1d(data0: dict, data1: np.ndarray, time1: np.ndarray, output_name: str) -> None:
+    """Adds interpolated 1d field to dict
+    Args:
+        data0: Output dict.
+        data1: Input field to be added & interpolated.
+        time1: Time of input field.
+    """
+    if data1.ndim > 1:
+        data0[output_name] = (
+            np.ones([len(data0["time"]), data1.shape[1]], np.float32) * Fill_Value_Float
+        )
+        for ndim in range(data1.shape[1]):
+            data0[output_name][:, ndim] = np.interp(data0["time"], time1, data1[:, ndim])
+    else:
+        data0[output_name] = np.interp(data0["time"], time1, data1)
 
 
 def seconds2date(time_in_seconds: float, epoch: Optional[tuple] = (1970, 1, 1)) -> list:
@@ -197,7 +184,7 @@ def seconds2date(time_in_seconds: float, epoch: Optional[tuple] = (1970, 1, 1)) 
 
 def add_time_bounds(time: np.ndarray, int_time: int) -> np.ndarray:
 
-    time_bounds = np.ones([len(time), 2], np.int32) * -99
+    time_bounds = np.ones([len(time), 2], np.int32) * Fill_Value_Int
     time_bounds[:, 0] = time - int_time
     time_bounds[:, 1] = time
 
@@ -226,7 +213,37 @@ def get_coeff_list(site: str, prefix: str):
     return c_list[0]
 
 
-def get_ret_ang(nc_file: str) -> np.ndarray:
+def get_file_list(path_to_files: str, path_to_prev: str, path_to_next: str, extension: str):
+
+    f_list = sorted(glob.glob(path_to_files + "*." + extension))
+    if len(f_list) == 0:
+        f_list = sorted(glob.glob(path_to_files + "*." + extension.upper()))
+    f_list_p = sorted(glob.glob(path_to_prev + "*." + extension))
+    if len(f_list_p) == 0:
+        f_list_p = sorted(glob.glob(path_to_prev + "*." + extension.upper()))
+    f_list_n = sorted(glob.glob(path_to_next + "*." + extension))
+    if len(f_list_n) == 0:
+        f_list_n = sorted(glob.glob(path_to_next + "*." + extension.upper()))
+
+    if len(f_list) == 0:
+        raise RuntimeError(
+            [
+                "Error: no binary files with extension "
+                + extension
+                + " found in directory "
+                + path_to_files
+            ]
+        )
+    if (len(f_list_p) > 0) & (len(f_list_n) > 0):
+        f_list = [f_list_p[-1], *f_list, f_list_n[0]]
+    elif (len(f_list_p) > 0) & (len(f_list_n) == 0):
+        f_list = [f_list_p[-1], *f_list]
+    elif (len(f_list_p) == 0) & (len(f_list_n) > 0):
+        f_list = [*f_list, f_list_n[0]]
+    return f_list
+
+
+def get_ret_ang(nc_file: str) -> list:
     """Returns highest elevation angle used in retrieval."""
     with netCDF4.Dataset(nc_file) as nc:
         ang = []
@@ -276,7 +293,7 @@ def read_nc_fields(nc_file: str, names: Union[str, list]) -> Union[ma.MaskedArra
     return data[0] if len(data) == 1 else data
 
 
-def convolve2DFFT(slab, kernel, max_missing=0.1, verbose=True):
+def convolve2DFFT(slab, kernel, max_missing=0.1):
     """2D convolution using fft.
     <slab>: 2d array, with optional mask.
     <kernel>: 2d array, convolution kernel.

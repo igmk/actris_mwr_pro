@@ -46,7 +46,7 @@ fi
 
 
 if [ ! "$DATE" ] ; then
-    # Default option is to get the day before yesterdays data 
+    # Default option is to run yesterday and today 
     YYYYMMDD=$(date --utc "+%Y%m%d" -d "today-1day")
     YYYYMMDD_E=$(date --utc "+%Y%m%d" -d "today")
 else
@@ -59,7 +59,7 @@ else
     fi
     # Check that date is YYYYMMDD (very rudimentary!)
     if [ $(echo "$DATE_E" | tr -d " "| wc -L) -eq 8 ] ; then
-        YYYYMMDD_E=$(date "+%Y%m%d" -d "$DATE_E + 1 day")
+        YYYYMMDD_E=$(date "+%Y%m%d" -d "$DATE_E")
     else
         echo "Error: DATE \"$DATE_E\" not understood"
         exit 1
@@ -68,7 +68,7 @@ else
 fi   
 
 
-while [ "$YYYYMMDD" != "$YYYYMMDD_E" ]; do
+while [ "$YYYYMMDD" -le "$YYYYMMDD_E" ]; do
 	echo $YYYYMMDD
 
 	python3 process_mwr_pro.py $SITE $YYYYMMDD $do_plot

@@ -14,12 +14,22 @@ def spec_heat(T: np.ndarray) -> np.ndarray:
 
 
 def vap_pres(q: np.ndarray, T: np.ndarray) -> np.ndarray:
-    "Water vapor pressure"
+    "Water vapor pressure (Pa)"
     return q * con.RW * T
 
 
+def t_dew_rh(T: np.ndarray, rh: np.ndarray) -> np.ndarray:
+    "Dew point temperature (K) from relative humidity ()"
+    return (
+        mpcalc.dewpoint_from_relative_humidity(
+            masked_array(T, data_units="K"), masked_array(rh, data_units="")
+        ).magnitude
+        + con.T0
+    )
+
+
 def pot_tem(T: np.ndarray, q: np.ndarray, p: np.ndarray, z: np.ndarray) -> np.ndarray:
-    "Potential temperature"
+    "Potential temperature (K)"
     p_baro = calc_p_baro(T, q, p, z)
     return mpcalc.potential_temperature(
         masked_array(p_baro, data_units="Pa"), masked_array(T, data_units="K")
@@ -27,7 +37,7 @@ def pot_tem(T: np.ndarray, q: np.ndarray, p: np.ndarray, z: np.ndarray) -> np.nd
 
 
 def eq_pot_tem(T: np.ndarray, q: np.ndarray, p: np.ndarray, z: np.ndarray) -> np.ndarray:
-    "Equivalent potential temperature"
+    "Equivalent potential temperature (K)"
     e = vap_pres(q, T)
     p_baro = calc_p_baro(T, q, p, z)
     Theta = pot_tem(T, q, p, z)
@@ -35,17 +45,13 @@ def eq_pot_tem(T: np.ndarray, q: np.ndarray, p: np.ndarray, z: np.ndarray) -> np
 
 
 def rel_hum(T: np.ndarray, q: np.ndarray) -> np.ndarray:
-    "Relative humidity"
+    "Relative humidity ()"
     return vap_pres(q, T) / calc_saturation_vapor_pressure(T)
 
 
 def rh_err(T: np.ndarray, q: np.ndarray, dT: np.ndarray, dq: np.ndarray) -> np.ndarray:
-    "Calculates relative humidity error from absolute humidity and temperature"
-    L = spec_heat(T)
-    e = vap_pres(q, T)
+    "Calculates relative humidity error propagation from absolute humidity and temperature ()"
     es = calc_saturation_vapor_pressure(T)
-
-    "Error propagation"
     drh_dq = con.RW * T / es
     des_dT = es * 17.67 * 243.5 / ((T - con.T0) + 243.5) ** 2
     drh_dT = q * con.RW / es**2 * (es - T * des_dT)
@@ -54,8 +60,14 @@ def rh_err(T: np.ndarray, q: np.ndarray, dT: np.ndarray, dq: np.ndarray) -> np.n
     return drh
 
 
+def abs_hum(T: np.ndarray, rh: np.ndarray) -> np.ndarray:
+    "Absolute humidity (kg/m^3)"
+    es = calc_saturation_vapor_pressure(T)
+    return (rh * es) / (con.RW * T)
+
+
 def calc_p_baro(T: np.ndarray, q: np.ndarray, p: np.ndarray, z: np.ndarray) -> np.ndarray:
-    "Calculate pressure in each level using barometric height formula"
+    "Calculate pressure (Pa) in each level using barometric height formula"
     Tv = mpcalc.virtual_temperature(
         masked_array(T, data_units="K"), masked_array(q, data_units="")
     ).magnitude
@@ -74,7 +86,7 @@ def calc_p_baro(T: np.ndarray, q: np.ndarray, p: np.ndarray, z: np.ndarray) -> n
 
 
 def calc_saturation_vapor_pressure(temperature: np.ndarray) -> np.ndarray:
-    """Goff-Gratch formula for saturation vapor pressure over water adopted by WMO.
+    """Goff-Gratch formula for saturation vapor pressure (Pa) over water adopted by WMO.
     Args:
         temperature: Temperature (K).
     Returns:
@@ -100,22 +112,21 @@ def c2k(T: np.ndarray) -> np.ndarray:
 
 
 def dir_avg(time: np.ndarray, spd: np.ndarray, drc: np.ndarray, win: float = 0.5):
-    """Computes average wind direction for a certain window length"""
+    """Computes average wind direction (DEG) for a certain window length"""
     width = len(time[time <= time[0] + win])
     if (width % 2) != 0:
         width = width + 1
     seq = range(len(time))
-    dir_avg = []
+    avg_dir = []
     for i in range(len(seq) - width + 1):
-        dir_avg.append(windvec(spd[seq[i : i + width]], drc[seq[i : i + width]]))
-    return np.array(dir_avg), width
+        avg_dir.append(winddir(spd[seq[i : i + width]], drc[seq[i : i + width]]))
+    return np.array(avg_dir), width
 
 
-def windvec(spd: np.ndarray, drc: np.ndarray):
-    """Computes wind vector from wind speed and direction"""
+def winddir(spd: np.ndarray, drc: np.ndarray):
+    """Computes mean wind direction (deg)"""
     ve = -np.mean(spd * np.sin(np.deg2rad(drc)))
     vn = -np.mean(spd * np.cos(np.deg2rad(drc)))
-    uv = np.sqrt(ve * ve + vn * vn)
     vdir = np.rad2deg(np.arctan2(ve, vn))
     if vdir < 180.0:
         Dv = vdir + 180.0

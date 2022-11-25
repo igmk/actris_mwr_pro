@@ -1,30 +1,32 @@
 """Misc. plotting routines for actris_mwr_pro products."""
-from typing import Optional, Tuple
-from datetime import datetime, date
+import importlib
 import locale
-import numpy as np
-from numpy import ma, ndarray
-import netCDF4
+from datetime import date, datetime, timezone
+from typing import Optional, Tuple, List
+
 import matplotlib.pyplot as plt
+import netCDF4
+import numpy as np
 from matplotlib import rcParams
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import BoundaryNorm, ListedColormap
+from matplotlib.ticker import FixedLocator, FormatStrFormatter
 from matplotlib.transforms import Affine2D, Bbox, ScaledTranslation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from matplotlib.ticker import FormatStrFormatter, FixedLocator
+from numpy import ma, ndarray
+from scipy.signal import filtfilt
+
+from atmos import abs_hum, dir_avg, t_dew_rh
+from plots.plot_meta import _COLORS, ATTRIBUTES
+from read_specs import get_site_specs
 from utils import (
-    read_nc_fields,
-    seconds2hours,
     convolve2DFFT,
-    isbit,
-    read_nc_field_name,
     get_ret_ang,
     get_ret_freq,
+    isbit,
+    read_nc_field_name,
+    read_nc_fields,
+    seconds2hours,
 )
-from plots.plot_meta import ATTRIBUTES, _COLORS
-from scipy.signal import filtfilt
-import importlib
-from read_specs import get_site_specs
-from atmos import dir_avg
 
 
 class Dimensions:
@@ -66,7 +68,7 @@ def generate_figure(
     show: bool = False,
     save_path: str = None,
     max_y: int = 5,
-    ele_range: Tuple = [0.0, 91.0],
+    ele_range: list = [0.0, 91.0],
     pointing: int = 0,
     dpi: int = 120,
     image_name: Optional[str] = None,
@@ -103,7 +105,7 @@ def generate_figure(
 
     for ax, field, name in zip(axes, valid_fields, valid_names):
         time = _read_time_vector(nc_file)
-        if ATTRIBUTES[name].ele != None:
+        if ATTRIBUTES[name].ele is not None:
             ele_range = ATTRIBUTES[name].ele
         ax.set_facecolor(_COLORS["lightgray"])
         if name not in ("ele", "azi"):
@@ -122,7 +124,7 @@ def generate_figure(
 
             plot_type = ATTRIBUTES[name].plot_type
             if plot_type == "mesh":
-                _plot_colormesh_data(ax, field, name, ax_value, max_y, nc_file, ele_range)
+                _plot_colormesh_data(ax, field, name, ax_value, nc_file)
 
     case_date = _set_labels(fig, axes[-1], nc_file, sub_title)
     file_name = handle_saving(nc_file, image_name, save_path, show, case_date, valid_names)
@@ -345,9 +347,7 @@ def _plot_segment_data(ax, data: ma.MaskedArray, name: str, axes: tuple, nc_file
     colorbar.ax.set_yticklabels(clabel, fontsize=13)
 
 
-def _plot_colormesh_data(
-    ax, data_in: ma.MaskedArray, name: str, axes: tuple, max_y: int, nc_file: str, ele_range: tuple
-):
+def _plot_colormesh_data(ax, data_in: ma.MaskedArray, name: str, axes: tuple, nc_file: str):
     """Plots continuous 2D variable.
     Creates only one plot, so can be used both one plot and subplot type of figs.
     Args:
@@ -359,6 +359,8 @@ def _plot_colormesh_data(
     """
     data = data_in
     variables = ATTRIBUTES[name]
+    nbin = 7
+    nlev1 = 31
     if ATTRIBUTES[name].nlev:
         nlev = ATTRIBUTES[name].nlev
     else:
@@ -366,17 +368,26 @@ def _plot_colormesh_data(
 
     assert variables.plot_range is not None
 
+    if name == "equivalent_potential_temperature":
+        nbin = 9
+        nlev1 = 41
+
+    if name == "water_vapor_vmr":
+        nbin = 6
+
     if name == "relative_humidity":
+        data[data_in.mask == True] = np.nan
         data[data > 1.0] = 1.0
         data[data < 0.0] = 0.0
         data *= 100.0
+        nbin = 6
 
     if variables.plot_type == "bit":
         cmap = ListedColormap(variables.cbar)
         pos = ax.get_position()
         ax.set_position([pos.x0, pos.y0, pos.width * 0.965, pos.height])
     else:
-        cmap = plt.get_cmap(variables.cbar, nlev)
+        cmap = plt.get_cmap(variables.cbar, nlev1)
 
     vmin, vmax = variables.plot_range
 
@@ -384,11 +395,21 @@ def _plot_colormesh_data(
         data[data < vmin] = vmin
 
     if np.ma.median(np.diff(axes[0][:])) < 5 / 60:
-        data, width = _calculate_rolling_mean(axes[0], data, win=15 / 60)
+        data, _ = _calculate_rolling_mean(axes[0], data, win=15 / 60)
+        time, data = _mark_gaps(axes[0][:], data, 35, 10)
+    else:
+        time, data = _mark_gaps(
+            axes[0][:],
+            data_in,
+            np.ma.median(np.diff(axes[0][:])) * 60.0 + np.ma.median(np.diff(axes[0][:])) * 10.0,
+            0,
+        )
+
     pl = ax.contourf(
-        *axes,
+        time,
+        axes[1],
         data.T,
-        levels=np.linspace(vmin, vmax, nlev),
+        levels=np.linspace(vmin, vmax, nlev1),
         cmap=cmap,
         extend=variables.cbar_ext,
         alpha=0.5,
@@ -396,15 +417,15 @@ def _plot_colormesh_data(
 
     data = data_in
     flag = _get_ret_flag(nc_file, axes[0])
-    data[flag == 1, :] = np.nan
+    data_in[flag == 1, :] = np.nan
 
     if np.ma.median(np.diff(axes[0][:])) < 5 / 60:
-        data, width = _calculate_rolling_mean(axes[0], data, win=15 / 60)
+        data, width = _calculate_rolling_mean(axes[0], data_in, win=15 / 60)
         time, data = _mark_gaps(axes[0][:], data, 35, 10)
     else:
         time, data = _mark_gaps(
             axes[0][:],
-            data,
+            data_in,
             np.ma.median(np.diff(axes[0][:])) * 60.0 + np.ma.median(np.diff(axes[0][:])) * 10.0,
             0,
         )
@@ -416,7 +437,7 @@ def _plot_colormesh_data(
         time,
         axes[1],
         data.T,
-        levels=np.linspace(vmin, vmax, nlev),
+        levels=np.linspace(vmin, vmax, nlev1),
         cmap=cmap,
         extend=variables.cbar_ext,
     )
@@ -450,7 +471,7 @@ def _plot_colormesh_data(
         colorbar = _init_colorbar(pl, ax)
         locator = colorbar.ax.yaxis.get_major_locator()
         # locator, formatter = colorbar._get_ticker_locator_formatter()
-        locator.set_params(nbins=6)
+        locator.set_params(nbins=nbin)
         colorbar.update_ticks()
         colorbar.set_label(variables.clabel, fontsize=13)
 
@@ -467,8 +488,8 @@ def _plot_instrument_data(
     pointing: int,
 ):
     if product == "int":
-        _plot_int(ax, data, name, time, nc_file, ele_range)
-    elif product == "met":
+        _plot_int(ax, data, name, time, nc_file)
+    elif product in ("met", "met2"):
         _plot_met(ax, data, name, time, nc_file)
     elif product == "tb":
         _plot_tb(ax, data, time, fig, nc_file, ele_range, pointing, name)
@@ -481,17 +502,16 @@ def _plot_instrument_data(
     elif product == "sen":
         _plot_sen(ax, data, name, time, nc_file)
     elif product == "hkd":
-        _plot_hkd(ax, data, name, time, nc_file)
+        _plot_hkd(ax, data, name, time)
 
     pos = ax.get_position()
     ax.set_position([pos.x0, pos.y0, pos.width * 0.965, pos.height])
 
 
-def _plot_hkd(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
-    variables = ATTRIBUTES[name]
-
+def _plot_hkd(ax, data_in: ndarray, name: str, time: ndarray):
+    time = _nan_time_gaps(time)
     if name == "t_amb":
-        lns3 = ax.plot(
+        ax.plot(
             time,
             np.abs(data_in[:, 0] - data_in[:, 1]),
             color=_COLORS["darkgray"],
@@ -507,41 +527,76 @@ def _plot_hkd(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
         ax.yaxis.set_label_position("right")
         ax2 = ax.twinx()
         vmin, vmax = np.nanmin(data_in) - 1.0, np.nanmax(data_in) + 1.0
-        lns2 = ax2.plot(time, np.mean(data_in, axis=1), color="darkblue", label="Mean")
+        ax2.plot(time, np.mean(data_in, axis=1), color="darkblue", label="Mean")
         ax2.yaxis.tick_left()
         ax2.yaxis.set_label_position("left")
         ax.legend(loc="upper right")
         _set_ax(ax2, vmax, "Sensor mean (K)", vmin)
-        lns = lns2 + lns3
-        labs = [l.get_label() for l in lns]
-        ax.legend(lns, labs, loc="upper right")
+        if np.nanmax(np.abs(data_in[:, 0] - data_in[:, 1])) > 0.3:
+            ax.plot(
+                time,
+                np.ones(len(time), np.float32) * 0.3,
+                color="black",
+                linewidth=0.8,
+                label="Threshold (Diff.)",
+            )
+        lines, labels = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax2.legend(lines + lines2, labels + labels2, loc="upper right")
         ax.yaxis.tick_right()
 
-    else:
+    if name == "t_rec":
         vmin, vmax = np.nanmin(data_in[:, 0]) - 0.01, np.nanmax(data_in[:, 0]) + 0.01
-        lns1 = ax.plot(time, data_in[:, 0], color="sienna", linewidth=0.8, label="Receiver 1")
+        ax.plot(time, data_in[:, 0], color="sienna", linewidth=0.8, label="Receiver 1")
         ax.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
-        if name == "t_sta":
-            vmin = 0.0
-            ax.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
-        _set_ax(ax, vmax, "Receiver 1 (K)", vmin)
         ax2 = ax.twinx()
-        lns2 = ax2.plot(
+        ax2.plot(
             time,
             data_in[:, 1],
             color=_COLORS["shockred"],
             linewidth=0.8,
             label="Receiver 2",
         )
-        vmin, vmax = np.nanmin(data_in[:, 1]) - 0.01, np.nanmax(data_in[:, 1]) + 0.01
+        vmin1, vmax1 = np.nanmin(data_in[:, 0]) - 0.01, np.nanmax(data_in[:, 0]) + 0.01
+        vmin2, vmax2 = np.nanmin(data_in[:, 1]) - 0.01, np.nanmax(data_in[:, 1]) + 0.01
+        if vmax1 - vmin1 > vmax2 - vmin2:
+            _set_ax(ax, vmax1, "Receiver 1 (K)", vmin1)
+            _set_ax(
+                ax2,
+                vmax2 + ((vmax1 - vmin1) - (vmax2 - vmin2)) / 2,
+                "Receiver 2 (K)",
+                vmin2 - ((vmax1 - vmin1) - (vmax2 - vmin2)) / 2,
+            )
+        else:
+            _set_ax(
+                ax,
+                vmax1 + ((vmax2 - vmin2) - (vmax1 - vmin1)) / 2,
+                "Receiver 1 (K)",
+                vmin1 - ((vmax2 - vmin2) - (vmax1 - vmin1)) / 2,
+            )
+            _set_ax(ax2, vmax2, "Receiver 2 (K)", vmin2)
         ax2.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
-        if name == "t_sta":
-            vmin = 0.0
-            ax.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
-        _set_ax(ax2, vmax, "Receiver 2 (K)", vmin)
-        lns = lns1 + lns2
-        labs = [l.get_label() for l in lns]
-        ax.legend(lns, labs, loc="upper right")
+        lines, labels = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax2.legend(lines + lines2, labels + labels2, loc="upper right")
+
+    if name == "t_sta":
+        vmin, vmax = 0.0, np.nanmax(
+            [np.nanmax(data_in[:, 0]), np.nanmax(data_in[:, 1])]
+        ) + 0.1 * np.nanmax([np.nanmax(data_in[:, 0]), np.nanmax(data_in[:, 1])])
+        ax.plot(time, data_in[:, 0], color="sienna", linewidth=0.8, label="Receiver 1")
+        ax.plot(time, data_in[:, 1], color=_COLORS["shockred"], linewidth=0.8, label="Receiver 2")
+        if vmax - 0.1 * vmax > 0.05:
+            ax.plot(
+                time,
+                np.ones(len(time), np.float32) * 0.05,
+                color="black",
+                linewidth=0.8,
+                label="Threshold",
+            )
+        ax.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
+        _set_ax(ax, vmax, "Mean absolute difference (K)", vmin)
+        ax.legend(loc="upper right")
 
 
 def _plot_sen(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
@@ -550,6 +605,9 @@ def _plot_sen(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     quality_flag = read_nc_fields(nc_file, "quality_flag")
     qf = _get_freq_flag(quality_flag, [6])
     vmin, vmax = variables.plot_range
+    time = _nan_time_gaps(time)
+    time1 = time[(pointing_flag == 1)]
+    time1 = _nan_time_gaps(time1)
     ax.plot(
         time[pointing_flag == 0],
         data_in[pointing_flag == 0],
@@ -559,8 +617,10 @@ def _plot_sen(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
         linewidth=0.8,
     )
     if name == "ele":
+        time1 = time[(pointing_flag == 1) & (data_in > 0.0)]
+        time1 = _nan_time_gaps(time1)
         ax.plot(
-            time[(pointing_flag == 1) & (data_in > 0.0)],
+            time1,
             data_in[(pointing_flag == 1) & (data_in > 0.0)],
             "--.",
             alpha=0.75,
@@ -568,16 +628,18 @@ def _plot_sen(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
             label="multiple pointing",
             linewidth=0.8,
         )
+        ax.set_yticks(np.linspace(0, 90, 7))
     else:
         ax.plot(
-            time[pointing_flag == 1],
-            data_in[pointing_flag == 1],
+            time1,
+            data_in[(pointing_flag == 1)],
             "--.",
             alpha=0.75,
             color=_COLORS["green"],
             label="multiple pointing",
             linewidth=0.8,
         )
+        ax.set_yticks(np.linspace(0, 360, 9))
     ax.plot(
         time[np.any(qf == 1, axis=1)],
         data_in[np.any(qf == 1, axis=1)],
@@ -634,6 +696,9 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
     fig, axs = plt.subplots(3, 1, figsize=(12.52, 16), dpi=120, facecolor="w")
     frequency = read_nc_fields(nc_file, "frequency")
     qf0 = _get_freq_flag(data_in[:, 0], [4])
+    case_date = _read_date(nc_file)
+    garray = _gap_array(time, case_date)
+
     qf1 = _get_bit_flag(data_in[:, -1], [4, 5, 6])
     qf = np.column_stack((qf0 - 1, qf1 + 1))
     _plot_segment_data(axs[0], qf, "quality_flag_0", (time, np.linspace(0.5, 3.5, 4)), nc_file)
@@ -651,6 +716,14 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
         (time, np.linspace(0.5, len(frequency) - 0.5, len(frequency))),
         nc_file,
     )
+    if len(garray) > 0:
+        _plot_segment_data(
+            axs[1],
+            np.zeros((len(garray), len(frequency)), np.int32),
+            "quality_flag_1",
+            (garray, np.linspace(0.5, len(frequency) - 0.5, len(frequency))),
+            nc_file,
+        )
     axs[1].set_title(ATTRIBUTES["quality_flag_1"].name)
 
     qf = _get_freq_flag(data_in, [1, 2])
@@ -661,6 +734,14 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
         (time, np.linspace(0.5, len(frequency) - 0.5, len(frequency))),
         nc_file,
     )
+    if len(garray) > 0:
+        _plot_segment_data(
+            axs[2],
+            np.zeros((len(garray), len(frequency)), np.int32),
+            "quality_flag_2",
+            (garray, np.linspace(0.5, len(frequency) - 0.5, len(frequency))),
+            nc_file,
+        )
     axs[2].set_title(ATTRIBUTES["quality_flag_2"].name)
 
     offset = ScaledTranslation(0 / 72, 8 / 72, fig.dpi_scale_trans)
@@ -698,7 +779,7 @@ def _plot_tb(
         quality_flag = _elevation_filter(nc_file, quality_flag, ele_range)
         quality_flag = _pointing_filter(nc_file, quality_flag, ele_range, pointing)
     else:
-        sc = dict()
+        sc = {}
         sc["tb"] = read_nc_fields(nc_file, "tb")
         sc["receiver_nb"] = read_nc_fields(nc_file, "receiver_nb")
         sc["receiver"] = read_nc_fields(nc_file, "receiver")
@@ -752,50 +833,50 @@ def _plot_tb(
     trans = ScaledTranslation(10 / 72, -5 / 72, fig.dpi_scale_trans)
     tb_m, tb_s = [], []
 
-    for i, ax in enumerate(axs.T.flatten()):
+    for i, axi in enumerate(axs.T.flatten()):
         no_flag = np.where(quality_flag[:, i] == 0)[0]
         if len(np.array(no_flag)) == 0:
             no_flag = np.arange(len(time))
         tb_m = np.append(tb_m, [np.mean(data_in[no_flag, i])])  # TB mean
         tb_s = np.append(tb_s, [np.std(data_in[no_flag, i])])  # TB std
-        ax.plot(
+        axi.plot(
             time,
             np.ones(len(time)) * tb_m[i],
             "--",
             color=_COLORS["darkgray"],
             linewidth=1,
         )
-        ax.plot(time, data_in[:, i], "ko", markersize=0.75, fillstyle="full")
+        axi.plot(time, data_in[:, i], "ko", markersize=0.75, fillstyle="full")
         flag = np.where(quality_flag[:, i] > 0)[0]
-        ax.plot(time[flag], data_in[flag, i], "ro", markersize=0.75, fillstyle="full")
-        ax.set_facecolor(_COLORS["lightgray"])
+        axi.plot(time[flag], data_in[flag, i], "ro", markersize=0.75, fillstyle="full")
+        axi.set_facecolor(_COLORS["lightgray"])
         dif = np.max(data_in[no_flag, i]) - np.min(data_in[no_flag, i])
         _set_ax(
-            ax,
+            axi,
             np.max(data_in[no_flag, i]) + 0.25 * dif,
             "",
             np.min(data_in[no_flag, i]) - 0.25 * dif,
         )
         if i in (6, 13):
-            _set_labels(fig, ax, nc_file)
-        ax.text(
+            _set_labels(fig, axi, nc_file)
+        axi.text(
             0.05,
             0.9,
             str(frequency[i]) + " GHz",
-            transform=ax.transAxes + trans,
+            transform=axi.transAxes + trans,
             color=_COLORS["darkgray"],
             fontweight="bold",
         )
-        ax.text(
+        axi.text(
             0.55,
             0.9,
             str(round(tb_m[i], 2)) + " +/- " + str(round(tb_s[i], 2)) + " K",
-            transform=ax.transAxes + trans,
+            transform=axi.transAxes + trans,
             color=_COLORS["darkgray"],
             fontweight="bold",
         )
 
-    "TB mean"
+    # TB mean
     axa = fig.add_subplot(121)
     axa.set_position([0.125, -0.05, 0.72, 0.125])
     axa.tick_params(axis="x", which="both", bottom=False, top=False, labelbottom=False)
@@ -894,33 +975,138 @@ def _plot_tb(
         if len(no_flag) == 0:
             no_flag = np.arange(len(sc["time"]))
         axa.set_ylim([0, np.nanmax(tb_m[no_flag, :]) + 0.5])
-        # axa.text(.5, .9, '', fontsize=13, horizontalalignment='center', transform=axa.transAxes, color=_COLORS['darkgray'], fontweight='bold')
+        # axa.text(.5, .9, '', fontsize=13, horizontalalignment='center',
+        # transform=axa.transAxes, color=_COLORS['darkgray'], fontweight='bold')
 
 
 def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     ylabel = ATTRIBUTES[name].ylabel
     if name == "relative_humidity":
         data_in *= 100.0
-        ylabel = "%"
+        ylabel = "relative humidity (%)"
+        ax.set_title("Relative and absolute humidity", fontsize=14)
     data, time = _get_unmasked_values(data_in, time)
     if name == "wind_direction":
         spd = read_nc_fields(nc_file, "wind_speed")
         rolling_mean, width = dir_avg(time, spd, data)
+        ax.set_yticks(np.linspace(0, 360, 9))
     else:
         rolling_mean, width = _calculate_rolling_mean(time, data)
     time = _nan_time_gaps(time)
     rolling_mean = np.interp(time, time[int(width / 2 - 1) : int(-width / 2)], rolling_mean)
 
-    if name != "rain_rate":
+    if (name != "rain_rate") | (name != "air_temperature") | (name != "relative_humidity"):
         ax.plot(time, data, ".", alpha=0.8, color=_COLORS["darksky"], markersize=1)
         ax.plot(time, rolling_mean, "o", fillstyle="full", color="darkblue", markersize=3)
     vmin, vmax = ATTRIBUTES[name].plot_range
-    if (name == "air_temperature") | (name == "air_pressure"):
+    if name == "air_pressure":
         vmin, vmax = np.nanmin(data) - 1.0, np.nanmax(data) + 1.0
     if (name == "wind_speed") | (name == "rain_rate"):
         vmin, vmax = 0.0, np.nanmax([np.nanmax(data) + 1.0, 3.0])
+
     _set_ax(ax, vmax, ylabel, min_y=vmin)
     ax.grid(True)
+
+    if name == "air_temperature":
+        ax.plot(time, data, ".", alpha=0.8, color=_COLORS["darksky"], markersize=1)
+        ax.plot(
+            time,
+            rolling_mean,
+            "o",
+            fillstyle="full",
+            color="darkblue",
+            markersize=3,
+            label="Temperature",
+        )
+        rh = read_nc_fields(nc_file, "relative_humidity")
+        t_d = t_dew_rh(data, rh)
+        rolling_mean, width = _calculate_rolling_mean(time, t_d)
+        rolling_mean = np.interp(time, time[int(width / 2 - 1) : int(-width / 2)], rolling_mean)
+        ax.plot(
+            time,
+            t_d,
+            ".",
+            alpha=0.8,
+            color=_COLORS["blue"],
+            markersize=1,
+        )
+        ax.plot(
+            time,
+            rolling_mean,
+            "o",
+            fillstyle="full",
+            color=_COLORS["darkgray"],
+            markersize=3,
+            label="Dewpoint",
+        )
+        vmin, vmax = np.nanmin([data, t_d]) - 1.0, np.nanmax([data, t_d]) + 1.0
+        ax.legend(loc="upper right", markerscale=2)
+        _set_ax(ax, vmax, ylabel, min_y=vmin)
+        ax.grid(True)
+
+    if name == "relative_humidity":
+        T = read_nc_fields(nc_file, "air_temperature")
+        q = abs_hum(T, data / 100.0)
+        rolling_mean2, width2 = _calculate_rolling_mean(time, q)
+        rolling_mean2 = np.interp(time, time[int(width2 / 2 - 1) : int(-width / 2)], rolling_mean2)
+        ax2 = ax.twinx()
+        ax2.plot(
+            time,
+            q,
+            ".",
+            alpha=0.8,
+            color=_COLORS["blue"],
+            markersize=1,
+        )
+        _set_ax(
+            ax2,
+            np.nanmax(
+                [
+                    np.nanmax(q) + 0.1 * np.nanmax(q),
+                    0.003,
+                ]
+            ),
+            "absolute humidity (kg m$^{-3}$)",
+            min_y=np.nanmax(
+                [
+                    np.nanmin(q) - 0.1 * np.nanmin(q),
+                    0.0,
+                ]
+            ),
+        )
+        ax2.plot(
+            time,
+            rolling_mean2,
+            "o",
+            fillstyle="full",
+            color=_COLORS["darkgray"],
+            markersize=3,
+            label="Abs. hum.",
+        )
+
+        yl = ax.get_ylim()
+        yl2 = ax2.get_ylim()
+        f = lambda x: yl2[0] + (x - yl[0]) / (yl[1] - yl[0]) * (yl2[1] - yl2[0])
+        ticks = f(ax.get_yticks())
+        ax2.yaxis.set_major_locator(FixedLocator(ticks))
+        ax2.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
+        ax3 = ax.twinx()
+        ax3.plot(time, data, ".", alpha=0.8, color=_COLORS["darksky"], markersize=1)
+        ax3.plot(
+            time,
+            rolling_mean,
+            "o",
+            fillstyle="full",
+            color="darkblue",
+            markersize=3,
+            label="Rel. hum.",
+        )
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        lines3, labels3 = ax3.get_legend_handles_labels()
+        ax3.legend(lines3 + lines2, labels3 + labels2, loc="upper right", markerscale=2)
+        _set_ax(ax3, vmax, "", min_y=vmin)
+        ax3.set_yticklabels([])
+        ax3.set_frame_on(False)
 
     if name == "rain_rate":
         ax2 = ax.twinx()
@@ -955,26 +1141,29 @@ def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
         ax3.set_frame_on(False)
 
 
-def _plot_int(
-    ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: str, ele_range: Tuple
-):
-    ax.plot(time, data_in, ".", color="royalblue", markersize=1, alpha=0.25)
+def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: str):
     flag = _get_ret_flag(nc_file, time)
+    vmin, vmax = ATTRIBUTES[name].plot_range
+    if name == "iwv":
+        vmin, vmax = np.nanmin(data_in[flag == 0]) - 1.0, np.nanmax(data_in[flag == 0]) + 1.0
+    else:
+        vmax = np.min([np.nanmax(data_in[flag == 0]) + 0.05, vmax])
+        vmin = np.max([np.nanmin(data_in[flag == 0]) - 0.05, vmin])
+    _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
+    data_f = np.zeros((len(time), 100), np.float32)
+    data_f[flag > 0, :] = 1.0
+    cmap = ListedColormap([_COLORS["lightgray"], _COLORS["gray"]])
+    norm = BoundaryNorm([0, 1, 2], cmap.N)
+    ax.pcolor(time, np.linspace(vmin, vmax, 100), data_f.T, cmap=cmap, norm=norm)
+
+    ax.plot(time, data_in, ".", color="royalblue", markersize=1)
+    ax.axhline(linewidth=0.8, color="k")
     data, time = data_in[flag == 0], time[flag == 0]
     rolling_mean, width = _calculate_rolling_mean(time, data)
     time = _nan_time_gaps(time)
     rolling_mean = np.interp(time, time[int(width / 2 - 1) : int(-width / 2)], rolling_mean)
-    ax.plot(time, data, ".", color="royalblue", markersize=1)
-    ax.axhline(linewidth=0.8, color="k")
     ax.plot(time, rolling_mean, color="sienna", linewidth=2.0)
     ax.plot(time, rolling_mean, color="wheat", linewidth=0.6)
-    vmin, vmax = ATTRIBUTES[name].plot_range
-    if name == "iwv":
-        vmin, vmax = np.nanmin(data) - 1.0, np.nanmax(data) + 1.0
-    else:
-        vmax = np.min([np.nanmax(data) + 0.05, vmax])
-        vmin = np.max([np.nanmin(data) - 0.05, vmin])
-    _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
 
 
 def _filter_noise(data: ndarray) -> ndarray:
@@ -1011,13 +1200,34 @@ def _get_unmasked_values(data: ma.MaskedArray, time: ndarray) -> Tuple[ndarray, 
     return data[good_values], time[good_values]
 
 
-def _nan_time_gaps(time: ndarray) -> ndarray:
-    """Finds time gaps bigger than 5min and inserts nan."""
+def _nan_time_gaps(time: ndarray, tgap: float = 5.0 / 60.0) -> ndarray:
+    """Finds time gaps bigger than 5min (default) and inserts nan."""
     time_diff = np.diff(time)
-    dec_hour_5min = 0.085
-    gaps = np.where(time_diff > dec_hour_5min)[0]
-    time[gaps] = np.nan
+    gaps = np.where(time_diff > tgap)[0] + 1
+    if len(gaps) > 0:
+        time[gaps[0 : np.min([len(time), gaps[-1]])]] = np.nan
     return time
+
+
+def _gap_array(time: ndarray, case_date, tgap: float = 1.0 / 60.0) -> ndarray:
+    """Creates regular spaced time array for gaps bigger than 5min (default).
+    End of gap for current day is current time."""
+    locale.setlocale(locale.LC_TIME, "en_US.UTF-8")
+    dtnow = datetime.now(tz=timezone.utc)
+    day_e = 24.0
+    if dtnow.strftime("%d %b %Y") == case_date.strftime("%d %b %Y"):
+        day_e = dtnow.hour + dtnow.minute / 60.0 + dtnow.second / 3600.0
+        if day_e - time[-1] < 2.0:
+            day_e = time[-1]
+    time_diff = np.diff(np.insert(time, [0, len(time)], [0.0, day_e]))
+    gaps = np.where(time_diff > tgap)[0]
+    garray = []
+    if len(gaps) > 0:
+        for i, ind in enumerate(gaps):
+            garray = np.concatenate(
+                [garray, np.linspace(time[ind - 1], time[np.min([ind, len(time)])], 10)]
+            )
+    return garray
 
 
 def _calculate_rolling_mean(time: ndarray, data: ndarray, win: float = 0.5) -> Tuple[ndarray, int]:
@@ -1072,14 +1282,14 @@ def _get_lev1(nc_file: str) -> str:
     """Returns name of lev1 file."""
     site = _read_location(nc_file)
     global_attributes, params = get_site_specs(site, "1C01")
-    date = datetime.strptime(nc_file[-11:-3], "%Y%m%d")
-    data_out_l1 = params["data_out"] + "level1/" + date.strftime("%Y/%m/%d/")
+    datef = datetime.strptime(nc_file[-11:-3], "%Y%m%d")
+    data_out_l1 = params["data_out"] + "level1/" + datef.strftime("%Y/%m/%d/")
     lev1_file = (
         data_out_l1
         + "MWR_1C01_"
         + global_attributes["wigos_station_id"]
         + "_"
-        + date.strftime("%Y%m%d")
+        + datef.strftime("%Y%m%d")
         + ".nc"
     )
     return lev1_file
@@ -1099,7 +1309,7 @@ def _get_ret_flag(nc_file: str, time: ndarray) -> ndarray:
     )
     quality_flag = quality_flag[t_ind, :]
     site = _read_location(nc_file)
-    global_attributes, params = get_site_specs(site, "1C01")
+    _, params = get_site_specs(site, "1C01")
     if params["flag_status"][3] == 0:
         flag[np.sum(isbit(quality_flag[:, freq_ind], 3), axis=1) > 0] = 1
     else:

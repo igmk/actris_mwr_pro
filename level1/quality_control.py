@@ -1,10 +1,13 @@
-import numpy as np
-from numpy import ma
-import pandas as pd
-from utils import setbit, get_coeff_list
+"""Quality control for level1 data."""
 import datetime
+
 import ephem
 import netCDF4 as nc
+import numpy as np
+import pandas as pd
+from numpy import ma
+
+from utils import get_coeff_list, setbit
 
 Fill_Value_Float = -999.0
 Fill_Value_Int = -99
@@ -40,54 +43,54 @@ def apply_qc(site: str, data: dict, params: dict) -> None:
 
     for freq, _ in enumerate(data["frequency"]):
 
-        """Bit 1: Missing TB-value"""
+        # Bit 1: Missing TB-value
         if params["flag_status"][0] == 1:
             data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 0)
         else:
             ind = np.where(data["tb"][:, freq] == Fill_Value_Float)
             data["quality_flag"][ind, freq] = setbit(data["quality_flag"][ind, freq], 0)
 
-        """ Bit 2: TB threshold (lower range) """
+        # Bit 2: TB threshold (lower range)
         if params["flag_status"][1] == 1:
             data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 1)
         else:
             ind = np.where(data["tb"][:, freq] < params["TB_threshold"][0])
             data["quality_flag"][ind, freq] = setbit(data["quality_flag"][ind, freq], 1)
 
-        """ Bit 3: TB threshold (upper range) """
+        # Bit 3: TB threshold (upper range)
         if params["flag_status"][2] == 1:
             data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 2)
         else:
             ind = np.where(data["tb"][:, freq] > params["TB_threshold"][1])
             data["quality_flag"][ind, freq] = setbit(data["quality_flag"][ind, freq], 2)
 
-        """ Bit 4: Spectral consistency threshold """
+        # Bit 4: Spectral consistency threshold
         if params["flag_status"][3] == 1:
             data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 3)
         else:
             ind = np.where(ind_bit4[:, freq] == 1)
             data["quality_flag"][ind, freq] = setbit(data["quality_flag"][ind, freq], 3)
 
-        """ Bit 5: Receiver sanity """
+        # Bit 5: Receiver sanity
         if params["flag_status"][4] == 1:
             data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 4)
         else:
             ind = np.where(data["status"][:, freq] == 1)
             data["quality_flag"][ind, freq] = setbit(data["quality_flag"][ind, freq], 4)
 
-        """ Bit 6: Rain flag """
+        # Bit 6: Rain flag
         if params["flag_status"][5] == 1:
             data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 5)
         else:
             data["quality_flag"][ind_bit6, freq] = setbit(data["quality_flag"][ind_bit6, freq], 5)
 
-        """ Bit 7: Solar/Lunar flag """
+        # Bit 7: Solar/Lunar flag
         if params["flag_status"][6] == 1:
             data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 6)
         else:
             data["quality_flag"][ind_bit7, freq] = setbit(data["quality_flag"][ind_bit7, freq], 6)
 
-        """ Bit 8: TB offset threshold """
+        # Bit 8: TB offset threshold
         if params["flag_status"][7] == 1:
             data["quality_flag_status"][:, freq] = setbit(data["quality_flag_status"][:, freq], 7)
         # else:
@@ -96,7 +99,7 @@ def apply_qc(site: str, data: dict, params: dict) -> None:
 def orbpos(data: dict, params: dict) -> np.ndarray:
     """Calculates sun & moon elevation/azimuth angles"""
 
-    sun = dict()
+    sun = {}
     sun["azi"] = np.zeros(data["time"].shape) * Fill_Value_Float
     sun["ele"] = np.zeros(data["time"].shape) * Fill_Value_Float
     # moon = dict()
@@ -143,13 +146,14 @@ def orbpos(data: dict, params: dict) -> np.ndarray:
 
 
 def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
-    """Applies spectral consistency coefficients for given frequency index and returns indices to be flagged"""
+    """Applies spectral consistency coefficients for given frequency index
+    and returns indices to be flagged"""
 
     flag_ind = np.zeros(data["tb"].shape, dtype=np.int32)
     flag_tmp = np.ones(data["tb"].shape) * np.nan
     tb_tot = ma.masked_all(data["tb"].shape, dtype=np.float32)
     tb_ret = np.ones(data["tb"].shape) * np.nan
-    for ifreq, freq in enumerate(data["frequency"]):
+    for ifreq, _ in enumerate(data["frequency"]):
         with nc.Dataset(c_file[ifreq]) as coeff:
             _, freq_ind, coeff_ind = np.intersect1d(
                 data["frequency"],

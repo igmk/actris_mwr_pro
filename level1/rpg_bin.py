@@ -1,8 +1,10 @@
 """ This module contains all functions to read in RPG MWR binary files """
-import numpy as np
 import datetime
-import utils
 import logging
+
+import numpy as np
+
+import utils
 
 Fill_Value_Float = -999.0
 Fill_Value_Int = -99
@@ -65,11 +67,12 @@ class RpgBin:
         self.date = self._get_date()
         self.data = {}
         self._init_data()
-        self.find_valid_times()
+        if str(file_list[0][-3:]).lower() != "his":
+            self.find_valid_times()
 
     def _init_data(self):
-        for key in self.raw_data:
-            self.data[key] = self.raw_data[key]
+        for key, data in self.raw_data.items():
+            self.data[key] = data
 
     def _get_date(self):
         time_median = float(np.ma.median(self.raw_data["time"]))
@@ -257,7 +260,8 @@ def read_met(file_name: str) -> dict:
                 "relative_humidity": np.ones(header["n"], np.float32) * Fill_Value_Float,
                 "adds": np.ones([header["n"], 3], np.float32) * Fill_Value_Float,
             }
-            #'adds' : np.ones( [header['n'], header['_n_sen'].count('1')], np.float32)*Fill_Value_Float}
+            #'adds' : np.ones( [header['n'], header['_n_sen'].count('1')], 
+            #np.float32)*Fill_Value_Float}
             return vrs
 
         def _get_data():

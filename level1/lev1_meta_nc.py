@@ -103,7 +103,10 @@ ATTRIBUTES_1B01 = {
         long_name="Nominal centre frequency of microwave channels",
         standard_name="radiation_frequency",
         units="GHz",
-        comment="1) For double-sideband receivers, frequency corresponds to the local oscillator frequency whereas the radio frequency of the upper/lower sideband is frequency+/-sideband_IF_separation. 2) In case of known offset between the real and the nominal frequency of some channels, frequency+freq_shift gives more accurate values.",
+        comment="1) For double-sideband receivers, frequency corresponds to the local\n"
+        "oscillator frequency whereas the radio frequency of the upper/lower sideband is\n"
+        "frequency+/-sideband_IF_separation. 2) In case of known offset between the real and the\n"
+        "nominal frequency of some channels, frequency+freq_shift gives more accurate values.",
     ),
     "receiver_nb": MetaData(
         long_name="Number of the microwave receiver",
@@ -117,10 +120,12 @@ ATTRIBUTES_1B01 = {
     ),
     "n_sidebands": MetaData(
         long_name="Number of sidebands",
-        comment="0: direct-detection receivers, 1: single-sideband, 2: double-sideband. The frequency separation of sidebands is indicated in sideband_IF_separation.",
+        comment="0: direct-detection receivers, 1: single-sideband, 2: double-sideband.\n"
+        "The frequency separation of sidebands is indicated in sideband_IF_separation.",
     ),
     "sideband_IF_separation": MetaData(
-        long_name="For double sideband channels, this is the positive and negative IF range distance of the two band passes around the centre frequency (which is the LO frqeuency)",
+        long_name="For double sideband channels, this is the positive and negative IF range\n"
+        "distance of the two band passes around the centre frequency (which is the LO frqeuency)",
         units="GHz",
         comment="ositive number for IF centre frequency",
     ),
@@ -150,26 +155,36 @@ ATTRIBUTES_1B01 = {
         comment="0=horizon, 90=zenith",
     ),
     "tb_accuracy": MetaData(
-        long_name="Total absolute calibration uncertainty of brightness temperature, one standard deviation",
+        long_name="Total absolute calibration uncertainty of brightness temperature,\n"
+        "one standard deviation",
         units="K",
-        comment="specify here source of this variable, e.g. literature value, specified by manufacturer, result of validation effort (updated irregularily) For RDX systems, derived from analysis performed by Tim Hewsion (Tim J. Hewison, 2006: Profiling Temperature and Humidity by Ground-based Microwave Radiometers, PhD Thesis, University of Reading.) Derived from sensitivity analysis of LN2 calibration plus instrument noise levels (ACTRIS work), currently literature values (Maschwitz et al. for HATPRO, ? for radiometrics)",
+        comment="specify here source of this variable, e.g. literature value, specified by\n"
+        "manufacturer, result of validation effort (updated irregularily) For RDX systems,\n"
+        "derived from analysis performed by Tim Hewsion (Tim J. Hewison, 2006: Profiling\n"
+        "Temperature and Humidity by Ground-based Microwave Radiometers, PhD Thesis,\n"
+        "University of Reading.) Derived from sensitivity analysis of LN2 calibration plus\n"
+        "instrument noise levels (ACTRIS work), currently literature values\n"
+        "(Maschwitz et al. for HATPRO, ? for radiometrics)",
     ),
     "tb_cov": MetaData(
         long_name="Error covariance matrix of brightness temperature channels",
         units="K*K",
-        comment="the covariance matrix has been determined using the xxx method from observations at a blackbody target of temperature t_amb",
+        comment="the covariance matrix has been determined using the xxx method\n"
+        "from observations at a blackbody target of temperature t_amb",
     ),
     "quality_flag": MetaData(
         long_name="Quality flag",
         units="1 (bit variable)",
         definition=DEFINITIONS_1B01["quality_flag"],
-        comment="0 indicates data with good quality according to applied tests. The list of (not) applied tests is encoded in quality_flag_status",
+        comment="0 indicates data with good quality according to applied tests.\n"
+        "The list of (not) applied tests is encoded in quality_flag_status",
     ),
     "quality_flag_status": MetaData(
         long_name="Quality flag status",
         units="1 (bit variable)",
         definition=DEFINITIONS_1B01["quality_flag_status"],
-        comment="Checks not executed in determination of quality_flag. 0 indicates quality check has been applied.",
+        comment="Checks not executed in determination of quality_flag.\n"
+        "0 indicates quality check has been applied.",
     ),
     "liquid_cloud_flag": MetaData(
         long_name="Liquid cloud flag",
@@ -184,7 +199,8 @@ ATTRIBUTES_1B01 = {
     "pointing_flag": MetaData(
         long_name="Pointing flag",
         units="1 (bit variable)",
-        comment="Flag indicating a single pointing (staring = 0) or multiple pointing (scanning = 1) observation sequence",
+        comment="Flag indicating a single pointing (staring = 0)\n"
+        "or multiple pointing (scanning = 1) observation sequence",
     ),
     "t_amb": MetaData(
         long_name="Ambient target temperature",
@@ -280,6 +296,7 @@ ATTRIBUTES_1B21 = {
         long_name="Meterological data quality flag",
         units="1 (bit variable)",
         definition=DEFINITIONS_1B21["met_quality_flag"],
-        comment="0=ok, 1=problem. Note: should also be set to 1 if corresponding sensor not available",
+        comment="0=ok, 1=problem. Note: should also be set to 1\n"
+        "if corresponding sensor not available",
     ),
 }

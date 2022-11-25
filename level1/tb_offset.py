@@ -1,6 +1,8 @@
-import numpy as np
-import time
 import datetime
+import time
+
+import numpy as np
+
 from utils import epoch2unix
 
 

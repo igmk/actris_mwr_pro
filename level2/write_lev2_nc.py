@@ -1,24 +1,26 @@
-from read_specs import get_site_specs
-from level2.lev2_meta_nc import get_data_attributes
+import os
+from datetime import datetime
+
+import netCDF4 as nc
+import numpy as np
+import pytz
+from numpy import ma
+from tzwhere import tzwhere
+
+import rpg_mwr
+from atmos import eq_pot_tem, pot_tem, rel_hum, rh_err
 from level1.quality_control import spectral_consistency
 from level2.get_ret_coeff import get_mvr_coeff
+from level2.lev2_meta_nc import get_data_attributes
 from level2.lwp_offset import correct_lwp_offset
-from utils import rebin_2d, get_coeff_list, get_ret_freq, get_ret_ang, add_time_bounds
-from atmos import rh_err, eq_pot_tem, pot_tem, rel_hum
-import rpg_mwr
-import os
-from datetime import datetime, date
-import pytz
-from tzwhere import tzwhere
-import numpy as np
-from numpy import ma
-import netCDF4 as nc
+from read_specs import get_site_specs
+from utils import add_time_bounds, get_coeff_list, get_ret_ang, get_ret_freq, interpol_2d
 
 Fill_Value_Float = -999.0
 Fill_Value_Int = -99
 
 
-def lev2_to_nc(date: str, site: str, data_type: str, lev1_path: str, lev2_path: str) -> dict:
+def lev2_to_nc(date_in: str, site: str, data_type: str, lev1_path: str, lev2_path: str) -> dict:
     """This function reads Level 1 files,
     applies retrieval coefficients for Level 2 products and writes it into a netCDF file.
 
@@ -30,7 +32,8 @@ def lev2_to_nc(date: str, site: str, data_type: str, lev1_path: str, lev2_path: 
 
     Examples:
         >>> from level2.write_lev2_nc import lev2_to_nc
-        >>> lev2_to_nc('date', site_name', '2P00', '/path/to/lev1_file/lev1_data.nc', '/path/to/lev2_file/')
+        >>> lev2_to_nc('date', site_name', '2P00', 
+        '/path/to/lev1_file/lev1_data.nc', '/path/to/lev2_file/')
     """
 
     if data_type not in (
@@ -48,11 +51,11 @@ def lev2_to_nc(date: str, site: str, data_type: str, lev1_path: str, lev2_path: 
 
     with nc.Dataset(lev1_path) as lev1:
         BL_scan = _test_BL_scan(site, lev1)
-        if (data_type == "2P02") & (BL_scan == False):
+        if (data_type == "2P02") & (not BL_scan):
             data_type = "2P01"
         if data_type in ("2P04", "2P07", "2P08"):
             T_prod = "2P02"
-            if BL_scan == False:
+            if not BL_scan:
                 T_prod = "2P01"
             for d_type in [T_prod, "2P03"]:
                 global_attributes, params = get_site_specs(site, d_type)
@@ -63,11 +66,11 @@ def lev2_to_nc(date: str, site: str, data_type: str, lev1_path: str, lev2_path: 
                     + "_"
                     + global_attributes["wigos_station_id"]
                     + "_"
-                    + date
+                    + date_in
                     + ".nc"
                 ):
                     rpg_dat, coeff, index = get_products(
-                        site, lev1, d_type, params, global_attributes
+                        site, lev1, d_type, params
                     )
                     _combine_lev1(lev1, rpg_dat, index, d_type, params)
                     hatpro = rpg_mwr.Rpg(rpg_dat)
@@ -79,15 +82,15 @@ def lev2_to_nc(date: str, site: str, data_type: str, lev1_path: str, lev2_path: 
                         + "_"
                         + global_attributes["wigos_station_id"]
                         + "_"
-                        + date
+                        + date_in
                         + ".nc"
                     )
-                    rpg_mwr.save_rpg(hatpro, output_file, global_attributes, d_type, params)
+                    rpg_mwr.save_rpg(hatpro, output_file, global_attributes, d_type)
 
         global_attributes, params = get_site_specs(site, data_type)
-        rpg_dat, coeff, index = get_products(site, lev1, data_type, params, global_attributes)
+        rpg_dat, coeff, index = get_products(site, lev1, data_type, params)
         _combine_lev1(lev1, rpg_dat, index, data_type, params)
-        _add_att(global_attributes, coeff)
+        _add_att(global_attributes, coeff, lev1)
         hatpro = rpg_mwr.Rpg(rpg_dat)
         hatpro.data = get_data_attributes(hatpro.data, data_type)
         output_file = (
@@ -97,18 +100,18 @@ def lev2_to_nc(date: str, site: str, data_type: str, lev1_path: str, lev2_path: 
             + "_"
             + global_attributes["wigos_station_id"]
             + "_"
-            + date
+            + date_in
             + ".nc"
         )
-        rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params)
+        rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type)
 
 
 def get_products(
-    site: str, lev1: dict, data_type: str, params: dict, global_attributes: dict
+    site: str, lev1: dict, data_type: str, params: dict
 ) -> dict:
     "Derive specified Level 2 products"
 
-    rpg_dat = dict()
+    rpg_dat = {}
 
     if data_type in ("2I01", "2I02"):
         if data_type == "2I01":
@@ -122,7 +125,7 @@ def get_products(
                 site, prod, lev1["frequency"][:]
             )
         else:
-            coeff, ns_ta, ns_sc, ns_os, w1, w2 = get_mvr_coeff(site, prod, lev1["frequency"][:])
+            coeff, ns_ta, ns_sc, ns_os, w1, w2, pn = get_mvr_coeff(site, prod, lev1["frequency"][:])
         ret_in = retrieval_input(lev1, coeff)
         _, freq_ind, _ = np.intersect1d(
             lev1["frequency"][:], coeff["freq"][:, 0], assume_unique=False, return_indices=True
@@ -285,17 +288,17 @@ def get_products(
             [],
             np.ones((len(coeff["freq"]), len(coeff["ele"]), 0), np.float32) * Fill_Value_Float,
         )
-        for ii in range(len(ix0)):
+        for ix0v in ix0:
             if np.allclose(
-                lev1["ele"][ix0[ii] - len(coeff["ele"]) : ix0[ii]], coeff["ele"], atol=0.5
+                lev1["ele"][ix0v - len(coeff["ele"]) : ix0v], coeff["ele"], atol=0.5
             ):
-                index = np.append(index, ix0[ii])
-                ele = np.append(ele, lev1["ele"][ix0[ii] - len(coeff["ele"]) : ix0[ii]])
+                index = np.append(index, ix0v)
+                ele = np.append(ele, lev1["ele"][ix0v - len(coeff["ele"]) : ix0v])
                 tb = np.concatenate(
                     (
                         tb,
                         np.expand_dims(
-                            lev1["tb"][ix0[ii] - len(coeff["ele"]) : ix0[ii], freq_ind].T, 2
+                            lev1["tb"][ix0v - len(coeff["ele"]) : ix0v, freq_ind].T, 2
                         ),
                     ),
                     axis=2,
@@ -337,7 +340,7 @@ def get_products(
             site, datetime.strptime(lev1.date, "%Y-%m-%d"), "2P03"
         )
 
-        coeff, index = dict(), []
+        coeff, index = {}, []
         coeff["retrieval_frequencies"] = str(
             np.unique(np.sort(np.concatenate([tem_freq, hum_freq])))
         )
@@ -345,18 +348,19 @@ def get_products(
             np.unique(np.sort(np.concatenate([tem_ang, hum_ang])))
         )
         coeff["retrieval_description"] = "derived product from: " + prod + ", 2P03"
+        coeff["dependencies"] = prod + ", 2P03"
 
-        hum = rebin_2d(
+        hum = interpol_2d(
             hum_dat.variables["time"][:],
             hum_dat.variables["water_vapor_vmr"][:, :],
             tem_dat.variables["time"][:],
         )
-        hum_re = rebin_2d(
+        hum_re = interpol_2d(
             hum_dat.variables["time"][:],
             hum_dat.variables["water_vapor_vmr_random_error"][:, :],
             tem_dat.variables["time"][:],
         )
-        hum_se = rebin_2d(
+        hum_se = interpol_2d(
             hum_dat.variables["time"][:],
             hum_dat.variables["water_vapor_vmr_systematic_error"][:, :],
             tem_dat.variables["time"][:],
@@ -437,8 +441,8 @@ def _combine_lev1(
                 rpg_dat[ivars] = lev1[ivars][index]
 
 
-def _add_att(global_attributes: dict, coeff: dict) -> None:
-    "add retrieval attributes"
+def _add_att(global_attributes: dict, coeff: dict, lev1: dict) -> None:
+    "add retrieval and calibration attributes"
     fields = [
         "retrieval_type",
         "retrieval_elevation_angles",
@@ -452,20 +456,33 @@ def _add_att(global_attributes: dict, coeff: dict) -> None:
         else:
             global_attributes[name] = ""
 
+    fields = [
+        "instrument_calibration_status",
+        "receiver1_date_of_last_absolute_calibration",
+        "receiver1_type_of_last_absolute_calibration",
+        "receiver2_date_of_last_absolute_calibration",
+        "receiver2_type_of_last_absolute_calibration",
+    ]
+    for name in fields:
+        if hasattr(lev1, name):
+            global_attributes[name] = eval("lev1." + name)
+        else:
+            global_attributes[name] = ""
 
-def load_product(site: str, date: str, prod: str):
+
+def load_product(site: str, date_in: str, prod: str):
     "load existing lev2 file for deriving other products"
     file = []
     global_attributes, params = get_site_specs(site, "1C01")
     ID = global_attributes["wigos_station_id"]
-    data_out_l2 = params["data_out"] + "level2/" + date.strftime("%Y/%m/%d/")
-    file_name = data_out_l2 + "MWR_" + prod + "_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"
+    data_out_l2 = params["data_out"] + "level2/" + date_in.strftime("%Y/%m/%d/")
+    file_name = data_out_l2 + "MWR_" + prod + "_" + ID + "_" + date_in.strftime("%Y%m%d") + ".nc"
 
     if os.path.isfile(file_name):
         file = nc.Dataset(file_name)
-    "load single pointing T if no BL scans are performed"
+    # Load single pointing T if no BL scans are performed
     if (not os.path.isfile(file_name)) & (prod == "2P02"):
-        file_name = data_out_l2 + "MWR_2P01_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"
+        file_name = data_out_l2 + "MWR_2P01_" + ID + "_" + date_in.strftime("%Y%m%d") + ".nc"
         if os.path.isfile(file_name):
             file = nc.Dataset(file_name)
             prod = "2P01"

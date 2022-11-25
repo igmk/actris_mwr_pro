@@ -1,7 +1,8 @@
+import netCDF4 as nc
 import numpy as np
 from numpy import ma
+
 from utils import get_coeff_list
-import netCDF4 as nc
 
 Fill_Value_Float = -999.0
 Fill_Value_Int = -99
@@ -22,7 +23,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
     """
 
     c_list = get_coeff_list(site, prefix)
-    cf = dict()
+    cf = {}
     cf["rt"] = -99
 
     if (str(c_list[0][-3:]).lower() == "ret") & (len(c_list) == 1):
@@ -68,7 +69,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                 assume_unique=False,
                                 return_indices=True,
                             )
-                            if len(freq_cf) < len(coeff["freq"][:]):
+                            if len(freq_cf) < len(freq_ret):
                                 raise RuntimeError(
                                     ["Instrument and retrieval frequencies do not match."]
                                 )
@@ -79,7 +80,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                         # Regression
                         if (cf["rt"] != -99) & (cf["rt"] < 2):
                             cf["aux"] = ["TS", "HS", "PS", "IS"]
-                            if not "aux_flg" in cf:
+                            if "aux_flg" not in cf:
                                 cf["aux_flg"] = np.zeros(len(cf["aux"]), np.int32)
                             for ii, aux_i in enumerate(cf["aux"]):
                                 if ls[0] == aux_i:
@@ -130,19 +131,19 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                 "DY",
                                 "SU",
                             ]
-                            if not "aux_flg" in cf:
+                            if "aux_flg" not in cf:
                                 cf["aux_flg"] = np.zeros(len(cf["aux"]), np.int32)
                             if ls[0] in cf["aux"]:
                                 xf = np.where(np.array(cf["aux"]) == ls[0])[0]
                                 cf["aux_flg"][xf] = int(ls[1])
                             if ls[0] == "NP":
-                                if not "np" in cf:
+                                if "np" not in cf:
                                     cf["np"] = float(ls[1][:].split()[0])
                                 else:
                                     cf["np"] = np.hstack((cf["np"], float(ls[1][:].split()[0])))
                             if ls[0] == "NS":
                                 cll = ls[1].split()
-                                if not "op_os" in cf:
+                                if "op_os" not in cf:
                                     cf["in_os"] = np.array([float(idx) for idx in cll], np.float32)
                                     cll = lines[il + 1].split(":")[1].split()
                                     cf["in_sc"] = np.array([float(idx) for idx in cll], np.float32)
@@ -174,10 +175,12 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                             float(lines[il + 3].split(":")[1].split()[0]),
                                         )
                                     )
-                                    # cf['ns_ta'] = np.vstack((cf['ns_ta'], np.array([float(lines[il+2].split(':')[1].split()[0]), float(lines[il+3].split(':')[1].split()[0])])))
+                                    # cf['ns_ta'] = np.vstack((cf['ns_ta'], 
+                                    # np.array([float(lines[il+2].split(':')[1].split()[0]), 
+                                    # float(lines[il+3].split(':')[1].split()[0])])))
                             if ls[0] == "W1":
                                 cll = ls[1].split()
-                                if not "w1" in cf:
+                                if "w1" not in cf:
                                     nn = np.sum(cf["aux_flg"]) + 15
                                     if cf["aux_flg"][7] == 1:
                                         nn += 1
@@ -222,7 +225,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                                     cf["w1"] = np.vstack((cf["w1"], w1[np.newaxis, ...]))
                             if ls[0] == "W2":
                                 cll = ls[1].split()
-                                if not "w2" in cf:
+                                if "w2" not in cf:
                                     cf["w2"] = np.array(
                                         [float(idx) for idx in cll[0 : cf["nd"][0]]],
                                         np.float32,
@@ -286,10 +289,10 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
             def ns_os(x):
                 return np.array([cf["ns_os"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x])
 
-            def w1(x):
+            def W1(x):
                 return np.array([cf["w1"][(np.abs(cf["ele"] - v)).argmin(), :, :] for v in x])
 
-            def w2(x):
+            def W2(x):
                 return np.array([cf["w2"][(np.abs(cf["ele"] - v)).argmin(), :] for v in x])
 
             def pn(x):
@@ -408,5 +411,5 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
     return (
         (cf, f_offset, f_lin, f_quad, e_ran, e_sys)
         if (cf["rt"] < 2)
-        else (cf, ns_ta, ns_sc, ns_os, w1, w2)
+        else (cf, ns_ta, ns_sc, ns_os, W1, W2, pn)
     )

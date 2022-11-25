@@ -146,7 +146,7 @@ ATTRIBUTES_2P03 = {
         units="ppm",
     ),
     "water_vapor_vmr_random_error": MetaData(
-        long_name="Random uncertainty of retrieved water",
+        long_name="Random uncertainty of retrieved water vapour profile",
         units="ppm",
         comment="specify here source of this variable",
     ),

@@ -1,5 +1,5 @@
 """Metadata for plotting module."""
-from typing import NamedTuple, Optional, Tuple, Union, Sequence
+from typing import NamedTuple, Optional, Sequence, Tuple, Union
 
 
 class PlotMeta(NamedTuple):
@@ -15,7 +15,7 @@ class PlotMeta(NamedTuple):
     ele: Optional[Tuple[float, float]] = None
 
 
-_K = "$K$"
+_K = "K"
 _KGM2 = "kg m$^{-2}$"
 _GM2 = "g m$^{-2}$"
 _KGM3 = "kg m$^{-3}$"
@@ -111,10 +111,10 @@ ATTRIBUTES = {
         name="Retrieved water vapour profile",
         cbar="Spectral_r",
         clabel=_KGM3,
-        plot_range=(-0.00000000000001, 0.026),
+        plot_range=(-0.00000000000001, 0.02),
         plot_type="mesh",
         cbar_ext="max",
-        nlev=14,
+        nlev=11,
     ),
     "temperature": PlotMeta(
         # name='Retrieved temperature profile',
@@ -136,13 +136,13 @@ ATTRIBUTES = {
     "equivalent_potential_temperature": PlotMeta(
         cbar="turbo",
         clabel=_K,
-        plot_range=(275.0, 350.0),
+        plot_range=(270.0, 350.0),
         plot_type="mesh",
         cbar_ext="both",
-        nlev=26,
+        nlev=41,
     ),
     "relative_humidity": PlotMeta(
-        name="Relative Humidity",
+        name="Relative humidity",
         cbar="viridis",
         clabel=_PP,
         plot_range=(0.0, 100.1),
@@ -152,7 +152,7 @@ ATTRIBUTES = {
         nlev=11,
     ),
     "air_temperature": PlotMeta(
-        name="Air temperature",
+        name="Air and dewpoint temperature",
         ylabel=_K,
         plot_range=(240, 310),
         plot_type="bar",
@@ -204,14 +204,14 @@ ATTRIBUTES = {
     "ele": PlotMeta(
         name="Sensor elevation angle",
         ylabel=_DEG,
-        plot_range=(-3, 93),
+        plot_range=(-1, 93),
         plot_type="bar",
         source="sen",
     ),
     "azi": PlotMeta(
         name="Sensor azimuth angle",
         ylabel=_DEG,
-        plot_range=(-3, 363),
+        plot_range=(-5, 363),
         plot_type="bar",
         source="sen",
     ),

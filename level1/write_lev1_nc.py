@@ -1,17 +1,18 @@
-from read_specs import get_site_specs
-from level1.rpg_bin import get_rpg_bin
-from level1.lev1_meta_nc import get_data_attributes
-from level1.quality_control import apply_qc
-from level1.met_quality_control import apply_met_qc
-
-# from level1.tb_offset import correct_tb_offset
-from utils import isbit, epoch2unix, add_time_bounds
-import rpg_mwr
-import numpy as np
-import pandas as pd
-import glob
 import datetime
 from itertools import groupby
+
+import numpy as np
+import pandas as pd
+
+import rpg_mwr
+from level1.lev1_meta_nc import get_data_attributes
+from level1.met_quality_control import apply_met_qc
+from level1.quality_control import apply_qc
+from level1.rpg_bin import get_rpg_bin
+from read_specs import get_site_specs
+
+# from level1.tb_offset import correct_tb_offset
+from utils import add_interpol1d, add_time_bounds, epoch2unix, get_file_list, isbit
 
 Fill_Value_Float = -999.0
 Fill_Value_Int = -99
@@ -38,15 +39,16 @@ def lev1_to_nc(
 
     Examples:
         >>> from level1.write_lev1_nc import lev1_to_nc
-        >>> lev1_to_nc('site_name', '1B01', '/path/to/files/', '/path/to/previous/day/', '/path/to/next/day/', 'rpg_mwr.nc')
+        >>> lev1_to_nc('site_name', '1B01', '/path/to/files/', '/path/to/previous/day/',
+        '/path/to/next/day/', 'rpg_mwr.nc')
     """
 
-    file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, "hkd")
+    # file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, "hkd")
     global_attributes, params = get_site_specs(site, data_type)
     rpg_bin = prepare_data(path_to_files, path_to_prev, path_to_next, data_type, params)
     if data_type in ("1B01", "1C01"):
         apply_qc(site, rpg_bin.data, params)
-        rpg_cal = cal_his(params, global_attributes, rpg_bin.data["time"][0])
+        # rpg_cal = cal_his(params, global_attributes, rpg_bin.data["time"][0])
         # if rpg_cal != []:
         #     correct_tb_offset(site, rpg_bin.data, params, global_attributes, rpg_cal)
     if data_type in ("1B21", "1C01"):
@@ -54,37 +56,7 @@ def lev1_to_nc(
     hatpro = rpg_mwr.Rpg(rpg_bin.data)
     hatpro.find_valid_times()
     hatpro.data = get_data_attributes(hatpro.data, data_type)
-    rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type, params)
-
-
-def get_file_list(path_to_files: str, path_to_prev: str, path_to_next: str, extension: str):
-
-    f_list = sorted(glob.glob(path_to_files + "*." + extension))
-    if len(f_list) == 0:
-        f_list = sorted(glob.glob(path_to_files + "*." + extension.upper()))
-    f_list_p = sorted(glob.glob(path_to_prev + "*." + extension))
-    if len(f_list_p) == 0:
-        f_list_p = sorted(glob.glob(path_to_prev + "*." + extension.upper()))
-    f_list_n = sorted(glob.glob(path_to_next + "*." + extension))
-    if len(f_list_n) == 0:
-        f_list_n = sorted(glob.glob(path_to_next + "*." + extension.upper()))
-
-    if len(f_list) == 0:
-        raise RuntimeError(
-            [
-                "Error: no binary files with extension "
-                + extension
-                + " found in directory "
-                + path_to_files
-            ]
-        )
-    if (len(f_list_p) > 0) & (len(f_list_n) > 0):
-        f_list = [f_list_p[-1], *f_list, f_list_n[0]]
-    elif (len(f_list_p) > 0) & (len(f_list_n) == 0):
-        f_list = [f_list_p[-1], *f_list]
-    elif (len(f_list_p) == 0) & (len(f_list_n) > 0):
-        f_list = [*f_list, f_list_n[0]]
-    return f_list
+    rpg_mwr.save_rpg(hatpro, output_file, global_attributes, data_type)
 
 
 def prepare_data(
@@ -120,12 +92,12 @@ def prepare_data(
 
         file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, "hkd")
         rpg_hkd = get_rpg_bin(file_list_hkd)
-        # try:
-        file_list_blb = get_file_list(path_to_files, path_to_prev, path_to_next, "blb")
-        rpg_blb = get_rpg_bin(file_list_blb)
-        _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)
-        # except:
-        #     print(["No binary files with extension blb found in directory " + path_to_files])
+        try:
+            file_list_blb = get_file_list(path_to_files, path_to_prev, path_to_next, "blb")
+            rpg_blb = get_rpg_bin(file_list_blb)
+            _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)
+        except:
+            print(["No binary files with extension blb found in directory " + path_to_files])
 
         if params["azi_cor"] != Fill_Value_Float:
             _azi_correction(rpg_bin.data, params)
@@ -138,35 +110,35 @@ def prepare_data(
                 rpg_bin.data["ir_wavelength"] = rpg_irt.header["_f"]
                 rpg_bin.data["ir_bandwidth"] = params["ir_bandwidth"]
                 rpg_bin.data["ir_beamwidth"] = params["ir_beamwidth"]
-                _add_interpol1(rpg_bin.data, rpg_irt.data["irt"], rpg_irt.data["time"], "irt")
-                _add_interpol1(rpg_bin.data, rpg_irt.data["ir_ele"], rpg_irt.data["time"], "ir_ele")
-                _add_interpol1(rpg_bin.data, rpg_irt.data["ir_azi"], rpg_irt.data["time"], "ir_azi")
+                add_interpol1d(rpg_bin.data, rpg_irt.data["irt"], rpg_irt.data["time"], "irt")
+                add_interpol1d(rpg_bin.data, rpg_irt.data["ir_ele"], rpg_irt.data["time"], "ir_ele")
+                add_interpol1d(rpg_bin.data, rpg_irt.data["ir_azi"], rpg_irt.data["time"], "ir_azi")
             except:
                 print(["No binary files with extension irt found in directory " + path_to_files])
 
             try:
                 file_list_met = get_file_list(path_to_files, path_to_prev, path_to_next, "met")
                 rpg_met = get_rpg_bin(file_list_met)
-                _add_interpol1(
+                add_interpol1d(
                     rpg_bin.data,
                     rpg_met.data["air_temperature"],
                     rpg_met.data["time"],
                     "air_temperature",
                 )
-                _add_interpol1(
+                add_interpol1d(
                     rpg_bin.data,
                     rpg_met.data["relative_humidity"],
                     rpg_met.data["time"],
                     "relative_humidity",
                 )
-                _add_interpol1(
+                add_interpol1d(
                     rpg_bin.data,
                     rpg_met.data["air_pressure"],
                     rpg_met.data["time"],
                     "air_pressure",
                 )
                 if (int(rpg_met.header["_n_sen"], 2) & 1) != 0:
-                    _add_interpol1(
+                    add_interpol1d(
                         rpg_bin.data,
                         rpg_met.data["adds"][:, 0],
                         rpg_met.data["time"],
@@ -174,14 +146,14 @@ def prepare_data(
                     )
                     rpg_bin.data["wind_speed"] = rpg_bin.data["wind_speed"] / 3.6
                 if (int(rpg_met.header["_n_sen"], 2) & 2) != 0:
-                    _add_interpol1(
+                    add_interpol1d(
                         rpg_bin.data,
                         rpg_met.data["adds"][:, 1],
                         rpg_met.data["time"],
                         "wind_direction",
                     )
                 if (int(rpg_met.header["_n_sen"], 2) & 4) != 0:
-                    _add_interpol1(
+                    add_interpol1d(
                         rpg_bin.data,
                         rpg_met.data["adds"][:, 2],
                         rpg_met.data["time"],
@@ -225,7 +197,7 @@ def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
     hkd = get_rpg_bin(file_list_hkd)
 
     if all(hkd.data["station_latitude"] == Fill_Value_Float):
-        _add_interpol1(
+        add_interpol1d(
             rpg_bin.data,
             np.ones(len(hkd.data["time"])) * params["station_latitude"],
             hkd.data["time"],
@@ -233,14 +205,14 @@ def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
         )
     else:
         idx = np.where(hkd.data["station_latitude"] != Fill_Value_Float)[0]
-        _add_interpol1(
+        add_interpol1d(
             rpg_bin.data,
             hkd.data["station_latitude"][idx],
             hkd.data["time"][idx],
             "station_latitude",
         )
     if all(hkd.data["station_longitude"] == Fill_Value_Float):
-        _add_interpol1(
+        add_interpol1d(
             rpg_bin.data,
             np.ones(len(hkd.data["time"])) * params["station_longitude"],
             hkd.data["time"],
@@ -248,7 +220,7 @@ def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
         )
     else:
         idx = np.where(hkd.data["station_longitude"] != Fill_Value_Float)[0]
-        _add_interpol1(
+        add_interpol1d(
             rpg_bin.data,
             hkd.data["station_longitude"][idx],
             hkd.data["time"][idx],
@@ -256,11 +228,11 @@ def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
         )
 
     if data_type in ("1B01", "1C01"):
-        _add_interpol1(rpg_bin.data, hkd.data["temp"][:, 0:2], hkd.data["time"], "t_amb")
-        _add_interpol1(rpg_bin.data, hkd.data["temp"][:, 2:4], hkd.data["time"], "t_rec")
-        _add_interpol1(rpg_bin.data, hkd.data["stab"], hkd.data["time"], "t_sta")
+        add_interpol1d(rpg_bin.data, hkd.data["temp"][:, 0:2], hkd.data["time"], "t_amb")
+        add_interpol1d(rpg_bin.data, hkd.data["temp"][:, 2:4], hkd.data["time"], "t_rec")
+        add_interpol1d(rpg_bin.data, hkd.data["stab"], hkd.data["time"], "t_sta")
 
-        """check time intervals of +-15 min of .HKD data for sanity checks"""
+        # Check time intervals of +-15 min of .HKD data for sanity checks
         rpg_bin.data["status"] = np.zeros(rpg_bin.data["tb"].shape, np.int32)
         for i_time, v_time in enumerate(rpg_bin.data["time"]):
             ind = np.where((hkd.data["time"] >= v_time - 900) & (hkd.data["time"] <= v_time + 900))
@@ -272,7 +244,7 @@ def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
                 # status flags for channel 1 to 7 of the temperature profiler receiver
                 if np.any(~isbit(status, bit + 8)):
                     rpg_bin.data["status"][i_time, bit + 7] = 1
-            # receiver 1 (humidity profiler) thermal stability & ambient target stability & noise diode
+            # receiver 1 (humidity) thermal stability & ambient target stability & noise diode
             if np.any(
                 isbit(status, 25)
                 | isbit(status, 29)
@@ -280,7 +252,7 @@ def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
                 | (~isbit(status, 24) & ~isbit(status, 25))
             ):
                 rpg_bin.data["status"][i_time, 0:6] = 1
-            # receiver 2 (temperature profiler) thermal stability & ambient target stability & noise diode
+            # receiver 2 (temperature) thermal stability & ambient target stability & noise diode
             if np.any(
                 isbit(status, 27)
                 | isbit(status, 29)
@@ -288,18 +260,6 @@ def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
                 | (~isbit(status, 26) & ~isbit(status, 27))
             ):
                 rpg_bin.data["status"][i_time, 7:13] = 1
-
-
-def _add_interpol1(data0: dict, data1: np.ndarray, time1: np.ndarray, output_name: str) -> None:
-
-    if data1.ndim > 1:
-        data0[output_name] = (
-            np.ones([len(data0["time"]), data1.shape[1]], np.float32) * Fill_Value_Float
-        )
-        for ndim in range(data1.shape[1]):
-            data0[output_name][:, ndim] = np.interp(data0["time"], time1, data1[:, ndim])
-    else:
-        data0[output_name] = np.interp(data0["time"], time1, data1)
 
 
 def find_lwcl_free(lev1: dict, ix: np.ndarray) -> tuple:
@@ -469,42 +429,43 @@ def cal_his(params: dict, glob_att: dict, time0: int) -> dict:
 
     if file_list_cal != []:
         rpg_cal = get_rpg_bin(file_list_cal)
+        cal_times1 = epoch2unix(rpg_cal.data["t1"], rpg_cal.header["_time_ref"])
+        cal_times2 = epoch2unix(rpg_cal.data["t2"], rpg_cal.header["_time_ref"])
+        cal_ind1 = np.where(cal_times1 < time0)[0]
+        cal_ind2 = np.where(cal_times2 < time0)[0]
 
-        if (
-            (rpg_cal.data["cal1_t"] > 0)
-            & (rpg_cal.data["cal2_t"] > 0)
-            & (
-                (time0 - epoch2unix(rpg_cal.data["t1"], rpg_cal.header["_time_ref"])) / 86400.0
-                < 183.0
-            )
-        ):
-            glob_att["instrument_calibration_status"] = "calibrated"
-        else:
-            glob_att["instrument_calibration_status"] = "needs calibration"
+        if (len(cal_ind1) > 0) & (len(cal_ind2) > 0):
+            if (
+                (rpg_cal.data["cal1_t"][cal_ind1[-1]] > 0)
+                & (rpg_cal.data["cal2_t"][cal_ind2[-1]] > 0)
+                & ((time0 - cal_times1[cal_ind1[-1]]) / 86400.0 < 183.0)
+                & ((time0 - cal_times2[cal_ind2[-1]]) / 86400.0 < 183.0)
+            ):
+                glob_att["instrument_calibration_status"] = "calibrated"
+            else:
+                glob_att["instrument_calibration_status"] = "needs calibration"
 
-        cal_t1 = np.where(epoch2unix(rpg_cal.data["t1"], rpg_cal.header["_time_ref"]) < time0)[0]
-        if len(cal_t1) > 0:
             glob_att[
                 "receiver1_date_of_last_absolute_calibration"
             ] = datetime.datetime.utcfromtimestamp(
-                epoch2unix(rpg_cal.data["t1"][cal_t1[-1]], rpg_cal.header["_time_ref"])
+                epoch2unix(rpg_cal.data["t1"][cal_ind1[-1]], rpg_cal.header["_time_ref"])
             ).strftime(
                 "%Y%m%d"
             )
             glob_att["receiver1_type_of_last_absolute_calibration"] = cal_type[
-                int(rpg_cal.data["cal1_t"])
+                int(rpg_cal.data["cal1_t"][cal_ind1[-1]])
             ]
-        cal_t2 = np.where(epoch2unix(rpg_cal.data["t2"], rpg_cal.header["_time_ref"]) < time0)[0]
-        if len(cal_t2) > 0:
             glob_att[
                 "receiver2_date_of_last_absolute_calibration"
             ] = datetime.datetime.utcfromtimestamp(
-                epoch2unix(rpg_cal.data["t2"][cal_t2[-1]], rpg_cal.header["_time_ref"])
+                epoch2unix(rpg_cal.data["t2"][cal_ind2[-1]], rpg_cal.header["_time_ref"])
             ).strftime(
                 "%Y%m%d"
             )
             glob_att["receiver2_type_of_last_absolute_calibration"] = cal_type[
-                int(rpg_cal.data["cal2_t"])
+                int(rpg_cal.data["cal2_t"][cal_ind2[-1]])
             ]
+        else:
+            glob_att["instrument_calibration_status"] = "needs calibration"
 
     return rpg_cal

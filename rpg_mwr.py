@@ -1,11 +1,14 @@
-from typing import Optional, Union, Tuple
+import locale
+from datetime import datetime, timezone
+from typing import Optional, Tuple, Union
+
+import netCDF4
 import numpy as np
 from numpy import ma
-import netCDF4
+
+import utils
+import version
 from level1.lev1_meta_nc import MetaData
-import utils, version
-from datetime import datetime, timezone
-import locale
 
 
 class RpgArray:
@@ -100,7 +103,7 @@ class Rpg:
 
     def _get_date(self):
         epoch = datetime(1970, 1, 1).timestamp()
-        time_median = float(np.ma.median(self.raw_data["time"]))
+        time_median = float(ma.median(self.raw_data["time"]))
         time_median += epoch
         return datetime.utcfromtimestamp(time_median).strftime("%Y-%m-%d")
 
@@ -127,19 +130,18 @@ class Rpg:
         if len(ind) < 1:
             raise RuntimeError(["Error: no valid data for date: " + self.date])
         n_time = len(self.data["time"].data)
-        for key, array in self.data.items():
+        for _, array in self.data.items():
             data = array.data
             if data.ndim > 0 and data.shape[0] == n_time:
                 if data.ndim == 1:
                     screened_data = data[ind]
                 else:
                     screened_data = data[ind, :]
-                self.data[key].data = screened_data
+                data = screened_data
 
 
 def save_rpg(
-    rpg: Rpg, output_file: str, att: dict, data_type: str, params: dict
-) -> Tuple[str, list]:
+    rpg: Rpg, output_file: str, att: dict, data_type: str) -> None:
     """Saves the RPG MWR file."""
 
     if data_type == "1B01":

@@ -1,9 +1,11 @@
+"""Reader for attributes from config file."""
 # from global_nc import GLOBAL_ALL
 import importlib
 
 
 def get_site_specs(site: str, data_type: str) -> dict:
-    """This function initializes site specific global attributes and parameters of RPG MWR Level 1 + 2 data for NetCDF file writing.
+    """This function initializes site specific global attributes
+    and parameters of RPG MWR Level 1 + 2 data for NetCDF file writing.
     Args:
         site: Name of site.
         data_type: Data type of the netCDF file.
@@ -20,7 +22,7 @@ def get_site_specs(site: str, data_type: str) -> dict:
 
     """
 
-    site_dict = importlib.import_module(f"site_config." + site + ".config")
+    site_dict = importlib.import_module(str("site_config." + site + ".config"))
     global_specs = get_global_specs(site_dict.global_specs, data_type)
     # add_global_description(global_specs, GLOBAL_ALL)
 
@@ -40,6 +42,7 @@ def add_global_description(site_specs: dict, global_description: dict) -> None:
 
 
 def get_global_specs(global_specs: dict, data_type: str) -> dict:
+    """Combines global attributes for specified data type."""
 
     vv = list(global_specs.values())[:]
     kk = list(global_specs.keys())[:]
@@ -93,6 +96,6 @@ def get_global_specs(global_specs: dict, data_type: str) -> dict:
     else:
         raise RuntimeError(["Data type " + data_type + " not supported for file writing."])
 
-    specs = {k: v for k, v in zip(keys, values)}
+    specs = dict(zip(keys, values))#{k: v for k, v in zip(keys, values)}
 
     return specs
