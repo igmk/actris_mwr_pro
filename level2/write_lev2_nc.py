@@ -14,7 +14,8 @@ from level2.get_ret_coeff import get_mvr_coeff
 from level2.lev2_meta_nc import get_data_attributes
 from level2.lwp_offset import correct_lwp_offset
 from read_specs import get_site_specs
-from utils import add_time_bounds, get_coeff_list, get_ret_ang, get_ret_freq, interpol_2d
+from utils import add_time_bounds, get_coeff_list, get_ret_ang, get_ret_freq, interpol_2d, get_file_list
+from level1.rpg_bin import get_rpg_bin
 
 Fill_Value_Float = -999.0
 Fill_Value_Int = -99
@@ -119,13 +120,13 @@ def get_products(
         else:
             prod = "iwv"
 
-        coeff, _, _, _, _, _ = get_mvr_coeff(site, prod, lev1["frequency"][:])
-        if coeff["rt"] < 2:
+        coeff = get_mvr_coeff(site, prod, lev1["frequency"][:])
+        if coeff[0]["rt"] < 2:
             coeff, offset, lin, quad, ran_err, sys_err = get_mvr_coeff(
                 site, prod, lev1["frequency"][:]
             )
         else:
-            coeff, ns_ta, ns_sc, ns_os, w1, w2, pn = get_mvr_coeff(site, prod, lev1["frequency"][:])
+            coeff, in_sc, in_os, op_sc, op_os, w1, w2, pn = get_mvr_coeff(site, prod, lev1["frequency"][:])
         ret_in = retrieval_input(lev1, coeff)
         _, freq_ind, _ = np.intersect1d(
             lev1["frequency"][:], coeff["freq"][:, 0], assume_unique=False, return_indices=True
@@ -156,48 +157,39 @@ def get_products(
             coeff_offset = offset(lev1["ele"][index])
             coeff_lin = lin(lev1["ele"][index])
             coeff_quad = quad(lev1["ele"][index])
-            if prod == "lwp":
-                lwp = (
-                    coeff_offset
-                    + np.sum(coeff_lin * ret_in[index, :], axis=1)
-                    + np.sum(coeff_quad * ret_in[index, :] ** 2, axis=1)
-                )
-            else:
-                rpg_dat["iwv"] = (
-                    coeff_offset
-                    + np.sum(coeff_lin * ret_in[index, :], axis=1)
-                    + np.sum(coeff_quad * ret_in[index, :] ** 2, axis=1)
-                )
+            tmp = (
+                coeff_offset
+                + np.sum(coeff_lin * ret_in[index, :], axis=1)
+                + np.sum(coeff_quad * ret_in[index, :] ** 2, axis=1)
+            )
             rpg_dat[str(prod + "_random_error")] = ran_err(lev1["ele"][index])
             rpg_dat[str(prod + "_systematic_error")] = sys_err(lev1["ele"][index])
 
-        # else:
-        #     c_w1 = w1(lev1["ele"][index])
-        #     c_w2 = w2(lev1["ele"][index])
-        #     hl = np.ones((len(index), c_w1.shape[2]), np.float32) * Fill_Value_Float
-        #     for ind in range(c_w1.shape[2]):
-        #         hl[:, ind] = np.tanh(
-        #             np.sum(
-        #                 (
-        #                     ret_in[index, 1:] * coeff["in_sc"][0, :]
-        #                     + coeff["in_os"][0, :]
-        #                 )
-        #                 * c_w1[:, 1:, ind]
-        #             )
-        #             + c_w1[:, 0, ind]
-        #         )
+        else:    
+            tmp = np.ones(len(index), np.float32) * Fill_Value_Float
+            c_w1, c_w2, sp = w1(lev1["ele"][index]), w2(lev1["ele"][index]), pn(lev1["ele"][index])
+            i_sc, i_os = in_sc(lev1["ele"][index]), in_os(lev1["ele"][index])
+            o_sc, o_os = op_sc(lev1["ele"][index]), op_os(lev1["ele"][index])
+            for ix, iv in enumerate(index):
+                ret_in[iv, 1:] = (ret_in[iv, 1:] - i_os[ix, :]) * i_sc[ix, :]
+                hl = np.ones(c_w1.shape[2] + 1, np.float32)
+                hl[1:] = np.tanh(sp[ix] * ret_in[iv, :].dot(c_w1[ix, :, :]))
+                tmp[ix] = np.tanh(sp[ix] * hl.dot(c_w2[ix, :])) * o_sc[ix, :] + o_os[ix, :]
 
         if prod == "lwp":
             freq_31 = np.where(np.round(lev1["frequency"][:], 1) == 31.4)[0]
             if len(freq_31) != 1:
                 rpg_dat["lwp"], rpg_dat["lwp_offset"] = (
-                    lwp,
+                    tmp,
                     np.ones(len(index)) * Fill_Value_Float,
                 )
             else:
                 rpg_dat["lwp"], rpg_dat["lwp_offset"] = correct_lwp_offset(
-                    lev1.variables, lwp, index, site
+                    lev1.variables, tmp, index, site
                 )
+        else:
+            rpg_dat["iwv"] = tmp
+            
 
     elif data_type in ("2P01", "2P03"):
         if data_type == "2P01":
@@ -205,11 +197,13 @@ def get_products(
         else:
             prod, ret = "water_vapor_vmr", "hze"
 
-        coeff, _, _, _, _, _ = get_mvr_coeff(site, ret, lev1["frequency"][:])
-        if coeff["rt"] < 2:
+        coeff = get_mvr_coeff(site, ret, lev1["frequency"][:])
+        if coeff[0]["rt"] < 2:
             coeff, offset, lin, quad, ran_err, sys_err = get_mvr_coeff(
                 site, ret, lev1["frequency"][:]
             )
+        else:
+            coeff, in_sc, in_os, op_sc, op_os, w1, w2, pn = get_mvr_coeff(site, ret, lev1["frequency"][:])
         ret_in = retrieval_input(lev1, coeff)
 
         _, freq_ind, _ = np.intersect1d(
@@ -256,14 +250,32 @@ def get_products(
                 )
             rpg_dat[str(prod + "_random_error")] = ran_err(lev1["ele"][index])
             rpg_dat[str(prod + "_systematic_error")] = sys_err(lev1["ele"][index])
+            
+        else:
+            c_w1, c_w2, sp = w1(lev1["ele"][index]), w2(lev1["ele"][index]), pn(lev1["ele"][index])
+            i_sc, i_os = in_sc(lev1["ele"][index]), in_os(lev1["ele"][index])
+            o_sc, o_os = op_sc(lev1["ele"][index]), op_os(lev1["ele"][index])
+
+            for ix, iv in enumerate(index):
+                hl_in = np.concatenate(([1.], (ret_in[iv, 1:] - i_os[ix, :]) * i_sc[ix, :]))
+                hl = np.concatenate(([1.], np.tanh(sp[ix] * hl_in.dot(c_w1[ix, :, :]))))
+                rpg_dat[prod][ix, :] = np.tanh(sp[ix] * hl.dot(c_w2[ix, :, :])) * o_sc[ix, :] + o_os[ix, :]
+                if prod == "water_vapor_vmr":
+                    rpg_dat[prod][ix, :] = rpg_dat[prod][ix, :] / 1000.
+            rpg_dat[str(prod + "_random_error")] = np.ones(rpg_dat[prod].shape, np.float32) * Fill_Value_Float
+            rpg_dat[str(prod + "_systematic_error")] = np.ones(rpg_dat[prod].shape, np.float32) * Fill_Value_Float
+         
 
     elif data_type == "2P02":
 
-        coeff, _, _, _, _, _ = get_mvr_coeff(site, "tel", lev1["frequency"][:])
-        if coeff["rt"] < 2:
+        coeff = get_mvr_coeff(site, "tel", lev1["frequency"][:])
+        if coeff[0]["rt"] < 2:
             coeff, offset, lin, quad, ran_err, sys_err = get_mvr_coeff(
                 site, "tel", lev1["frequency"][:]
             )
+        else:
+            coeff, in_sc, in_os, op_sc, op_os, w1, w2, pn = get_mvr_coeff(site, "tel", lev1["frequency"][:])
+        ret_in = retrieval_input(lev1, coeff)        
 
         _, freq_ind, _ = np.intersect1d(
             lev1["frequency"][:],
@@ -283,17 +295,15 @@ def get_products(
             )[0]
             + 1
         )
-        index, ele, tb = (
-            np.empty(0, np.int32),
-            [],
-            np.ones((len(coeff["freq"]), len(coeff["ele"]), 0), np.float32) * Fill_Value_Float,
+        ibl, tb = (
+            np.empty([0, len(coeff["ele"])], np.int32),
+            np.ones((len(freq_ind), len(coeff["ele"]), 0), np.float32) * Fill_Value_Float,
         )
         for ix0v in ix0:
             if np.allclose(
                 lev1["ele"][ix0v - len(coeff["ele"]) : ix0v], coeff["ele"], atol=0.5
-            ):
-                index = np.append(index, ix0v)
-                ele = np.append(ele, lev1["ele"][ix0v - len(coeff["ele"]) : ix0v])
+            ):             
+                ibl = np.append(ibl, [np.array(range(ix0v - len(coeff["ele"]), ix0v))], axis=0)
                 tb = np.concatenate(
                     (
                         tb,
@@ -302,23 +312,24 @@ def get_products(
                         ),
                     ),
                     axis=2,
-                )
+                )               
 
-        if len(index) == 0:
+        if len(ibl) == 0:
             raise RuntimeError(
                 ["No suitable data found for processing for data type: " + data_type]
             )
-
-        tb_alg = []
-        if len(freq_ind) - len(freq_bl) > 0:
-            tb_alg = np.squeeze(tb[0 : len(freq_ind) - len(freq_bl), 0, :])
-        for ifq, _ in enumerate(coeff["freq_bl"]):
-            tb_alg = np.append(tb_alg, np.squeeze(tb[freq_bl[ifq], :, :]), axis=0)
-
+            
+        index = ibl[:, -1]
         rpg_dat["altitude"] = coeff["height_grid"][:] + params["station_altitude"]
-        rpg_dat["temperature"] = ma.masked_all((len(index), coeff["n_height_grid"]))
-
+        rpg_dat["temperature"] = ma.masked_all((len(index), coeff["n_height_grid"]))                  
+        
         if coeff["rt"] < 2:
+            tb_alg = []
+            if len(freq_ind) - len(freq_bl) > 0:
+                tb_alg = np.squeeze(tb[0 : len(freq_ind) - len(freq_bl), 0, :])
+            for ifq, _ in enumerate(coeff["freq_bl"]):
+                tb_alg = np.append(tb_alg, np.squeeze(tb[freq_bl[ifq], :, :]), axis=0)
+
             for ialt, _ in enumerate(rpg_dat["altitude"]):
                 rpg_dat["temperature"][:, ialt] = offset[ialt] + np.sum(
                     lin[:, ialt] * tb_alg[:, :].T, axis=1
@@ -330,6 +341,28 @@ def get_products(
             rpg_dat["temperature_systematic_error"] = (
                 np.repeat(sys_err, len(index)).reshape((len(sys_err), len(index))).T
             )
+        else:
+            for ix in range(ibl.shape[0]):
+                ret_array = np.reshape(ret_in[np.ix_(ibl[ix, :], freq_ind+1)], len(coeff["ele"]) * len(freq_ind))
+                for i_add in range(ret_in.shape[1] - len(coeff["freq"]) - 1, 0, -1):
+                    ret_array = np.concatenate((ret_array, [ma.median(ret_in[ibl[ix, :], -i_add])]))
+                hl_in = np.concatenate(([1.], (ret_array - coeff["in_os"][0, :]) * coeff["in_sc"][0, :]))
+                hl = np.concatenate(([1.], np.tanh(coeff["np"][0] * hl_in.dot(coeff["w1"][0, :, :]))))
+                rpg_dat["temperature"][ix, :] = np.tanh(coeff["np"][0] * hl.dot(coeff["w2"][0, :, :])) * coeff["op_sc"][0, :] + coeff["op_os"][0, :]
+            rpg_dat["temperature_random_error"] = np.ones(rpg_dat["temperature"].shape, np.float32) * Fill_Value_Float
+            rpg_dat["temperature_systematic_error"] = np.ones(rpg_dat["temperature"].shape, np.float32) * Fill_Value_Float   
+            
+        # file_list_tpb = get_file_list("/data/obs/site/cgn/foghat/l2/2022/11/23/", "", "", "tpb")
+        # rpg_bin = get_rpg_bin(file_list_tpb)            
+        # tem = nc.Dataset("/data/obs/site/cgn/foghat/l2/2022/11/23/sups_cgn_mwrBL00_l2_ta_p00_20221123000908.nc")
+        # import matplotlib.pyplot as plt
+        # plt.plot(rpg_bin.data["time"], rpg_bin.data["T"][:,0],"o")
+        # plt.plot(lev1["time"][ibl[:, -1]], rpg_dat["temperature"][:,0],"o")
+        # plt.plot(tem["time"][:], tem["ta"][:,0],"o")
+        # plt.show()            
+        # import pdb
+        # pdb.set_trace()
+                
 
     elif data_type in ("2P04", "2P07", "2P08"):
 
@@ -494,10 +527,10 @@ def load_product(site: str, date_in: str, prod: str):
 def _test_BL_scan(site: str, lev1: dict) -> bool:
     "Check for existing BL scans in lev1 data"
     BL_scan = True
-    coeff, _, _, _, _, _ = get_mvr_coeff(site, "tel", lev1["frequency"][:])
+    coeff = get_mvr_coeff(site, "tel", lev1["frequency"][:])
     ix0 = np.where(
-        (lev1["ele"][:] > coeff["ele"][0] - 0.5)
-        & (lev1["ele"][:] < coeff["ele"][0] + 0.5)
+        (lev1["ele"][:] > coeff[0]["ele"][0] - 0.5)
+        & (lev1["ele"][:] < coeff[0]["ele"][0] + 0.5)
         & (lev1["pointing_flag"][:] == 1)
     )[0]
     if len(ix0) == 0:
@@ -515,19 +548,20 @@ def ele_ret(ele_arr: np.ndarray, coeff: dict) -> np.ndarray:
 
 def retrieval_input(lev1: dict, cf: list) -> np.ndarray:
     "Get retrieval input"
-
     bias = np.ones((len(lev1["time"][:]), 1), np.float32)
     doy = np.ones((len(lev1["time"][:]), 2), np.float32) * Fill_Value_Float
     tz = tzwhere.tzwhere()
     sun = np.ones((len(lev1["time"][:]), 2), np.float32) * Fill_Value_Float
+    irt = np.ones((len(lev1["time"][:]), 2), np.float32) * Fill_Value_Float
     for i, time in enumerate(lev1["time"][:].data):
-        doy[i, 0] = np.cos(datetime.fromtimestamp(time).timetuple().tm_yday / 365 * 2 * np.pi)
-        doy[i, 1] = np.sin(datetime.fromtimestamp(time).timetuple().tm_yday / 365 * 2 * np.pi)
         timezone_str = tz.tzNameAt(lev1["station_latitude"][i], lev1["station_longitude"][i])
         timezone = pytz.timezone(timezone_str)
         dt = datetime.fromtimestamp(time, timezone)
-        sun[i, 0] = np.cos((dt.hour + dt.minute / 60 + dt.second / 3600) / 365 * 2 * np.pi)
-        sun[i, 1] = np.sin((dt.hour + dt.minute / 60 + dt.second / 3600) / 365 * 2 * np.pi)
+        dy = datetime(dt.year, 12, 31, 0, 0).timetuple().tm_yday
+        doy[i, 0] = np.cos(datetime.fromtimestamp(time).timetuple().tm_yday / dy * 2 * np.pi)
+        doy[i, 1] = np.sin(datetime.fromtimestamp(time).timetuple().tm_yday / dy * 2 * np.pi)
+        sun[i, 0] = np.cos((dt.hour + dt.minute / 60 + dt.second / 3600) / 24 * 2 * np.pi)
+        sun[i, 1] = np.sin((dt.hour + dt.minute / 60 + dt.second / 3600) / 24 * 2 * np.pi)
 
     fields = [
         "air_temperature",
@@ -577,7 +611,7 @@ def retrieval_input(lev1: dict, cf: list) -> np.ndarray:
                 ret_in = np.concatenate(
                     (
                         ret_in,
-                        np.reshape(lev1["air_pressure"][:].data, (len(lev1["time"][:]), 1)),
+                        np.reshape(lev1["air_pressure"][:].data * 100., (len(lev1["time"][:]), 1)),
                     ),
                     axis=1,
                 )

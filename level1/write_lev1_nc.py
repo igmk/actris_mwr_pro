@@ -2,6 +2,7 @@ import datetime
 from itertools import groupby
 
 import numpy as np
+from numpy import ma
 import pandas as pd
 
 import rpg_mwr
@@ -68,7 +69,7 @@ def prepare_data(
 ) -> dict:
     """Load and prepare data for netCDF writing"""
 
-    if data_type in ("1B01", "1C01"):
+    if data_type in ("1B01", "1C01"):        
 
         file_list_brt = get_file_list(path_to_files, path_to_prev, path_to_next, "brt")
         rpg_bin = get_rpg_bin(file_list_brt)
@@ -291,7 +292,6 @@ def find_lwcl_free(lev1: dict, ix: np.ndarray) -> tuple:
         index = np.array(df["index"])
         index[(tb_mx["Tb"] < 0.3) & (index != 1.0)] = 0.0
         index[(lev1["ele"][ix] < 89.0) & (index != 1.0)] = 2.0
-
     return np.nan_to_num(index, nan=2).astype(int), status
 
 
@@ -305,6 +305,8 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
         [],
         [],
     )
+    if params["const_azi"] == Fill_Value_Float:
+        params["const_azi"] = ma.median(brt.data["azi"][:])
     seqs = [(key, len(list(val))) for key, val in groupby(hkd.data["status"][:] & 2**18 > 0)]
     seqs = np.array(
         [
@@ -314,13 +316,18 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
         ]
     )
 
-    for time_ind, time_blb in enumerate(blb.data["time"]):
-        seqi = np.where(np.abs(hkd.data["time"][seqs[:, 1] + seqs[:, 2] - 1] - time_blb) < 2)[0]
+    for time_ind, time_blb in enumerate(blb.data["time"]):      
+        seqi = np.where(np.abs(hkd.data["time"][seqs[:, 1] + seqs[:, 2] - 1] - time_blb) < 60)[0]
+        if (datetime.datetime.utcfromtimestamp(hkd.data["time"][0]) >= datetime.datetime(2022, 12, 1)) & (time_blb + int(params["scan_time"]) < hkd.data["time"][-1]):
+            time_blb = time_blb + int(params["scan_time"])
+            seqi = np.where(np.abs(hkd.data["time"][seqs[:, 1] + seqs[:, 2] - 1] - time_blb) < 60)[0]
+        if len(seqi) != 1:
+            continue
 
-        if len(seqi) == 1:
+        if np.abs(time_blb - hkd.data["time"][seqs[seqi, 1]][0]) >= len(blb.header["_ang"]):
             sq = 0.0  # scan quadrant, 0: 1st, 180: 2nd
-            if (not isbit(blb.data["rf_mod"][time_ind], 5)) & (
-                isbit(blb.data["rf_mod"][time_ind], 6)
+            if (isbit(blb.data["rf_mod"][time_ind], 1)) & (
+                not isbit(blb.data["rf_mod"][time_ind], 2)
             ):
                 sq = 180.0
 
@@ -363,7 +370,7 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
                 (
                     rain_add,
                     np.ones(blb.header["_n_ang"], np.int32)
-                    * int(isbit(blb.data["rf_mod"][time_ind], 1)),
+                    * int(isbit(blb.data["rf_mod"][time_ind], 0)),
                 )
             )
             ele_add = np.concatenate((ele_add, blb.header["_ang"]))
@@ -373,40 +380,41 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
                 else:
                     tb_add = np.vstack((tb_add, blb.data["tb"][time_ind, :, ang]))
 
-    time_bnds_add = add_time_bounds(
-        time_add[0:-1], int(np.floor(params["scan_time"] / (blb.header["_n_ang"] - 1)))
-    )
-    time_bnds_add = np.concatenate(
-        (time_bnds_add, add_time_bounds(np.array(time_add[-1], ndmin=1), params["int_time"]))
-    )
-    pointing_flag_add = np.ones(len(time_add), np.int32)
-    liquid_cloud_flag_add = np.ones(len(time_add), np.int32) * 2
-    liquid_cloud_flag_status_add = np.ones(len(time_add), np.int32) * Fill_Value_Int
-    brt.data["time"] = np.concatenate((brt.data["time"], time_add))
-    ind = np.argsort(brt.data["time"])
-    brt.data["time"] = brt.data["time"][ind]
-    names = [
-        "time_bnds",
-        "ele",
-        "azi",
-        "rain",
-        "tb",
-        "pointing_flag",
-        "liquid_cloud_flag",
-        "liquid_cloud_flag_status",
-    ]
-    for var in names:
-        brt.data[var] = np.concatenate((brt.data[var], eval(var + "_add")))
-        if brt.data[var].ndim > 1:
-            brt.data[var] = brt.data[var][ind, :]
-        else:
-            brt.data[var] = brt.data[var][ind]
-    brt.header["n"] = brt.header["n"] + blb.header["n"] * blb.header["_n_ang"]
+            time_bnds_add = add_time_bounds(
+                time_add[0:-1], int(np.floor(params["scan_time"] / (blb.header["_n_ang"] - 1)))
+            )
+            time_bnds_add = np.concatenate(
+                (time_bnds_add, add_time_bounds(np.array(time_add[-1], ndmin=1), params["int_time"]))
+            )
+            
+    if len(time_add) > 0:        
+        pointing_flag_add = np.ones(len(time_add), np.int32)
+        liquid_cloud_flag_add = np.ones(len(time_add), np.int32) * 2
+        liquid_cloud_flag_status_add = np.ones(len(time_add), np.int32) * Fill_Value_Int
+        brt.data["time"] = np.concatenate((brt.data["time"], time_add))
+        ind = np.argsort(brt.data["time"])
+        brt.data["time"] = brt.data["time"][ind]
+        names = [
+            "time_bnds",
+            "ele",
+            "azi",
+            "rain",
+            "tb",
+            "pointing_flag",
+            "liquid_cloud_flag",
+            "liquid_cloud_flag_status",
+        ]
+        for var in names:
+            brt.data[var] = np.concatenate((brt.data[var], eval(var + "_add")))
+            if brt.data[var].ndim > 1:
+                brt.data[var] = brt.data[var][ind, :]
+            else:
+                brt.data[var] = brt.data[var][ind]
+        brt.header["n"] = brt.header["n"] + blb.header["n"] * blb.header["_n_ang"]
 
 
 def _azi_correction(brt: dict, params: dict) -> None:
     """Azimuth correction (transform to "geographical" coordinates)"""
-
     ind180 = np.where((brt["azi"][:] >= 0) & (brt["azi"][:] <= 180))
     ind360 = np.where((brt["azi"][:] > 180) & (brt["azi"][:] <= 360))
     brt["azi"][ind180] = params["azi_cor"] - brt["azi"][ind180]

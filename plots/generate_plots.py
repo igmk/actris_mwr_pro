@@ -331,20 +331,27 @@ def _plot_segment_data(ax, data: ma.MaskedArray, name: str, axes: tuple, nc_file
         axes (tuple): Time and height 1D arrays.
         nc_file (str): Input file.
     """
-    variables = ATTRIBUTES[name]
-    clabel = [x[0] for x in variables.clabel]
-    cbar = [x[1] for x in variables.clabel]
-    cmap = ListedColormap(cbar)
-    pl = ax.pcolor(*axes, data.T, cmap=cmap, shading="nearest", vmin=-0.5, vmax=len(cbar) - 0.5)
-    ax.grid(axis="y")
-    colorbar = _init_colorbar(pl, ax)
-    colorbar.set_ticks(np.arange(len(clabel)))
-    if name == "quality_flag_2":
-        site_name = _read_location(nc_file)
-        site_dict = importlib.import_module(f"site_config." + site_name + ".config")
-        clabel[2] = clabel[2] + " (" + str(site_dict.params["TB_threshold"][1]) + " K)"
-        clabel[1] = clabel[1] + " (" + str(site_dict.params["TB_threshold"][0]) + " K)"
-    colorbar.ax.set_yticklabels(clabel, fontsize=13)
+    if name == "tb_missing":
+        cmap = ListedColormap(["#FFFFFF00", _COLORS["gray"]])
+        pl = ax.pcolor(*axes, data.T, cmap=cmap, shading="nearest", vmin=-0.5, vmax=1.5)
+    elif name == "tb_qf":
+        cmap = ListedColormap([_COLORS["lightgray"], _COLORS["darkgray"]])
+        pl = ax.pcolor(*axes, data.T, cmap=cmap, shading="nearest", vmin=-0.5, vmax=1.5)        
+    else:
+        variables = ATTRIBUTES[name]
+        clabel = [x[0] for x in variables.clabel]
+        cbar = [x[1] for x in variables.clabel]
+        cmap = ListedColormap(cbar)
+        pl = ax.pcolor(*axes, data.T, cmap=cmap, shading="nearest", vmin=-0.5, vmax=len(cbar) - 0.5)
+        ax.grid(axis="y")
+        colorbar = _init_colorbar(pl, ax)
+        colorbar.set_ticks(np.arange(len(clabel)))
+        if name == "quality_flag_2":
+            site_name = _read_location(nc_file)
+            site_dict = importlib.import_module(f"site_config." + site_name + ".config")
+            clabel[2] = clabel[2] + " (" + str(site_dict.params["TB_threshold"][1]) + " K)"
+            clabel[1] = clabel[1] + " (" + str(site_dict.params["TB_threshold"][0]) + " K)"
+        colorbar.ax.set_yticklabels(clabel, fontsize=13)
 
 
 def _plot_colormesh_data(ax, data_in: ma.MaskedArray, name: str, axes: tuple, nc_file: str):
@@ -605,9 +612,9 @@ def _plot_sen(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     quality_flag = read_nc_fields(nc_file, "quality_flag")
     qf = _get_freq_flag(quality_flag, [6])
     vmin, vmax = variables.plot_range
-    time = _nan_time_gaps(time)
+    time = _nan_time_gaps(time, 15./60.)
     time1 = time[(pointing_flag == 1)]
-    time1 = _nan_time_gaps(time1)
+    time1 = _nan_time_gaps(time1, 15./60.)
     ax.plot(
         time[pointing_flag == 0],
         data_in[pointing_flag == 0],
@@ -618,7 +625,7 @@ def _plot_sen(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     )
     if name == "ele":
         time1 = time[(pointing_flag == 1) & (data_in > 0.0)]
-        time1 = _nan_time_gaps(time1)
+        time1 = _nan_time_gaps(time1, 15./60.)
         ax.plot(
             time1,
             data_in[(pointing_flag == 1) & (data_in > 0.0)],
@@ -697,7 +704,7 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
     frequency = read_nc_fields(nc_file, "frequency")
     qf0 = _get_freq_flag(data_in[:, 0], [4])
     case_date = _read_date(nc_file)
-    garray = _gap_array(time, case_date)
+    gtim = _gap_array(time, case_date)
 
     qf1 = _get_bit_flag(data_in[:, -1], [4, 5, 6])
     qf = np.column_stack((qf0 - 1, qf1 + 1))
@@ -709,6 +716,18 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
     axs[0].set_title(ATTRIBUTES["quality_flag_0"].name)
 
     qf = _get_freq_flag(data_in, [3])
+    if len(gtim) > 0:
+        time_i, data_g = np.linspace(time[0], time[-1], len(time)), np.zeros((len(time), 20), np.float32)
+        for ig, _ in enumerate(gtim[:, 0]):
+            xind = np.where((time_i >= gtim[ig, 0]) & (time_i <= gtim[ig, 1]))
+            data_g[xind, :] = 1.        
+        _plot_segment_data(
+            axs[1],
+            data_g,
+            "tb_qf",
+            (time_i, np.linspace(0.5, 20. - 0.5, 20)),
+            nc_file,
+        )    
     _plot_segment_data(
         axs[1],
         qf,
@@ -716,17 +735,21 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
         (time, np.linspace(0.5, len(frequency) - 0.5, len(frequency))),
         nc_file,
     )
-    if len(garray) > 0:
-        _plot_segment_data(
-            axs[1],
-            np.zeros((len(garray), len(frequency)), np.int32),
-            "quality_flag_1",
-            (garray, np.linspace(0.5, len(frequency) - 0.5, len(frequency))),
-            nc_file,
-        )
     axs[1].set_title(ATTRIBUTES["quality_flag_1"].name)
 
     qf = _get_freq_flag(data_in, [1, 2])
+    if len(gtim) > 0:
+        time_i, data_g = np.linspace(time[0], time[-1], len(time)), np.zeros((len(time), 20), np.float32)
+        for ig, _ in enumerate(gtim[:, 0]):
+            xind = np.where((time_i >= gtim[ig, 0]) & (time_i <= gtim[ig, 1]))
+            data_g[xind, :] = 1.        
+        _plot_segment_data(
+            axs[2],
+            data_g,
+            "tb_qf",
+            (time_i, np.linspace(0.5, 20. - 0.5, 20)),
+            nc_file,
+        )    
     _plot_segment_data(
         axs[2],
         qf,
@@ -734,14 +757,6 @@ def _plot_qf(ax, data_in: ndarray, time: ndarray, fig, nc_file: str):
         (time, np.linspace(0.5, len(frequency) - 0.5, len(frequency))),
         nc_file,
     )
-    if len(garray) > 0:
-        _plot_segment_data(
-            axs[2],
-            np.zeros((len(garray), len(frequency)), np.int32),
-            "quality_flag_2",
-            (garray, np.linspace(0.5, len(frequency) - 0.5, len(frequency))),
-            nc_file,
-        )
     axs[2].set_title(ATTRIBUTES["quality_flag_2"].name)
 
     offset = ScaledTranslation(0 / 72, 8 / 72, fig.dpi_scale_trans)
@@ -1143,18 +1158,35 @@ def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
 
 def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: str):
     flag = _get_ret_flag(nc_file, time)
-    vmin, vmax = ATTRIBUTES[name].plot_range
+    vmin, vmax = ATTRIBUTES[name].plot_range    
     if name == "iwv":
         vmin, vmax = np.nanmin(data_in[flag == 0]) - 1.0, np.nanmax(data_in[flag == 0]) + 1.0
     else:
         vmax = np.min([np.nanmax(data_in[flag == 0]) + 0.05, vmax])
         vmin = np.max([np.nanmin(data_in[flag == 0]) - 0.05, vmin])
-    _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
+    _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)     
+    
     data_f = np.zeros((len(time), 100), np.float32)
     data_f[flag > 0, :] = 1.0
     cmap = ListedColormap([_COLORS["lightgray"], _COLORS["gray"]])
     norm = BoundaryNorm([0, 1, 2], cmap.N)
-    ax.pcolor(time, np.linspace(vmin, vmax, 100), data_f.T, cmap=cmap, norm=norm)
+    ax.pcolor(time, np.linspace(vmin, vmax, 100), data_f.T, cmap=cmap, norm=norm)     
+    
+    case_date = _read_date(nc_file)
+    gtim = _gap_array(time, case_date)
+    if len(gtim) > 0:
+        time_i, data_g = np.linspace(time[0], time[-1], len(time)), np.zeros((len(time), 10), np.float32)
+        for ig, _ in enumerate(gtim[:, 0]):
+            xind = np.where((time_i >= gtim[ig, 0]) & (time_i <= gtim[ig, 1]))
+            data_g[xind, :] = 1.
+
+        _plot_segment_data(
+            ax,
+            data_g,
+            "tb_missing",
+            (time_i, np.linspace(vmin, vmax, 10)),
+            nc_file,
+        )      
 
     ax.plot(time, data_in, ".", color="royalblue", markersize=1)
     ax.axhline(linewidth=0.8, color="k")
@@ -1163,7 +1195,7 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: st
     time = _nan_time_gaps(time)
     rolling_mean = np.interp(time, time[int(width / 2 - 1) : int(-width / 2)], rolling_mean)
     ax.plot(time, rolling_mean, color="sienna", linewidth=2.0)
-    ax.plot(time, rolling_mean, color="wheat", linewidth=0.6)
+    ax.plot(time, rolling_mean, color="wheat", linewidth=0.6)         
 
 
 def _filter_noise(data: ndarray) -> ndarray:
@@ -1209,8 +1241,8 @@ def _nan_time_gaps(time: ndarray, tgap: float = 5.0 / 60.0) -> ndarray:
     return time
 
 
-def _gap_array(time: ndarray, case_date, tgap: float = 1.0 / 60.0) -> ndarray:
-    """Creates regular spaced time array for gaps bigger than 5min (default).
+def _gap_array(time: ndarray, case_date, tgap: float = 5.0 / 60.0) -> ndarray:
+    """Returns edges of time gaps bigger than 5min (default).
     End of gap for current day is current time."""
     locale.setlocale(locale.LC_TIME, "en_US.UTF-8")
     dtnow = datetime.now(tz=timezone.utc)
@@ -1221,13 +1253,11 @@ def _gap_array(time: ndarray, case_date, tgap: float = 1.0 / 60.0) -> ndarray:
             day_e = time[-1]
     time_diff = np.diff(np.insert(time, [0, len(time)], [0.0, day_e]))
     gaps = np.where(time_diff > tgap)[0]
-    garray = []
+    gtim = np.zeros((len(gaps), 2), np.float32)
     if len(gaps) > 0:
         for i, ind in enumerate(gaps):
-            garray = np.concatenate(
-                [garray, np.linspace(time[ind - 1], time[np.min([ind, len(time)])], 10)]
-            )
-    return garray
+            gtim[i, :] = [time[ind-1], time[ind]]
+    return gtim
 
 
 def _calculate_rolling_mean(time: ndarray, data: ndarray, win: float = 0.5) -> Tuple[ndarray, int]:

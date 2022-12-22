@@ -22,6 +22,7 @@ product = [
     ("1C01", ""),
     ("2I01", "lwp"),
     ("2I02", "iwv"),
+    ("2P01", "temperature"),
     ("2P02", "temperature"),
     ("2P03", "water_vapor_vmr"),
     ("2P04", "relative_humidity"),
@@ -44,7 +45,9 @@ def _link_quicklook(link_direc: str, figure_name: str) -> None:
 for prod, var in product:
     if prod == "1C01":
         link_dir = (
-            "/home/hatpro/public_html/quicklooks/obs/site/jue/tophat/actris/level1/"
+            "/home/hatpro/public_html/quicklooks/"
+            + params["data_out"][6:]
+            + "level1/"
             + date.strftime("%Y/%m/%d/")
         )
         if not os.path.isdir(data_out_l1):
@@ -126,7 +129,9 @@ for prod, var in product:
 
     else:
         link_dir = (
-            "/home/hatpro/public_html/quicklooks/obs/site/jue/tophat/actris/level2/"
+            "/home/hatpro/public_html/quicklooks/"
+            + params["data_out"][6:]
+            + "level2/"
             + date.strftime("%Y/%m/%d/")
         )
         if not os.path.isdir(data_out_l2):

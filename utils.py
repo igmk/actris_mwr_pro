@@ -183,7 +183,7 @@ def seconds2date(time_in_seconds: float, epoch: Optional[tuple] = (1970, 1, 1)) 
 
 
 def add_time_bounds(time: np.ndarray, int_time: int) -> np.ndarray:
-
+    "Adds time bounds"
     time_bounds = np.ones([len(time), 2], np.int32) * Fill_Value_Int
     time_bounds[:, 0] = time - int_time
     time_bounds[:, 1] = time

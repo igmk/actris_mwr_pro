@@ -43,7 +43,7 @@ def stack_files(file_list):
                 target[name] = value
 
     ext = str(file_list[0][-3:]).lower()
-    if ext not in ("brt", "irt", "met", "hkd", "blb", "spc", "his"):
+    if ext not in ("brt", "irt", "met", "hkd", "blb", "spc", "his", "iwv", "tpb", "tpc"):
         raise RuntimeError(["Error: no reader for file type " + ext])
     reader_name = str("read_" + ext)
     data, header = {}, {}
@@ -125,6 +125,218 @@ class RpgBin:
                 else:
                     screened_data = data[ind, :]
                 self.data[key] = screened_data
+                
+                
+def read_tpc(file_name: str) -> dict:
+    """This function reads RPG MWR .TPC binary files."""
+
+    with open(file_name, "rb") as file:   
+        code = np.fromfile(file, np.int32, 1)
+        if code not in (780798065, 780798066):
+            raise RuntimeError(["Error: TPC file code " + str(code) + " not suported"])
+
+        def _get_header():
+            """Read header info"""
+
+            n = int(np.fromfile(file, np.uint32, 1))
+            xmin = np.fromfile(file, np.float32, 1)
+            xmax = np.fromfile(file, np.float32, 1)
+            time_ref = np.fromfile(file, np.uint32, 1)
+            ret_type = np.fromfile(file, np.uint32, 1)
+            alt_anz = int(np.fromfile(file, np.uint32, 1))
+            alts = np.fromfile(file, np.uint32, alt_anz)
+
+            header_names = ["_code", "n", "_xmin", "_xmax", "_time_ref", "_ret_type", "_alt_anz", "_alts"]
+            header_values = [code, n, xmin, xmax, time_ref, ret_type, alt_anz, alts]
+            header = dict(zip(header_names, header_values))        
+            return header
+
+        def _create_variables():
+            """Initialize data arrays"""
+            if code == 780798065:
+                vrs = {
+                    "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
+                    "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
+                    "T": np.ones((header["n"], header["_alt_anz"]), np.float32) * Fill_Value_Float,
+                }
+            else:
+                vrs = {
+                    "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
+                    "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
+                    "T": np.ones((header["n"], header["_alt_anz"]), np.float32) * Fill_Value_Float,
+                    "T_ele": np.ones(header["n"], np.float32) * Fill_Value_Float,
+                    "T_azi": np.ones(header["n"], np.float32) * Fill_Value_Float,                    
+                    "T_ra": np.ones(header["n"], np.float32) * Fill_Value_Float,
+                    "T_dec": np.ones(header["n"], np.float32) * Fill_Value_Float,                    
+                }                
+            return vrs
+        
+        def _angle_calc(ang):
+            """Convert angle"""
+
+            a_str = str(ang[0])
+            if a_str[0:-5].isnumeric():
+                el = float(a_str[0:-5]) / 100.0
+            else:
+                el = Fill_Value_Float
+            if a_str[-5:].isnumeric():
+                az = float(a_str[-5:]) / 100.0
+            else:
+                az = Fill_Value_Float
+
+            return el, az        
+
+        def _get_data():
+            """Loop over file to read data"""
+
+            data = _create_variables()
+            for sample in range(header["n"]):
+                data["time"][sample] = np.fromfile(file, np.int32, 1)
+                data["rain"][sample] = np.fromfile(file, np.byte, 1)
+                data["T"][sample,] = np.fromfile(file, np.float32, header["_alt_anz"])
+                if code == 780798066:
+                    ang = np.fromfile(file, np.int32, 1)
+                    data["T_ele"][sample], data["T_azi"][sample] = _angle_calc(ang)
+                    data["T_ra"][sample] = np.fromfile(file, np.float32, 1)
+                    data["T_dec"][sample] = np.fromfile(file, np.float32, 1)
+                    
+            file.close()
+            return data
+
+        header = _get_header()
+        data = _get_data()
+        return header, data                 
+                
+                
+def read_tpb(file_name: str) -> dict:
+    """This function reads RPG MWR .TPB binary files."""
+
+    with open(file_name, "rb") as file:   
+        code = np.fromfile(file, np.int32, 1)
+        if code != 459769847:
+            raise RuntimeError(["Error: TPB file code " + str(code) + " not suported"])
+
+        def _get_header():
+            """Read header info"""
+
+            n = int(np.fromfile(file, np.uint32, 1))
+            xmin = np.fromfile(file, np.float32, 1)
+            xmax = np.fromfile(file, np.float32, 1)
+            time_ref = np.fromfile(file, np.uint32, 1)
+            ret_type = np.fromfile(file, np.uint32, 1)
+            alt_anz = int(np.fromfile(file, np.uint32, 1))
+            alts = np.fromfile(file, np.uint32, alt_anz)
+
+            header_names = ["_code", "n", "_xmin", "_xmax", "_time_ref", "_ret_type", "_alt_anz", "_alts"]
+            header_values = [code, n, xmin, xmax, time_ref, ret_type, alt_anz, alts]
+            header = dict(zip(header_names, header_values))        
+            return header
+
+        def _create_variables():
+            """Initialize data arrays"""
+
+            vrs = {
+                "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
+                "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
+                "T": np.ones((header["n"], header["_alt_anz"]), np.float32) * Fill_Value_Float,
+            }
+            return vrs
+
+        def _get_data():
+            """Loop over file to read data"""
+
+            data = _create_variables()
+            for sample in range(header["n"]):
+                data["time"][sample] = np.fromfile(file, np.int32, 1)
+                data["rain"][sample] = np.fromfile(file, np.byte, 1)
+                data["T"][sample,] = np.fromfile(file, np.float32, header["_alt_anz"])
+            file.close()
+            return data
+
+        header = _get_header()
+        data = _get_data()
+        return header, data                                  
+                
+                
+def read_iwv(file_name: str) -> dict:
+    """This function reads RPG MWR .IWV binary files."""
+
+    with open(file_name, "rb") as file:
+
+        code = np.fromfile(file, np.int32, 1)
+        if code not in (594811068, 594811000):
+            raise RuntimeError(["Error: IWV file code " + str(code) + " not suported"])
+
+        def _get_header():
+            """Read header info"""
+
+            n = int(np.fromfile(file, np.uint32, 1))
+            xmin = np.fromfile(file, np.float32, 1)
+            xmax = np.fromfile(file, np.float32, 1)
+            time_ref = np.fromfile(file, np.uint32, 1)
+            ret_type = np.fromfile(file, np.uint32, 1)
+
+            header_names = ["_code", "n", "_xmin", "_xmax", "_time_ref", "_ret_type"]
+            header_values = [code, n, xmin, xmax, time_ref, ret_type]
+            header = dict(zip(header_names, header_values))
+            return header
+
+        def _create_variables():
+            """Initialize data arrays"""
+
+            vrs = {
+                "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
+                "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
+                "iwv": np.ones(header["n"], np.float32) * Fill_Value_Float,
+                "iwv_ele": np.ones(header["n"], np.float32) * Fill_Value_Float,
+                "iwv_azi": np.ones(header["n"], np.float32) * Fill_Value_Float,
+            }
+            return vrs
+
+        def _angle_calc(ang, code):
+            """Convert angle"""
+
+            if code == 594811068:
+                els = ang - 100.0 * ((ang / 100.0).astype(np.int32))
+                azs = (ang - els) / 1000.0
+                if azs <= 360.0:
+                    el = els
+                    az = azs
+                elif azs > 1000.0:
+                    az = azs - 1000.0
+                    el = 100.0 + els
+            elif code == 594811000:
+                a_str = str(ang[0])
+                if a_str[0:-5].isnumeric():
+                    el = float(a_str[0:-5]) / 100.0
+                else:
+                    el = Fill_Value_Float
+                if a_str[-5:].isnumeric():
+                    az = float(a_str[-5:]) / 100.0
+                else:
+                    az = Fill_Value_Float
+
+            return el, az
+
+        def _get_data():
+            """Loop over file to read data"""
+
+            data = _create_variables()
+            for sample in range(header["n"]):
+                data["time"][sample] = np.fromfile(file, np.int32, 1)
+                data["rain"][sample] = np.fromfile(file, np.byte, 1)
+                data["iwv"][sample] = np.fromfile(file, np.float32, 1)
+                if code == 594811068:
+                    ang = np.fromfile(file, np.float32, 1)
+                elif code == 594811000:
+                    ang = np.fromfile(file, np.int32, 1)
+                data["iwv_ele"][sample], data["iwv_azi"][sample] = _angle_calc(ang, code)
+            file.close()
+            return data
+
+        header = _get_header()
+        data = _get_data()
+        return header, data                
 
 
 def read_brt(file_name: str) -> dict:

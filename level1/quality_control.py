@@ -131,15 +131,18 @@ def orbpos(data: dict, params: dict) -> np.ndarray:
     if i_sun:
         sun["sunrise"] = data["time"][i_sun[0][0]]
         sun["sunset"] = data["time"][i_sun[-1][-1]]
-
+    # exclude added surface observations    
+    ele_tmp = np.copy(data["ele"][:])
+    ele_tmp[(data["ele"][:] == 0.) & (data["pointing_flag"][:] == 1)] = Fill_Value_Float
     ind = np.where(
-        (data["ele"][:] <= np.max(sun["ele"]) + 10.0)
-        & (data["time"][:] >= sun["sunrise"])
-        & (data["time"][:] <= sun["sunset"])
-        & (data["ele"][:] >= sun["ele"][:] - params["saf"])
-        & (data["ele"][:] <= sun["ele"][:] + params["saf"])
-        & (data["azi"][:] >= sun["azi"][:] - params["saf"])
-        & (data["azi"][:] <= sun["azi"][:] + params["saf"])
+        (ele_tmp != Fill_Value_Float)
+        & (ele_tmp <= np.max(sun["ele"]) + 10.0)
+        & (data["time"] >= sun["sunrise"])
+        & (data["time"] <= sun["sunset"])
+        & (ele_tmp >= sun["ele"][:] - params["saf"])
+        & (ele_tmp <= sun["ele"][:] + params["saf"])
+        & (data["azi"] >= sun["azi"][:] - params["saf"])
+        & (data["azi"] <= sun["azi"][:] + params["saf"])
     )
 
     return ind
