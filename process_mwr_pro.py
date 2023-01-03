@@ -1,3 +1,4 @@
+"""Module for processing."""
 import os
 import sys
 import datetime
@@ -127,7 +128,7 @@ for prod, var in product:
                 )
                 _link_quicklook(link_dir, fig_name)
 
-    else:
+    elif os.path.isdir("site_config/" + site + "/coefficients/"):
         link_dir = (
             "/home/hatpro/public_html/quicklooks/"
             + params["data_out"][6:]

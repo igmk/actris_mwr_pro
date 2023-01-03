@@ -1,4 +1,4 @@
-""" This module contains all functions to read in RPG MWR binary files """
+"""This module contains all functions to read in RPG MWR binary files"""
 import datetime
 import logging
 
@@ -61,6 +61,8 @@ def stack_files(file_list):
 
 
 class RpgBin:
+    """Class for RPG binary files"""
+
     def __init__(self, file_list):
         self.header, self.raw_data = stack_files(file_list)
         self.raw_data["time"] = utils.epoch2unix(self.raw_data["time"], self.header["_time_ref"])
@@ -125,12 +127,12 @@ class RpgBin:
                 else:
                     screened_data = data[ind, :]
                 self.data[key] = screened_data
-                
-                
+
+
 def read_tpc(file_name: str) -> dict:
     """This function reads RPG MWR .TPC binary files."""
 
-    with open(file_name, "rb") as file:   
+    with open(file_name, "rb") as file:
         code = np.fromfile(file, np.int32, 1)
         if code not in (780798065, 780798066):
             raise RuntimeError(["Error: TPC file code " + str(code) + " not suported"])
@@ -146,9 +148,18 @@ def read_tpc(file_name: str) -> dict:
             alt_anz = int(np.fromfile(file, np.uint32, 1))
             alts = np.fromfile(file, np.uint32, alt_anz)
 
-            header_names = ["_code", "n", "_xmin", "_xmax", "_time_ref", "_ret_type", "_alt_anz", "_alts"]
+            header_names = [
+                "_code",
+                "n",
+                "_xmin",
+                "_xmax",
+                "_time_ref",
+                "_ret_type",
+                "_alt_anz",
+                "_alts",
+            ]
             header_values = [code, n, xmin, xmax, time_ref, ret_type, alt_anz, alts]
-            header = dict(zip(header_names, header_values))        
+            header = dict(zip(header_names, header_values))
             return header
 
         def _create_variables():
@@ -165,12 +176,12 @@ def read_tpc(file_name: str) -> dict:
                     "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
                     "T": np.ones((header["n"], header["_alt_anz"]), np.float32) * Fill_Value_Float,
                     "T_ele": np.ones(header["n"], np.float32) * Fill_Value_Float,
-                    "T_azi": np.ones(header["n"], np.float32) * Fill_Value_Float,                    
+                    "T_azi": np.ones(header["n"], np.float32) * Fill_Value_Float,
                     "T_ra": np.ones(header["n"], np.float32) * Fill_Value_Float,
-                    "T_dec": np.ones(header["n"], np.float32) * Fill_Value_Float,                    
-                }                
+                    "T_dec": np.ones(header["n"], np.float32) * Fill_Value_Float,
+                }
             return vrs
-        
+
         def _angle_calc(ang):
             """Convert angle"""
 
@@ -184,7 +195,7 @@ def read_tpc(file_name: str) -> dict:
             else:
                 az = Fill_Value_Float
 
-            return el, az        
+            return el, az
 
         def _get_data():
             """Loop over file to read data"""
@@ -193,25 +204,27 @@ def read_tpc(file_name: str) -> dict:
             for sample in range(header["n"]):
                 data["time"][sample] = np.fromfile(file, np.int32, 1)
                 data["rain"][sample] = np.fromfile(file, np.byte, 1)
-                data["T"][sample,] = np.fromfile(file, np.float32, header["_alt_anz"])
+                data["T"][
+                    sample,
+                ] = np.fromfile(file, np.float32, header["_alt_anz"])
                 if code == 780798066:
                     ang = np.fromfile(file, np.int32, 1)
                     data["T_ele"][sample], data["T_azi"][sample] = _angle_calc(ang)
                     data["T_ra"][sample] = np.fromfile(file, np.float32, 1)
                     data["T_dec"][sample] = np.fromfile(file, np.float32, 1)
-                    
+
             file.close()
             return data
 
         header = _get_header()
         data = _get_data()
-        return header, data                 
-                
-                
+        return header, data
+
+
 def read_tpb(file_name: str) -> dict:
     """This function reads RPG MWR .TPB binary files."""
 
-    with open(file_name, "rb") as file:   
+    with open(file_name, "rb") as file:
         code = np.fromfile(file, np.int32, 1)
         if code != 459769847:
             raise RuntimeError(["Error: TPB file code " + str(code) + " not suported"])
@@ -227,9 +240,18 @@ def read_tpb(file_name: str) -> dict:
             alt_anz = int(np.fromfile(file, np.uint32, 1))
             alts = np.fromfile(file, np.uint32, alt_anz)
 
-            header_names = ["_code", "n", "_xmin", "_xmax", "_time_ref", "_ret_type", "_alt_anz", "_alts"]
+            header_names = [
+                "_code",
+                "n",
+                "_xmin",
+                "_xmax",
+                "_time_ref",
+                "_ret_type",
+                "_alt_anz",
+                "_alts",
+            ]
             header_values = [code, n, xmin, xmax, time_ref, ret_type, alt_anz, alts]
-            header = dict(zip(header_names, header_values))        
+            header = dict(zip(header_names, header_values))
             return header
 
         def _create_variables():
@@ -249,15 +271,17 @@ def read_tpb(file_name: str) -> dict:
             for sample in range(header["n"]):
                 data["time"][sample] = np.fromfile(file, np.int32, 1)
                 data["rain"][sample] = np.fromfile(file, np.byte, 1)
-                data["T"][sample,] = np.fromfile(file, np.float32, header["_alt_anz"])
+                data["T"][
+                    sample,
+                ] = np.fromfile(file, np.float32, header["_alt_anz"])
             file.close()
             return data
 
         header = _get_header()
         data = _get_data()
-        return header, data                                  
-                
-                
+        return header, data
+
+
 def read_iwv(file_name: str) -> dict:
     """This function reads RPG MWR .IWV binary files."""
 
@@ -336,7 +360,7 @@ def read_iwv(file_name: str) -> dict:
 
         header = _get_header()
         data = _get_data()
-        return header, data                
+        return header, data
 
 
 def read_brt(file_name: str) -> dict:
@@ -462,8 +486,6 @@ def read_met(file_name: str) -> dict:
         def _create_variables():
             """Initialize data arrays"""
 
-            Fill_Value_Float = -999.0
-            Fill_Value_Int = -99
             vrs = {
                 "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
                 "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
@@ -472,8 +494,8 @@ def read_met(file_name: str) -> dict:
                 "relative_humidity": np.ones(header["n"], np.float32) * Fill_Value_Float,
                 "adds": np.ones([header["n"], 3], np.float32) * Fill_Value_Float,
             }
-            #'adds' : np.ones( [header['n'], header['_n_sen'].count('1')], 
-            #np.float32)*Fill_Value_Float}
+            #'adds' : np.ones( [header['n'], header['_n_sen'].count('1')],
+            # np.float32)*Fill_Value_Float}
             return vrs
 
         def _get_data():

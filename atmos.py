@@ -1,3 +1,4 @@
+"""Module for atmsopheric functions."""
 import numpy as np
 from numpy import ma
 import metpy.calc as mpcalc

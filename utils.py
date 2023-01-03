@@ -1,14 +1,12 @@
-""" This module contains general helper functions. """
+"""Module for general helper functions."""
 
 import glob
 import re
 import time
 from datetime import datetime, timezone
-from typing import Optional, Union
 
 import netCDF4
 import numpy as np
-import pytz
 from numpy import ma
 from scipy import signal
 
@@ -17,6 +15,7 @@ SECONDS_PER_HOUR = 3600
 SECONDS_PER_DAY = 86400
 Fill_Value_Float = -999.0
 Fill_Value_Int = -99
+Epoch = tuple[int, int, int]
 
 
 def seconds2hours(time_in_seconds: np.ndarray) -> np.ndarray:
@@ -35,7 +34,7 @@ def seconds2hours(time_in_seconds: np.ndarray) -> np.ndarray:
     return fraction_hour
 
 
-def epoch2unix(epoch_time, time_ref, epoch: Optional[tuple] = (2001, 1, 1)):
+def epoch2unix(epoch_time, time_ref, epoch: Epoch = (2001, 1, 1)):
     """Converts seconds since (2001,1,1,0,0,0) to unix time in UTC.
 
     Args:
@@ -142,13 +141,16 @@ def interpol_2d(
     result = np.zeros((len(x_new), array.shape[1]))
     array_screened = ma.masked_invalid(array, copy=True)  # data may contain nan-values
     for ind, values in enumerate(array_screened.T):
-        mask = ~values.mask
-        if ma.any(values[mask]):
-            result[:, ind] = np.interp(x_new, x_in[mask], values[mask])
+        if array.mask == True:
+            mask = ~values.mask
+            if ma.any(values[mask]):
+                result[:, ind] = np.interp(x_new, x_in[mask], values[mask])
+        else:
+            result[:, ind] = np.interp(x_new, x_in, values)
     result[~np.isfinite(result)] = 0
     masked = ma.make_mask(result)
 
-    return ma.array(result, mask=~masked), []
+    return ma.array(result, mask=~masked)
 
 
 def add_interpol1d(data0: dict, data1: np.ndarray, time1: np.ndarray, output_name: str) -> None:
@@ -168,7 +170,7 @@ def add_interpol1d(data0: dict, data1: np.ndarray, time1: np.ndarray, output_nam
         data0[output_name] = np.interp(data0["time"], time1, data1)
 
 
-def seconds2date(time_in_seconds: float, epoch: Optional[tuple] = (1970, 1, 1)) -> list:
+def seconds2date(time_in_seconds: float, epoch: Epoch = (1970, 1, 1)) -> list:
     """Converts seconds since some epoch to datetime (UTC).
     Args:
         time_in_seconds: Seconds since some epoch.
@@ -177,16 +179,16 @@ def seconds2date(time_in_seconds: float, epoch: Optional[tuple] = (1970, 1, 1)) 
         [year, month, day, hours, minutes, seconds] formatted as '05' etc (UTC).
     """
 
-    epoch_in_seconds = datetime.timestamp(datetime(*epoch, tzinfo=pytz.utc))
+    epoch_in_seconds = datetime.timestamp(datetime(*epoch, tzinfo=timezone.utc))
     timestamp = time_in_seconds + epoch_in_seconds
     return datetime.utcfromtimestamp(timestamp).strftime("%Y %m %d %H %M %S").split()
 
 
-def add_time_bounds(time: np.ndarray, int_time: int) -> np.ndarray:
+def add_time_bounds(time_arr: np.ndarray, int_time: int) -> np.ndarray:
     "Adds time bounds"
-    time_bounds = np.ones([len(time), 2], np.int32) * Fill_Value_Int
-    time_bounds[:, 0] = time - int_time
-    time_bounds[:, 1] = time
+    time_bounds = np.ones([len(time_arr), 2], np.int32) * Fill_Value_Int
+    time_bounds[:, 0] = time_arr - int_time
+    time_bounds[:, 1] = time_arr
 
     return time_bounds
 
@@ -214,7 +216,7 @@ def get_coeff_list(site: str, prefix: str):
 
 
 def get_file_list(path_to_files: str, path_to_prev: str, path_to_next: str, extension: str):
-
+    """Returns file list for specified path."""
     f_list = sorted(glob.glob(path_to_files + "*." + extension))
     if len(f_list) == 0:
         f_list = sorted(glob.glob(path_to_files + "*." + extension.upper()))
@@ -278,7 +280,7 @@ def read_nc_field_name(nc_file: str, name: str) -> str:
     return long_name
 
 
-def read_nc_fields(nc_file: str, names: Union[str, list]) -> Union[ma.MaskedArray, list]:
+def read_nc_fields(nc_file: str, names: str | list) -> ma.MaskedArray | list:
     """Reads selected variables from a netCDF file.
     Args:
         nc_file: netCDF file name.

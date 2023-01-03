@@ -1,6 +1,6 @@
+"""RpgArray Class"""
 import locale
 from datetime import datetime, timezone
-from typing import Optional, Tuple, Union
 
 import netCDF4
 import numpy as np
@@ -28,10 +28,10 @@ class RpgArray:
 
     def __init__(
         self,
-        variable: Union[netCDF4.Variable, np.ndarray, float, int],
+        variable: netCDF4.Variable | np.ndarray | float | int,
         name: str,
-        units_from_user: Optional[str] = None,
-        dimensions: Optional[tuple] = None,
+        units_from_user: str | None = None,
+        dimensions: str | None = None,
     ):
         self.variable = variable
         self.name = name
@@ -72,7 +72,7 @@ class RpgArray:
                 pass
         raise ValueError(f"Incorrect RpgArray input: {self.variable}")
 
-    def _init_units(self, units_from_user: Union[str, None]) -> str:
+    def _init_units(self, units_from_user: str | None) -> str:
         if units_from_user is not None:
             return units_from_user
         return getattr(self.variable, "units", "")
@@ -140,8 +140,7 @@ class Rpg:
                 data = screened_data
 
 
-def save_rpg(
-    rpg: Rpg, output_file: str, att: dict, data_type: str) -> None:
+def save_rpg(rpg: Rpg, output_file: str, att: dict, data_type: str) -> None:
     """Saves the RPG MWR file."""
 
     if data_type == "1B01":

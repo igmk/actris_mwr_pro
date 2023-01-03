@@ -1,4 +1,4 @@
-"""Reader for attributes from config file."""
+"""Module for readeing attributes from config file."""
 # from global_nc import GLOBAL_ALL
 import importlib
 
@@ -96,6 +96,6 @@ def get_global_specs(global_specs: dict, data_type: str) -> dict:
     else:
         raise RuntimeError(["Data type " + data_type + " not supported for file writing."])
 
-    specs = dict(zip(keys, values))#{k: v for k, v in zip(keys, values)}
+    specs = dict(zip(keys, values))  # {k: v for k, v in zip(keys, values)}
 
     return specs

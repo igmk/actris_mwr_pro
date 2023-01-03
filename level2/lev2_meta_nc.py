@@ -1,3 +1,4 @@
+"""Module for Level 2 Metadata"""
 from collections import namedtuple
 
 
@@ -18,7 +19,7 @@ def get_data_attributes(rpg_variables: dict, data_type: str) -> dict:
         att = get_data_attributes('data','data_type')
     """
 
-    if data_type in (
+    if data_type not in (
         "2P01",
         "2P02",
         "2P03",
@@ -29,6 +30,9 @@ def get_data_attributes(rpg_variables: dict, data_type: str) -> dict:
         "2I02",
         "2S02",
     ):
+        raise RuntimeError(["Data type " + data_type + " not supported for file writing."])
+
+    else:
 
         attributes = dict(ATTRIBUTES_COM, **eval("ATTRIBUTES_" + data_type))
         for key in list(rpg_variables):
@@ -41,9 +45,6 @@ def get_data_attributes(rpg_variables: dict, data_type: str) -> dict:
         rpg_variables = dict(sorted(rpg_variables.items(), key=lambda pair: index_map[pair[0]]))
 
         return rpg_variables
-
-    else:
-        raise RuntimeError(["Data type " + data_type + " not supported for file writing."])
 
 
 FIELDS = ("long_name", "standard_name", "units", "definition", "comment")

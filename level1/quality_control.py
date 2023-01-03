@@ -97,7 +97,8 @@ def apply_qc(site: str, data: dict, params: dict) -> None:
 
 
 def orbpos(data: dict, params: dict) -> np.ndarray:
-    """Calculates sun & moon elevation/azimuth angles"""
+    """Calculates sun & moon elevation/azimuth angles
+    and returns index for observations in the direction of the sun"""
 
     sun = {}
     sun["azi"] = np.zeros(data["time"].shape) * Fill_Value_Float
@@ -110,13 +111,13 @@ def orbpos(data: dict, params: dict) -> np.ndarray:
     # lun = ephem.Moon()
     obs_loc = ephem.Observer()
 
-    for ind, tim in enumerate(data["time"]):
+    for ind, time in enumerate(data["time"]):
 
         obs_loc.lat, obs_loc.lon = str(data["station_latitude"][ind]), str(
             data["station_longitude"][ind]
         )
         obs_loc.elevation = data["station_altitude"][ind]
-        obs_loc.date = datetime.datetime.utcfromtimestamp(tim).strftime("%Y/%m/%d %H:%M:%S")
+        obs_loc.date = datetime.datetime.utcfromtimestamp(time).strftime("%Y/%m/%d %H:%M:%S")
         sol.compute(obs_loc)
         sun["ele"][ind] = np.rad2deg(sol.alt)
         sun["azi"][ind] = np.rad2deg(sol.az)
@@ -131,10 +132,12 @@ def orbpos(data: dict, params: dict) -> np.ndarray:
     if i_sun:
         sun["sunrise"] = data["time"][i_sun[0][0]]
         sun["sunset"] = data["time"][i_sun[-1][-1]]
-    # exclude added surface observations    
+
+    # exclude added surface observations from sun flagging
     ele_tmp = np.copy(data["ele"][:])
-    ele_tmp[(data["ele"][:] == 0.) & (data["pointing_flag"][:] == 1)] = Fill_Value_Float
-    ind = np.where(
+    ele_tmp[(data["ele"][:] == 0.0) & (data["pointing_flag"][:] == 1)] = Fill_Value_Float
+
+    flag_ind = np.where(
         (ele_tmp != Fill_Value_Float)
         & (ele_tmp <= np.max(sun["ele"]) + 10.0)
         & (data["time"] >= sun["sunrise"])
@@ -145,7 +148,7 @@ def orbpos(data: dict, params: dict) -> np.ndarray:
         & (data["azi"] <= sun["azi"][:] + params["saf"])
     )
 
-    return ind
+    return flag_ind
 
 
 def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
@@ -154,8 +157,9 @@ def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
 
     flag_ind = np.zeros(data["tb"].shape, dtype=np.int32)
     flag_tmp = np.ones(data["tb"].shape) * np.nan
-    tb_tot = ma.masked_all(data["tb"].shape, dtype=np.float32)
+    abs_diff = ma.masked_all(data["tb"].shape, dtype=np.float32)
     tb_ret = np.ones(data["tb"].shape) * np.nan
+
     for ifreq, _ in enumerate(data["frequency"]):
         with nc.Dataset(c_file[ifreq]) as coeff:
             _, freq_ind, coeff_ind = np.intersect1d(
@@ -187,37 +191,40 @@ def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
                     {"Tb": (data["tb"][ele_ind, ifreq] - tb_ret[ele_ind, ifreq])},
                     index=pd.to_datetime(data["time"][ele_ind], unit="s"),
                 )
-                tb_med = tb_df.resample(
+                tb_mean = tb_df.resample(
                     "20min", origin="start", closed="left", label="left", offset="10min"
                 ).mean()
-                org = pd.DataFrame(
+                tb_org = pd.DataFrame(
                     {"Tb": tb_ret[:, ifreq]},
                     index=pd.to_datetime(data["time"][:], unit="s"),
                 )
-                tb_df = tb_df.reindex(org.index, method="pad")
-                tb_med = tb_med.reindex(org.index, method="pad")
+                tb_df = tb_df.reindex(tb_org.index, method="pad")
+                tb_mean = tb_mean.reindex(tb_org.index, method="pad")
 
-                fact = [2.5, 3.5]
+                fact = [2.5, 3.5]  # factor for receiver retrieval uncertainty
+                # flag for individual channels based on channel retrieval uncertainty
                 flag_tmp[
                     ele_ind[
                         (
-                            np.abs(tb_df["Tb"].values[ele_ind] - tb_med["Tb"].values[ele_ind])
+                            np.abs(tb_df["Tb"].values[ele_ind] - tb_mean["Tb"].values[ele_ind])
                             > coeff["predictand_err"][0] * fact[data["receiver"][ifreq] - 1]
                         )
                     ],
                     ifreq,
                 ] = 1
-                tb_tot[ele_ind, ifreq] = np.abs(tb_df["Tb"].values[ele_ind])
+                abs_diff[ele_ind, ifreq] = np.abs(tb_df["Tb"].values[ele_ind])
 
-    th_rec = [1.0, 2.0]
+    th_rec = [1.0, 2.0]  # threshold for receiver mean absolute difference
+    # receiver flag based on mean absolute difference
     for _, rec in enumerate(data["receiver_nb"]):
         flag_tmp[
             np.ix_(
-                ma.mean(tb_tot[:, data["receiver"] == rec], axis=1) > th_rec[rec - 1],
+                ma.mean(abs_diff[:, data["receiver"] == rec], axis=1) > th_rec[rec - 1],
                 data["receiver"] == rec,
             )
         ] = 1
 
+    # adding flag for +- 2min
     for ifreq, _ in enumerate(data["frequency"]):
         df = pd.DataFrame(
             {"Flag": flag_tmp[:, ifreq]},

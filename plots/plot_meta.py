@@ -1,18 +1,20 @@
-"""Metadata for plotting module."""
-from typing import NamedTuple, Optional, Sequence, Tuple, Union
+"""Module for metadata of plotting module."""
+from typing import NamedTuple, Sequence
 
 
 class PlotMeta(NamedTuple):
-    name: Optional[str] = None
-    cbar: Optional[Union[str, Sequence[str]]] = None
-    clabel: Optional[Union[str, Sequence[Tuple[str, str]]]] = None
-    ylabel: Optional[str] = None
-    plot_range: Optional[Tuple[float, float]] = None
-    plot_type: Optional[str] = None
-    source: Optional[str] = None
-    cbar_ext: Optional[str] = None
-    nlev: Optional[int] = None
-    ele: Optional[Tuple[float, float]] = None
+    """Class for plotting module."""
+
+    name: str | None = None
+    cbar: str | Sequence[str] | None = None
+    clabel: str | Sequence[tuple[str, str]] | None = None
+    ylabel: str | None = None
+    plot_range: tuple[float, float] | None = None
+    plot_type: str | None = None
+    source: str | None = None
+    cbar_ext: str | None = None
+    nlev: int | None = None
+    ele: tuple[float, float] | None = None
 
 
 _K = "K"

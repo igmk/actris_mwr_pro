@@ -1,3 +1,4 @@
+"""Module for LWP offset correction"""
 import os
 from time import gmtime
 
@@ -30,8 +31,8 @@ def correct_lwp_offset(lev1: dict, lwp_org: np.ndarray, index: np.ndarray, site:
     time = lev1["time"][index]
     lwp_df = pd.DataFrame({"Lwp": lwp}, index=pd.to_datetime(time, unit="s"))
     lwp_std = lwp_df.rolling("2min", center=True, min_periods=10).std()
-    lwp_mx = lwp_std.rolling("20min", center=True, min_periods=100).max()
-    lwp_df[lwp_mx > 0.0025] = np.nan
+    lwp_max = lwp_std.rolling("20min", center=True, min_periods=100).max()
+    lwp_df[lwp_max > 0.0025] = np.nan
 
     lwp_offset = lwp_df.resample(
         "20min", origin="start", closed="left", label="left", offset="10min"
@@ -43,43 +44,59 @@ def correct_lwp_offset(lev1: dict, lwp_org: np.ndarray, index: np.ndarray, site:
         df = pd.DataFrame({"date": [], "offset": []})
         df.to_csv("site_config/" + site + "/lwp_offset_" + str(t1[0]) + ".csv")
 
-    off = pd.read_csv(
+    # use previously determined offset (within 2h) and write current offset in csv file
+    csv_off = pd.read_csv(
         "site_config/" + site + "/lwp_offset_" + str(t1[0]) + ".csv",
         usecols=["date", "offset"],
     )
     ind = np.where(lwp_offset["Lwp"].values > 0)[0]
     if ind.size > 1:
-        off = off.append(
-            pd.DataFrame({"date": time[ind[0]], "offset": lwp_offset["Lwp"][ind[0]]}, index={0}),
+        csv_off = pd.concat(
+            [
+                csv_off,
+                pd.DataFrame(
+                    {"date": time[ind[0]], "offset": lwp_offset["Lwp"][ind[0]]}, index=[0]
+                ),
+            ],
             ignore_index=True,
         )
-        off = off.append(
-            pd.DataFrame({"date": time[ind[-1]], "offset": lwp_offset["Lwp"][ind[-1]]}, index={0}),
+        csv_off = pd.concat(
+            [
+                csv_off,
+                pd.DataFrame(
+                    {"date": time[ind[-1]], "offset": lwp_offset["Lwp"][ind[-1]]}, index=[0]
+                ),
+            ],
             ignore_index=True,
         )
     elif ind.size == 1:
-        off = off.append(
-            pd.DataFrame({"date": time[ind], "offset": lwp_offset["Lwp"][int(ind)]}, index={0}),
+        csv_off = pd.concat(
+            [
+                csv_off,
+                pd.DataFrame({"date": time[ind], "offset": lwp_offset["Lwp"][int(ind)]}, index=[0]),
+            ],
             ignore_index=True,
         )
-    off = off.sort_values(by=["date"])
-    off = off.drop_duplicates(subset=["date"])
-    off.to_csv("site_config/" + site + "/lwp_offset_" + str(t1[0]) + ".csv", index=False)
+    csv_off = csv_off.sort_values(by=["date"])
+    csv_off = csv_off.drop_duplicates(subset=["date"])
+    csv_off.to_csv("site_config/" + site + "/lwp_offset_" + str(t1[0]) + ".csv", index=False)
 
+    # offset from previous day
     off_ind = np.where(
-        (off["date"].values < time[0]) & (time[0] - off["date"].values < 2.0 * 3600.0)
+        (csv_off["date"].values < time[0]) & (time[0] - csv_off["date"].values < 2.0 * 3600.0)
     )[0]
     if off_ind.size == 1:
         off_ind = np.array([int(off_ind), int(off_ind)])
     if (off_ind.size > 1) & (np.isnan(lwp_offset["Lwp"][0])):
-        lwp_offset["Lwp"][0] = off["offset"][off_ind[-1]]
+        lwp_offset["Lwp"][0] = csv_off["offset"][off_ind[-1]]
+    # offset from next day (for reprocessing purposes)
     off_ind = np.where(
-        (off["date"].values > time[-1]) & (off["date"].values - time[-1] < 2.0 * 3600.0)
+        (csv_off["date"].values > time[-1]) & (csv_off["date"].values - time[-1] < 2.0 * 3600.0)
     )[0]
     if off_ind.size == 1:
         off_ind = np.array([int(off_ind), int(off_ind)])
     if (off_ind.size > 1) & (np.isnan(lwp_offset["Lwp"][-1])):
-        lwp_offset["Lwp"][-1] = off["offset"][off_ind[0]]
+        lwp_offset["Lwp"][-1] = csv_off["offset"][off_ind[0]]
 
     lwp_offset = lwp_offset.interpolate(method="linear")
     lwp_offset = lwp_offset.fillna(method="bfill")

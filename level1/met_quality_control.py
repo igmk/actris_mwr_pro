@@ -1,10 +1,11 @@
+"""Module for meteorological sensor quality control"""
 import numpy as np
 
 from utils import setbit
 
 
 def apply_met_qc(data: dict, params: dict) -> None:
-    """This function performs the met quality control of level 1 data.
+    """This function performs quality control of meteorological sensor data.
     Args:
         data: Level 1 data.
         params: Site specific parameters.
