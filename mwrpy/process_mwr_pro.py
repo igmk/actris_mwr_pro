@@ -5,7 +5,7 @@ import datetime
 from level1.write_lev1_nc import lev1_to_nc
 from level2.write_lev2_nc import lev2_to_nc
 from plots.generate_plots import generate_figure
-from read_specs import get_site_specs
+from utils import read_yaml_config
 
 site = sys.argv[1]
 dvec = sys.argv[2]
@@ -15,7 +15,7 @@ date = datetime.datetime.strptime(dvec, "%Y%m%d")
 prv = date - datetime.timedelta(days=1)
 nex = date + datetime.timedelta(days=1)
 
-global_attributes, params = get_site_specs(site, "1C01")
+global_attributes, params = read_yaml_config(site)
 ID = global_attributes["wigos_station_id"]
 data_out_l1 = params["data_out"] + "level1/" + date.strftime("%Y/%m/%d/")
 data_out_l2 = params["data_out"] + "level2/" + date.strftime("%Y/%m/%d/")
@@ -118,7 +118,7 @@ for prod, var in product:
                 image_name="met2",
             )
             _link_quicklook(link_dir, fig_name)
-            if params["ir_beamwidth"] != -999.0:
+            if params["ir_flag"]:
                 fig_name = generate_figure(
                     lev1_data,
                     ["irt"],

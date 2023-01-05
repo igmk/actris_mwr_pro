@@ -1,5 +1,4 @@
 """Module for plotting"""
-import importlib
 import locale
 from datetime import date, datetime, timezone
 
@@ -16,7 +15,6 @@ from scipy.signal import filtfilt
 
 from atmos import abs_hum, dir_avg, t_dew_rh
 from plots.plot_meta import _COLORS, ATTRIBUTES
-from read_specs import get_site_specs
 from utils import (
     convolve2DFFT,
     get_ret_ang,
@@ -24,6 +22,7 @@ from utils import (
     isbit,
     read_nc_field_name,
     read_nc_fields,
+    read_yaml_config,
     seconds2hours,
 )
 
@@ -353,10 +352,10 @@ def _plot_segment_data(ax, data: ma.MaskedArray, name: str, axes: tuple, nc_file
         colorbar = _init_colorbar(pl, ax)
         colorbar.set_ticks(np.arange(len(clabel)))
         if name == "quality_flag_2":
-            site_name = _read_location(nc_file)
-            site_dict = importlib.import_module(f"site_config." + site_name + ".config")
-            clabel[2] = clabel[2] + " (" + str(site_dict.params["TB_threshold"][1]) + " K)"
-            clabel[1] = clabel[1] + " (" + str(site_dict.params["TB_threshold"][0]) + " K)"
+            site = _read_location(nc_file)
+            _, params = read_yaml_config(site)
+            clabel[2] = clabel[2] + " (" + str(params["TB_threshold"][1]) + " K)"
+            clabel[1] = clabel[1] + " (" + str(params["TB_threshold"][0]) + " K)"
         colorbar.ax.set_yticklabels(clabel, fontsize=13)
 
 
@@ -717,7 +716,7 @@ def _plot_qf(data_in: ndarray, time: ndarray, fig, nc_file: str):
     """Plot for Level 1 quality flags."""
 
     site = _read_location(nc_file)
-    _, params = get_site_specs(site, "1C01")
+    _, params = read_yaml_config(site)
 
     fig.clear()
     nsub = 3
@@ -799,7 +798,7 @@ def _plot_qf(data_in: ndarray, time: ndarray, fig, nc_file: str):
         _set_ax(axs[i], len(frequency), "Frequency [GHz]")
         axs[i].plot(
             np.linspace(*axs[i].get_xlim(), len(time)),
-            np.ones(len(time)) * np.sum(params["receiver"] == 1),
+            np.ones(len(time)) * np.sum(np.array(params["receiver"]) == 1),
             "k-",
             linewidth=1,
         )
@@ -817,7 +816,7 @@ def _plot_tb(
 ):
     """Plot for microwave brigthness temperatures."""
     site = _read_location(nc_file)
-    _, params = get_site_specs(site, "1C01")
+    _, params = read_yaml_config(site)
     frequency = read_nc_fields(nc_file, "frequency")
     if name == "tb":
         quality_flag = read_nc_fields(nc_file, "quality_flag")
@@ -946,8 +945,8 @@ def _plot_tb(
         axaK.set_xticklabels(axaK.get_xticks(), rotation=30)
         axaK.set_xlim(
             [
-                np.floor(np.min(frequency[params["receiver"] == 1]) - 0.1),
-                np.ceil(np.max(frequency[params["receiver"] == 1]) + 0.1),
+                np.floor(np.min(frequency[np.array(params["receiver"]) == 1]) - 0.1),
+                np.ceil(np.max(frequency[np.array(params["receiver"]) == 1]) + 0.1),
             ]
         )
         axaK.set_ylim([0, np.nanmax(tb_m + tb_s) + 30])
@@ -962,8 +961,8 @@ def _plot_tb(
         axaV.set_xticklabels(axaV.get_xticks(), rotation=30)
         axaV.set_xlim(
             [
-                np.floor(np.min(frequency[params["receiver"] == 2]) - 0.1),
-                np.ceil(np.max(frequency[params["receiver"] == 2]) + 0.1),
+                np.floor(np.min(frequency[np.array(params["receiver"]) == 2]) - 0.1),
+                np.ceil(np.max(frequency[np.array(params["receiver"]) == 2]) + 0.1),
             ]
         )
         axaV.set_ylim([0, np.nanmax(tb_m + tb_s) + 30])
@@ -1371,7 +1370,7 @@ def _add_subtitle(fig, case_date: date, site_name: str):
 def _get_lev1(nc_file: str) -> str:
     """Returns name of lev1 file."""
     site = _read_location(nc_file)
-    global_attributes, params = get_site_specs(site, "1C01")
+    global_attributes, params = read_yaml_config(site)
     datef = datetime.strptime(nc_file[-11:-3], "%Y%m%d")
     data_out_l1 = params["data_out"] + "level1/" + datef.strftime("%Y/%m/%d/")
     lev1_file = (
@@ -1399,7 +1398,7 @@ def _get_ret_flag(nc_file: str, time: ndarray) -> ndarray:
     )
     quality_flag = quality_flag[t_ind, :]
     site = _read_location(nc_file)
-    _, params = get_site_specs(site, "1C01")
+    _, params = read_yaml_config(site)
     if params["flag_status"][3] == 0:
         flag[np.sum(isbit(quality_flag[:, freq_ind], 3), axis=1) > 0] = 1
     else:

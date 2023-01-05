@@ -3,6 +3,8 @@
 import glob
 import re
 import time
+import yaml
+from yaml.loader import SafeLoader
 from datetime import datetime, timezone
 
 import netCDF4
@@ -243,6 +245,64 @@ def get_file_list(path_to_files: str, path_to_prev: str, path_to_next: str, exte
     elif (len(f_list_p) == 0) & (len(f_list_n) > 0):
         f_list = [*f_list, f_list_n[0]]
     return f_list
+
+
+def read_yaml_config(site: str) -> tuple[dict, dict]:
+    """Reads config yaml files."""
+    site_file = "site_config/" + site + "/config.yaml"
+    with open(site_file) as f:
+        site_config = yaml.load(f, Loader=SafeLoader)
+    inst_file = "site_config/" + site_config["type"] + ".yaml"
+    with open(inst_file) as f:
+        inst_config = yaml.load(f, Loader=SafeLoader)
+    inst_config["global_specs"].update(site_config["global_specs"])
+    for name in inst_config["params"].keys():
+        site_config["params"][name] = inst_config["params"][name]
+
+    return inst_config["global_specs"], site_config["params"]
+
+
+def update_lev1_attributes(attributes: dict, data_type: str) -> None:
+    """Removes attributes that are not needed for specified Level 1 data type"""
+    if data_type == "1B01":
+        att_del = ["ir_instrument", "met_instrument", "_accuracy"]
+        key = " "
+    elif data_type == "1B11":
+        att_del = [
+            "instrument_manufacturer",
+            "instrument_model",
+            "instrument_generation",
+            "instrument_hw_id",
+            "instrument_calibration",
+            "receiver",
+            "date_of",
+            "instrument_history",
+            "met",
+            "air",
+            "relative",
+            "wind",
+            "rain",
+        ]
+        key = "ir_"
+    elif data_type == "1B21":
+        att_del = [
+            "instrument_manufacturer",
+            "instrument_model",
+            "instrument_generation",
+            "instrument_hw_id",
+            "instrument_calibration",
+            "receiver",
+            "date_of",
+            "instrument_history",
+            "ir_instrument",
+            "ir_accuracy",
+        ]
+        key = "met"
+        attributes["source"] = "In Situ"
+
+    for name in list(attributes.keys()):
+        if any(x in name for x in att_del) & (name[0:3] != key):
+            del attributes[name]
 
 
 def get_ret_ang(nc_file: str) -> list:

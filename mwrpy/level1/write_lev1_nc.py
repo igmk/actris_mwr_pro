@@ -11,10 +11,17 @@ from level1.lev1_meta_nc import get_data_attributes
 from level1.met_quality_control import apply_met_qc
 from level1.quality_control import apply_qc
 from level1.rpg_bin import get_rpg_bin
-from read_specs import get_site_specs
 
 # from level1.tb_offset import correct_tb_offset
-from utils import add_interpol1d, add_time_bounds, epoch2unix, get_file_list, isbit
+from utils import (
+    add_interpol1d,
+    add_time_bounds,
+    epoch2unix,
+    get_file_list,
+    isbit,
+    read_yaml_config,
+    update_lev1_attributes,
+)
 
 Fill_Value_Float = -999.0
 Fill_Value_Int = -99
@@ -45,8 +52,9 @@ def lev1_to_nc(
         '/path/to/next/day/', 'rpg_mwr.nc')
     """
 
-    # file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, "hkd")
-    global_attributes, params = get_site_specs(site, data_type)
+    global_attributes, params = read_yaml_config(site)
+    if data_type != "1C01":
+        update_lev1_attributes(global_attributes, data_type)
     rpg_bin = prepare_data(path_to_files, path_to_prev, path_to_next, data_type, params)
     if data_type in ("1B01", "1C01"):
         apply_qc(site, rpg_bin.data, params)
@@ -84,7 +92,7 @@ def prepare_data(
             "receiver",
         ]
         for name in fields:
-            rpg_bin.data[name] = params[name]
+            rpg_bin.data[name] = np.array(params[name])
         rpg_bin.data["time_bnds"] = add_time_bounds(rpg_bin.data["time"], params["int_time"])
         rpg_bin.data["pointing_flag"] = np.zeros(len(rpg_bin.data["time"]), np.int32)
         (
@@ -106,7 +114,7 @@ def prepare_data(
             _azi_correction(rpg_bin.data, params)
 
         if data_type == "1C01":
-            if params["ir_beamwidth"] != Fill_Value_Float:
+            if params["ir_flag"]:
                 try:
                     file_list_irt = get_file_list(path_to_files, path_to_prev, path_to_next, "irt")
                     rpg_irt = get_rpg_bin(file_list_irt)
@@ -247,8 +255,8 @@ def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
         for i_time, v_time in enumerate(rpg_bin.data["time"]):
             ind = np.where((hkd.data["time"] >= v_time - 900) & (hkd.data["time"] <= v_time + 900))
             status = hkd.data["status"][ind]
-            for irec, nrec in enumerate(params["receiver_nb"]):
-                for bit in range(np.sum(params["receiver"] == nrec)):
+            for irec, nrec in enumerate(np.array(params["receiver_nb"])):
+                for bit in range(np.sum(np.array(params["receiver"]) == nrec)):
                     # status flags for individual channels
                     if np.any(~isbit(status, bit)):
                         rpg_bin.data["status"][i_time, bit + irec] = 1
@@ -260,7 +268,9 @@ def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
                         | ~isbit(status, 22)
                         | (~isbit(status, 24) & ~isbit(status, 25))
                     ):
-                        rpg_bin.data["status"][i_time, np.where(params["receiver"] == nrec)[0]] = 1
+                        rpg_bin.data["status"][
+                            i_time, np.where(np.array(params["receiver"]) == nrec)[0]
+                        ] = 1
                 if nrec == 2:
                     # receiver 2 thermal stability & ambient target stability & noise diode
                     if np.any(
@@ -269,7 +279,9 @@ def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
                         | ~isbit(status, 23)
                         | (~isbit(status, 26) & ~isbit(status, 27))
                     ):
-                        rpg_bin.data["status"][i_time, np.where(params["receiver"] == nrec)[0]] = 1
+                        rpg_bin.data["status"][
+                            i_time, np.where(np.array(params["receiver"]) == nrec)[0]
+                        ] = 1
 
 
 def find_lwcl_free(lev1: dict, ix: np.ndarray) -> tuple:

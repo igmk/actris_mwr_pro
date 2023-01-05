@@ -263,4 +263,6 @@ def _add_standard_global_attributes(nc: netCDF4.Dataset, att_global) -> None:
     locale.setlocale(locale.LC_TIME, "en_US.UTF-8")
     nc.processed = datetime.now(tz=timezone.utc).strftime("%d %b %Y %H:%M:%S") + " UTC"
     for name, value in att_global.items():
+        if value is None:
+            value = ""
         setattr(nc, name, value)

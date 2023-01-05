@@ -14,13 +14,13 @@ from level1.quality_control import spectral_consistency
 from level2.get_ret_coeff import get_mvr_coeff
 from level2.lev2_meta_nc import get_data_attributes
 from level2.lwp_offset import correct_lwp_offset
-from read_specs import get_site_specs
 from utils import (
     add_time_bounds,
     get_coeff_list,
     get_ret_ang,
     get_ret_freq,
     interpol_2d,
+    read_yaml_config,
 )
 
 Fill_Value_Float = -999.0
@@ -65,7 +65,7 @@ def lev2_to_nc(date_in: str, site: str, data_type: str, lev1_path: str, lev2_pat
             if not BL_scan:
                 T_product = "2P01"
             for d_type in [T_product, "2P03"]:
-                global_attributes, params = get_site_specs(site, d_type)
+                global_attributes, params = read_yaml_config(site)
                 if not os.path.isfile(
                     lev2_path
                     + "MWR_"
@@ -92,7 +92,7 @@ def lev2_to_nc(date_in: str, site: str, data_type: str, lev1_path: str, lev2_pat
                     )
                     rpg_mwr.save_rpg(hatpro, output_file, global_attributes, d_type)
 
-        global_attributes, params = get_site_specs(site, data_type)
+        global_attributes, params = read_yaml_config(site)
         rpg_dat, coeff, index = get_products(site, lev1, data_type, params)
         _combine_lev1(lev1, rpg_dat, index, data_type, params)
         _add_att(global_attributes, coeff, lev1)
@@ -524,24 +524,18 @@ def _add_att(global_attributes: dict, coeff: dict, lev1: dict) -> None:
         else:
             global_attributes[name] = ""
 
-    fields = [
-        "instrument_calibration_status",
-        "receiver1_date_of_last_absolute_calibration",
-        "receiver1_type_of_last_absolute_calibration",
-        "receiver2_date_of_last_absolute_calibration",
-        "receiver2_type_of_last_absolute_calibration",
-    ]
-    for name in fields:
-        if hasattr(lev1, name):
-            global_attributes[name] = eval("lev1." + name)
-        else:
-            global_attributes[name] = ""
+    # remove lev1 only attributes
+    att_del = ["ir_instrument", "met_instrument", "_accuracy"]
+    att_names = global_attributes.keys()
+    for name in list(att_names):
+        if any(x in name for x in att_del):
+            del global_attributes[name]
 
 
 def load_product(site: str, date_in: str, product: str):
     "load existing lev2 file for deriving other products"
     file = []
-    global_attributes, params = get_site_specs(site, "1C01")
+    global_attributes, params = read_yaml_config(site)
     ID = global_attributes["wigos_station_id"]
     data_out_l2 = params["data_out"] + "level2/" + date_in.strftime("%Y/%m/%d/")
     file_name = data_out_l2 + "MWR_" + product + "_" + ID + "_" + date_in.strftime("%Y%m%d") + ".nc"
