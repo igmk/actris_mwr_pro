@@ -198,12 +198,9 @@ def add_time_bounds(time_arr: np.ndarray, int_time: int) -> np.ndarray:
 def get_coeff_list(site: str, prefix: str):
     "Returns list of .nc coefficient file(s)"
 
-    s_list = sorted(
-        [
-            glob.glob("site_config/" + site + "/coefficients/" + prefix.lower() + "*"),
-            glob.glob("site_config/" + site + "/coefficients/" + prefix.upper() + "*"),
-        ]
-    )
+    s_list = [glob.glob("site_config/" + site + "/coefficients/" + prefix.lower() + "*"), 
+              glob.glob("site_config/" + site + "/coefficients/" + prefix.upper() + "*"),
+             ]
     c_list = [x for x in s_list if x != []]
     if len(c_list[0]) < 1:
         raise RuntimeError(
@@ -214,7 +211,7 @@ def get_coeff_list(site: str, prefix: str):
                 + "/coefficients/"
             ]
         )
-    return c_list[0]
+    return sorted(c_list[0])
 
 
 def get_file_list(path_to_files: str, path_to_prev: str, path_to_next: str, extension: str):

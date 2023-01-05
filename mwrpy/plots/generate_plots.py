@@ -1208,12 +1208,15 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: st
     """Plot for integrated quantities (LWP, IWV)."""
 
     flag = _get_ret_flag(nc_file, time)
+    data0, time0 = data_in[flag == 0], time[flag == 0]
+    if len(data0) == 0:
+        data0, time0 = data_in, time
     vmin, vmax = ATTRIBUTES[name].plot_range
     if name == "iwv":
-        vmin, vmax = np.nanmin(data_in[flag == 0]) - 1.0, np.nanmax(data_in[flag == 0]) + 1.0
+        vmin, vmax = np.nanmin(data0) - 1.0, np.nanmax(data0) + 1.0
     else:
-        vmax = np.min([np.nanmax(data_in[flag == 0]) + 0.05, vmax])
-        vmin = np.max([np.nanmin(data_in[flag == 0]) - 0.05, vmin])
+        vmax = np.min([np.nanmax(data0) + 0.05, vmax])
+        vmin = np.max([np.nanmin(data0) - 0.05, vmin])
     _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
 
     data_f = np.zeros((len(time), 100), np.float32)
@@ -1242,7 +1245,7 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: st
 
     ax.plot(time, data_in, ".", color="royalblue", markersize=1)
     ax.axhline(linewidth=0.8, color="k")
-    data, time_f = data_in[flag == 0], time[flag == 0]
+    data, time_f = data0, time0
     rolling_mean, width = _calculate_rolling_mean(time, data)
     time_f = _nan_time_gaps(time_f)
     ax.plot(
