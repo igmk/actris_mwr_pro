@@ -15,7 +15,7 @@ The data format including metadata information, variable names and file naming i
 
 ### `mwrpy/site_config/`
 
-This folder contains subfolders for each site, where retrieval coeffiecients are stored in `coefficients/` and `config.py` defines site and instrument specific information (including input and output data paths), which is used for processing purposes and metadata generation.
+This folder contains configuration files for each instrument type in `instrument.yaml` and subfolders for each site, where retrieval coeffiecients are stored in `coefficients/` and `config.yaml` defines site specific information (including input and output data paths), which needs to be modified and is used for processing purposes and metadata generation.
 
 ### `mwrpy/level1/`
 
