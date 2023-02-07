@@ -198,9 +198,10 @@ def add_time_bounds(time_arr: np.ndarray, int_time: int) -> np.ndarray:
 def get_coeff_list(site: str, prefix: str):
     "Returns list of .nc coefficient file(s)"
 
-    s_list = [glob.glob("site_config/" + site + "/coefficients/" + prefix.lower() + "*"), 
-              glob.glob("site_config/" + site + "/coefficients/" + prefix.upper() + "*"),
-             ]
+    s_list = [
+        glob.glob("site_config/" + site + "/coefficients/" + prefix.lower() + "*"),
+        glob.glob("site_config/" + site + "/coefficients/" + prefix.upper() + "*"),
+    ]
     c_list = [x for x in s_list if x != []]
     if len(c_list[0]) < 1:
         raise RuntimeError(
@@ -350,6 +351,24 @@ def read_nc_fields(nc_file: str, names: str | list) -> ma.MaskedArray | list:
     with netCDF4.Dataset(nc_file) as nc:
         data = [nc.variables[name][:] for name in names]
     return data[0] if len(data) == 1 else data
+
+
+def append_data(data_in: dict, key: str, array: np.ndarray) -> dict:
+    """Appends data to a dictionary field (creates the field if not yet present).
+    Args:
+        data_in: Dictionary where data will be appended.
+        key: Key of the field.
+        array: Numpy array to be appended to data_in[key].
+    """
+    data = data_in.copy()
+    if key not in data:
+        if array.ndim == 1:
+            data[key] = array[:].data
+        else:
+            data[key] = array[:, :].data
+    else:
+        data[key] = ma.concatenate((data[key], array))
+    return data
 
 
 def convolve2DFFT(slab, kernel, max_missing=0.1):

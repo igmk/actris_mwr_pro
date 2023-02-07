@@ -34,7 +34,6 @@ def apply_qc(site: str, data: dict, params: dict) -> None:
 
     data["quality_flag"] = np.zeros(data["tb"].shape, dtype=np.int32)
     data["quality_flag_status"] = np.zeros(data["tb"].shape, dtype=np.int32)
-    data["tb"][data["tb"] == 0.0] = Fill_Value_Float
 
     if params["flag_status"][3] == 0:
         c_list = get_coeff_list(site, "tbx")
@@ -128,11 +127,11 @@ def orbpos(data: dict, params: dict) -> np.ndarray:
 
     sun["sunrise"] = data["time"][0]
     sun["sunset"] = data["time"][0] + 24.0 * 3600.0
-    i_sun = np.where(sun["ele"] > 0.0)
+    i_sun = np.where(sun["ele"] > 0.0)[0]
 
-    if i_sun:
-        sun["sunrise"] = data["time"][i_sun[0][0]]
-        sun["sunset"] = data["time"][i_sun[-1][-1]]
+    if len(i_sun) > 0:
+        sun["sunrise"] = data["time"][i_sun[0]]
+        sun["sunset"] = data["time"][i_sun[-1]]
 
     # exclude added surface observations from sun flagging
     ele_tmp = np.copy(data["ele"][:])

@@ -1,24 +1,33 @@
 """Module for plotting"""
 import locale
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
 import matplotlib.pyplot as plt
 import netCDF4
 import numpy as np
 from matplotlib import rcParams
 from matplotlib.colors import BoundaryNorm, ListedColormap
-from matplotlib.ticker import FixedLocator, FormatStrFormatter
+from matplotlib.patches import Patch
+from matplotlib.ticker import FixedLocator, FormatStrFormatter, MultipleLocator
 from matplotlib.transforms import Affine2D, Bbox, ScaledTranslation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from numpy import ma, ndarray
-from scipy.signal import filtfilt
 
 from atmos import abs_hum, dir_avg, t_dew_rh
 from plots.plot_meta import _COLORS, ATTRIBUTES
+from plots.plot_utils import (
+    _calculate_rolling_mean,
+    _gap_array,
+    _get_bit_flag,
+    _get_freq_flag,
+    _get_lev1,
+    _get_ret_flag,
+    _get_unmasked_values,
+    _nan_time_gaps,
+    _read_location,
+)
 from utils import (
-    convolve2DFFT,
     get_ret_ang,
-    get_ret_freq,
     isbit,
     read_nc_field_name,
     read_nc_fields,
@@ -98,34 +107,38 @@ def generate_figure(
     """
 
     valid_fields, valid_names = _find_valid_fields(nc_file, field_names)
-    is_height = _is_height_dimension(nc_file)
-    fig, axes = _initialize_figure(len(valid_fields), dpi)
+    file_name = []
+    if len(valid_fields) > 0:
+        is_height = _is_height_dimension(nc_file)
+        fig, axes = _initialize_figure(len(valid_fields), dpi)
 
-    for ax, field, name in zip(axes, valid_fields, valid_names):
-        time = _read_time_vector(nc_file)
-        if ATTRIBUTES[name].ele is not None:
-            ele_range = ATTRIBUTES[name].ele
-        ax.set_facecolor(_COLORS["lightgray"])
-        if name not in ("ele", "azi"):
-            time = _elevation_filter(nc_file, time, ele_range)
-            field = _elevation_filter(nc_file, field, ele_range)
-        if title:
-            _set_title(ax, name, nc_file, "")
-        if not is_height:
-            source = ATTRIBUTES[name].source
-            _plot_instrument_data(ax, field, name, source, time, fig, nc_file, ele_range, pointing)
-        else:
-            ax_value = _read_ax_values(nc_file)
-            ax_value = (time, ax_value[1])
-            field, ax_value = _screen_high_altitudes(field, ax_value, max_y)
-            _set_ax(ax, max_y)
+        for ax, field, name in zip(axes, valid_fields, valid_names):
+            time = _read_time_vector(nc_file)
+            if ATTRIBUTES[name].ele is not None:
+                ele_range = ATTRIBUTES[name].ele
+            ax.set_facecolor(_COLORS["lightgray"])
+            if name not in ("ele", "azi"):
+                time = _elevation_filter(nc_file, time, ele_range)
+                field = _elevation_filter(nc_file, field, ele_range)
+            if title:
+                _set_title(ax, name, nc_file, "")
+            if not is_height:
+                source = ATTRIBUTES[name].source
+                _plot_instrument_data(
+                    ax, field, name, source, time, fig, nc_file, ele_range, pointing
+                )
+            else:
+                ax_value = _read_ax_values(nc_file)
+                ax_value = (time, ax_value[1])
+                field, ax_value = _screen_high_altitudes(field, ax_value, max_y)
+                _set_ax(ax, max_y)
 
-            plot_type = ATTRIBUTES[name].plot_type
-            if plot_type == "mesh":
-                _plot_colormesh_data(ax, field, name, ax_value, nc_file)
+                plot_type = ATTRIBUTES[name].plot_type
+                if plot_type == "mesh":
+                    _plot_colormesh_data(ax, field, name, ax_value, nc_file)
 
-    case_date = _set_labels(fig, axes[-1], nc_file, sub_title)
-    file_name = handle_saving(nc_file, image_name, save_path, show, case_date, valid_names)
+        case_date = _set_labels(fig, axes[-1], nc_file, sub_title)
+        file_name = handle_saving(nc_file, image_name, save_path, show, case_date, valid_names)
     return file_name
 
 
@@ -228,8 +241,8 @@ def _find_valid_fields(nc_file: str, names: list) -> tuple[list, list]:
                 valid_data.append(nc.variables[name][:])
             else:
                 valid_names.remove(name)
-    if not valid_names:
-        raise ValueError("No fields to be plotted")
+    # if not valid_names:
+    #     raise ValueError("No fields to be plotted")
     return valid_data, valid_names
 
 
@@ -327,6 +340,46 @@ def _get_standard_time_ticks(resolution: int = 4) -> list:
     return [f"{int(i):02d}:00" if 24 > i > 0 else "" for i in np.arange(0, 24.01, resolution)]
 
 
+def _init_colorbar(plot, axis):
+    """Returns colorbar."""
+    divider = make_axes_locatable(axis)
+    cax = divider.append_axes("right", size="1%", pad=0.25)
+    return plt.colorbar(plot, fraction=1.0, ax=axis, cax=cax)
+
+
+def _read_date(nc_file: str) -> date:
+    """Returns measurement date."""
+    locale.setlocale(locale.LC_TIME, "en_US.UTF-8")
+    with netCDF4.Dataset(nc_file) as nc:
+        case_date = datetime.strptime(nc.date, "%Y-%m-%d")
+    return case_date
+
+
+def _add_subtitle(fig, case_date: date, site_name: str):
+    """Adds subtitle into figure."""
+    text = _get_subtitle_text(case_date, site_name)
+    fig.suptitle(
+        text,
+        fontsize=13,
+        y=0.885,
+        x=0.07,
+        horizontalalignment="left",
+        verticalalignment="bottom",
+    )
+
+
+def _get_subtitle_text(case_date: date, site_name: str) -> str:
+    """Returns string with site name and date."""
+    site_name = site_name.replace("-", " ")
+    return f"{site_name}, {case_date.strftime('%-d %b %Y')}"
+
+
+def _create_save_name(save_path: str, case_date: date, field_names: list, fix: str = "") -> str:
+    """Creates file name for saved images."""
+    date_string = case_date.strftime("%Y%m%d")
+    return f"{save_path}{date_string}_{'_'.join(field_names)}{fix}.png"
+
+
 def _plot_segment_data(ax, data: ma.MaskedArray, name: str, axes: tuple, nc_file: str):
     """Plots categorical 2D variable.
     Args:
@@ -351,7 +404,7 @@ def _plot_segment_data(ax, data: ma.MaskedArray, name: str, axes: tuple, nc_file
         ax.grid(axis="y")
         colorbar = _init_colorbar(pl, ax)
         colorbar.set_ticks(np.arange(len(clabel)))
-        if name == "quality_flag_2":
+        if name == "quality_flag_3":
             site = _read_location(nc_file)
             _, params = read_yaml_config(site)
             clabel[2] = clabel[2] + " (" + str(params["TB_threshold"][1]) + " K)"
@@ -557,7 +610,7 @@ def _plot_hkd(ax, data_in: ndarray, name: str, time: ndarray):
             )
         lines, labels = ax.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
-        ax2.legend(lines + lines2, labels + labels2, loc="upper right")
+        leg = ax2.legend(lines + lines2, labels + labels2, loc="upper right")
         ax.yaxis.tick_right()
 
     if name == "t_rec":
@@ -593,7 +646,7 @@ def _plot_hkd(ax, data_in: ndarray, name: str, time: ndarray):
         ax2.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
         lines, labels = ax.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
-        ax2.legend(lines + lines2, labels + labels2, loc="upper right")
+        leg = ax2.legend(lines + lines2, labels + labels2, loc="upper right")
 
     if name == "t_sta":
         vmin, vmax = 0.0, np.nanmax(
@@ -611,7 +664,10 @@ def _plot_hkd(ax, data_in: ndarray, name: str, time: ndarray):
             )
         ax.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
         _set_ax(ax, vmax, "Mean absolute difference (K)", vmin)
-        ax.legend(loc="upper right")
+        leg = ax.legend(loc="upper right")
+
+    for legobj in leg.legendHandles:
+        legobj.set_linewidth(2.0)
 
 
 def _plot_sen(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
@@ -697,7 +753,7 @@ def _plot_irt(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
                 label=str(ir_wavelength[1]) + " µm",
             )
     ax.set_ylim((vmin, vmax))
-    ax.legend(loc="upper right")
+    ax.legend(loc="upper right", markerscale=6)
     _set_ax(ax, vmax, variables.ylabel, vmin)
 
 
@@ -719,24 +775,39 @@ def _plot_qf(data_in: ndarray, time: ndarray, fig, nc_file: str):
     _, params = read_yaml_config(site)
 
     fig.clear()
-    nsub = 3
+    nsub = 4
+    h_ratio = [0.1, 0.3, 0.3, 0.3]
     if params["flag_status"][3] == 1:
-        nsub = 2
-    fig, axs = plt.subplots(nsub, 1, figsize=(12.52, 16), dpi=120, facecolor="w")
+        nsub = 3
+        h_ratio = [0.2, 0.4, 0.4]
+    fig, axs = plt.subplots(
+        nsub, 1, figsize=(12.52, 16), dpi=120, facecolor="w", height_ratios=h_ratio
+    )
     frequency = read_nc_fields(nc_file, "frequency")
-    qf0 = _get_freq_flag(data_in[:, 0], [4])
-    case_date = _read_date(nc_file)
 
-    qf1 = _get_bit_flag(data_in[:, -1], [4, 5, 6])
-    qf = np.column_stack((qf0 - 1, qf1 + 1))
-    _plot_segment_data(axs[0], qf, "quality_flag_0", (time, np.linspace(0.5, 3.5, 4)), nc_file)
-    axs[0].set_yticks(np.arange(4))
+    qf = _get_bit_flag(data_in[:, 0], [5, 6])
+    _plot_segment_data(axs[0], qf, "quality_flag_0", (time, np.linspace(0.5, 1.5, 2)), nc_file)
+    axs[0].set_yticks(np.arange(2))
     axs[0].yaxis.set_ticklabels([])
     axs[0].set_facecolor(_COLORS["lightgray"])
-    _set_ax(axs[0], 4, "")
+    _set_ax(axs[0], 2, "")
     axs[0].set_title(ATTRIBUTES["quality_flag_0"].name)
 
+    case_date = _read_date(nc_file)
     gtim = _gap_array(time, case_date)
+
+    qf1 = _get_freq_flag(data_in[:, np.array(params["receiver"]) == 1], [4])
+    qf2 = _get_freq_flag(data_in[:, np.array(params["receiver"]) == 2], [4])
+    qf = np.column_stack((qf1 - 1, qf2 + 1))
+    _plot_segment_data(
+        axs[1],
+        qf,
+        "quality_flag_1",
+        (time, np.linspace(0.5, len(frequency) - 0.5, len(frequency))),
+        nc_file,
+    )
+    axs[1].set_title(ATTRIBUTES["quality_flag_1"].name)
+
     if params["flag_status"][3] == 0:
         qf = _get_freq_flag(data_in, [3])
         if len(gtim) > 0:
@@ -747,20 +818,20 @@ def _plot_qf(data_in: ndarray, time: ndarray, fig, nc_file: str):
                 xind = np.where((time_i >= gtim[ig, 0]) & (time_i <= gtim[ig, 1]))
                 data_g[xind, :] = 1.0
             _plot_segment_data(
-                axs[1],
+                axs[2],
                 data_g,
                 "tb_qf",
                 (time_i, np.linspace(0.5, 20.0 - 0.5, 20)),
                 nc_file,
             )
         _plot_segment_data(
-            axs[1],
+            axs[2],
             qf,
-            "quality_flag_1",
+            "quality_flag_2",
             (time, np.linspace(0.5, len(frequency) - 0.5, len(frequency))),
             nc_file,
         )
-        axs[1].set_title(ATTRIBUTES["quality_flag_1"].name)
+        axs[2].set_title(ATTRIBUTES["quality_flag_2"].name)
 
     qf = _get_freq_flag(data_in, [1, 2])
     if len(gtim) > 0:
@@ -780,11 +851,11 @@ def _plot_qf(data_in: ndarray, time: ndarray, fig, nc_file: str):
     _plot_segment_data(
         axs[nsub - 1],
         qf,
-        "quality_flag_2",
+        "quality_flag_3",
         (time, np.linspace(0.5, len(frequency) - 0.5, len(frequency))),
         nc_file,
     )
-    axs[nsub - 1].set_title(ATTRIBUTES["quality_flag_2"].name)
+    axs[nsub - 1].set_title(ATTRIBUTES["quality_flag_3"].name)
 
     offset = ScaledTranslation(0 / 72, 8 / 72, fig.dpi_scale_trans)
     if params["flag_status"][3] == 1:
@@ -835,6 +906,7 @@ def _plot_tb(
         quality_flag = read_nc_fields(lev1_file, "quality_flag")
         quality_flag = _elevation_filter(lev1_file, quality_flag, [ang[-1] - 0.5, ang[-1] + 0.5])
         quality_flag = _pointing_filter(lev1_file, quality_flag, [ang[-1] - 0.5, ang[-1] + 0.5], 0)
+        qf = np.copy(quality_flag)
         quality_flag[~isbit(quality_flag, 3)] = 0
         data_in = sc["tb"] - data_in
 
@@ -879,8 +951,32 @@ def _plot_tb(
         )
 
     if axs.ndim > 1:
-        axs[0, 0].set_title("K-Band Channels", fontsize=15, color=_COLORS["darkgray"], loc="right")
-        axs[0, 1].set_title("V-Band Channels", fontsize=15, color=_COLORS["darkgray"], loc="right")
+        axs[0, 0].set_title(
+            "Receiver 1 Channels", fontsize=15, color=_COLORS["darkgray"], loc="right"
+        )
+        axs[0, 1].set_title(
+            "Receiver 2 Channels", fontsize=15, color=_COLORS["darkgray"], loc="right"
+        )
+    else:
+        axs[np.where(np.array(params["receiver"]) == 1)[0][0]].set_title(
+            "Receiver 1",
+            fontsize=15,
+            color=_COLORS["darkgray"],
+            loc="right",
+            rotation="vertical",
+            x=1.03,
+            y=0.05,
+        )
+        axs[np.where(np.array(params["receiver"]) == 2)[0][0]].set_title(
+            "Receiver 2",
+            fontsize=15,
+            color=_COLORS["darkgray"],
+            loc="right",
+            rotation="vertical",
+            x=1.03,
+            y=0.05,
+        )
+
     trans = ScaledTranslation(10 / 72, -5 / 72, fig.dpi_scale_trans)
     tb_m, tb_s = [], []
 
@@ -934,9 +1030,9 @@ def _plot_tb(
     axa.tick_params(axis="y", which="both", right=False, left=False, labelleft=False)
     for pos in ["right", "top", "bottom", "left"]:
         axa.spines[pos].set_visible(False)
-    axa.set_facecolor(_COLORS["lightgray"])
 
     if name == "tb":
+        axa.set_facecolor(_COLORS["lightgray"])
         axaK = fig.add_subplot(121)
         axaK.set_position([0.125, -0.05, 0.36, 0.125])
         axaK.plot(frequency, tb_m, "ko", markerfacecolor="k", markersize=4)
@@ -949,9 +1045,21 @@ def _plot_tb(
                 np.ceil(np.max(frequency[np.array(params["receiver"]) == 1]) + 0.1),
             ]
         )
-        axaK.set_ylim([0, np.nanmax(tb_m + tb_s) + 30])
+        minv = np.nanmin(
+            tb_m[np.array(params["receiver"]) == 1] - tb_s[np.array(params["receiver"]) == 1]
+        )
+        maxv = np.nanmax(
+            tb_m[np.array(params["receiver"]) == 1] + tb_s[np.array(params["receiver"]) == 1]
+        )
+        axaK.set_ylim([np.nanmax([0, minv - 0.05 * minv]), maxv + 0.05 * maxv])
         axaK.tick_params(axis="both", labelsize=12)
         axaK.set_facecolor(_COLORS["lightgray"])
+        axaK.plot(
+            frequency[np.array(params["receiver"]) == 1],
+            tb_m[np.array(params["receiver"]) == 1],
+            "k-",
+            linewidth=2,
+        )
 
         axaV = fig.add_subplot(122)
         axaV.set_position([0.54, -0.05, 0.36, 0.125])
@@ -965,9 +1073,21 @@ def _plot_tb(
                 np.ceil(np.max(frequency[np.array(params["receiver"]) == 2]) + 0.1),
             ]
         )
-        axaV.set_ylim([0, np.nanmax(tb_m + tb_s) + 30])
+        minv = np.nanmin(
+            tb_m[np.array(params["receiver"]) == 2] - tb_s[np.array(params["receiver"]) == 2]
+        )
+        maxv = np.nanmax(
+            tb_m[np.array(params["receiver"]) == 2] + tb_s[np.array(params["receiver"]) == 2]
+        )
+        axaV.set_ylim([np.nanmax([0, minv - 0.05 * minv]), maxv + 0.05 * maxv])
         axaV.tick_params(axis="both", labelsize=12)
         axaV.set_facecolor(_COLORS["lightgray"])
+        axaV.plot(
+            frequency[np.array(params["receiver"]) == 2],
+            tb_m[np.array(params["receiver"]) == 2],
+            "k-",
+            linewidth=2,
+        )
 
         axaK.spines["right"].set_visible(False)
         axaV.spines["left"].set_visible(False)
@@ -1005,39 +1125,47 @@ def _plot_tb(
 
     else:
         tb_m = np.ones((len(sc["time"]), len(sc["receiver_nb"]))) * np.nan
-        axa = fig.add_subplot(111)
-        axa.set_position([0.125, -0.05, 0.775, 0.125])
-        axa.set_facecolor(_COLORS["lightgray"])
-        cl = [_COLORS["darksky"], _COLORS["darkgreen"]]
-        lb = ["K-Band", "V-Band"]
+        axa = fig.subplots(1, 2)
+        ticks_x_labels = _get_standard_time_ticks()
+        axa[0].set_ylabel("Mean absolute difference [K]", fontsize=12)
 
         for irec, rec in enumerate(sc["receiver_nb"]):
+            axa[irec].set_position([0.125 + irec * 0.415, -0.05, 0.36, 0.125])
+            no_flag = np.where(np.sum(quality_flag[:, sc["receiver"] == rec], axis=1) == 0)[0]
+            if len(no_flag) == 0:
+                no_flag = np.arange(len(sc["time"]))
             tb_m[:, irec] = ma.mean(np.abs(data_in[:, sc["receiver"] == rec]), axis=1)
-            axa.plot(
+            axa[irec].plot(
                 time,
                 tb_m[:, irec],
                 "o",
-                color=cl[irec],
+                color="black",
                 markersize=0.75,
                 fillstyle="full",
-                label=lb[irec],
             )
+            axa[irec].set_facecolor(_COLORS["lightgray"])
             flag = np.where(np.sum(quality_flag[:, sc["receiver"] == rec], axis=1) > 0)[0]
-            axa.plot(time[flag], tb_m[flag, irec], "ro", markersize=0.75, fillstyle="full")
+            axa[irec].plot(time[flag], tb_m[flag, irec], "ro", markersize=0.75, fillstyle="full")
+            axa[irec].set_xticks(np.arange(0, 25, 4, dtype=int))
+            axa[irec].set_xticklabels(ticks_x_labels, fontsize=12)
+            axa[irec].set_xlim(0, 24)
+            axa[irec].set_xlabel("Time (UTC)", fontsize=12)
+            axa[irec].set_ylim([0, np.nanmax(tb_m[no_flag, irec]) + 0.5])
 
-        axa.legend(loc="upper right")
-        axa.set_ylabel("Mean absolute difference [K]", fontsize=12)
-        axa.set_xlabel("Time (UTC)", fontsize=12)
-        ticks_x_labels = _get_standard_time_ticks()
-        axa.set_xticks(np.arange(0, 25, 4, dtype=int))
-        axa.set_xticklabels(ticks_x_labels, fontsize=12)
-        axa.set_xlim(0, 24)
-        no_flag = np.where(np.sum(quality_flag[:, :], axis=1) == 0)[0]
-        if len(no_flag) == 0:
-            no_flag = np.arange(len(sc["time"]))
-        axa.set_ylim([0, np.nanmax(tb_m[no_flag, :]) + 0.5])
-        # axa.text(.5, .9, '', fontsize=13, horizontalalignment='center',
-        # transform=axa.transAxes, color=_COLORS['darkgray'], fontweight='bold')
+            if len(np.where(isbit(qf[:, 0], 5))[0]) > 0:
+                data_g = np.zeros((len(time), 10), np.float32)
+                data_g[isbit(qf[:, 0], 5), :] = 1.0
+                _plot_segment_data(
+                    axa[irec],
+                    data_g,
+                    "tb_missing",
+                    (time, np.linspace(0, np.nanmax(tb_m[no_flag, irec]) + 0.5, 10)),
+                    nc_file,
+                )
+                handles, labels = axa[irec].get_legend_handles_labels()
+                handles.append(Patch(facecolor=_COLORS["gray"]))
+                labels.append("rain_detected")
+                axa[irec].legend(handles, labels, loc="upper right")
 
 
 def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
@@ -1065,7 +1193,7 @@ def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
     if name == "air_pressure":
         vmin, vmax = np.nanmin(data) - 1.0, np.nanmax(data) + 1.0
     if (name == "wind_speed") | (name == "rain_rate"):
-        vmin, vmax = 0.0, np.nanmax([np.nanmax(data) + 1.0, 3.0])
+        vmin, vmax = 0.0, np.nanmax([np.nanmax(data) + 1.0, 2.0])
 
     _set_ax(ax, vmax, ylabel, min_y=vmin)
     ax.grid(True)
@@ -1152,7 +1280,7 @@ def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
         f = lambda x: yl2[0] + (x - yl[0]) / (yl[1] - yl[0]) * (yl2[1] - yl2[0])
         ticks = f(ax.get_yticks())
         ax2.yaxis.set_major_locator(FixedLocator(ticks))
-        ax2.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
+        ax2.yaxis.set_major_formatter(FormatStrFormatter("%.4f"))
         ax3 = ax.twinx()
         ax3.plot(time, data, ".", alpha=0.8, color=_COLORS["darksky"], markersize=1)
         ax3.plot(
@@ -1184,23 +1312,28 @@ def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
             np.nanmax(
                 [
                     np.nanmax(np.cumsum(data) / 3600.0) + 0.1 * np.nanmax(np.cumsum(data) / 3600.0),
-                    0.003,
+                    0.004,
                 ]
             ),
             "accum. amount (mm)",
             min_y=0.0,
         )
+        if np.nanmax(data) <= 2.0:
+            minorLocator = MultipleLocator(0.5)
+            ax.yaxis.set_major_locator(minorLocator)
         yl = ax.get_ylim()
         yl2 = ax2.get_ylim()
         f = lambda x: yl2[0] + (x - yl[0]) / (yl[1] - yl[0]) * (yl2[1] - yl2[0])
         ticks = f(ax.get_yticks())
         ax2.yaxis.set_major_locator(FixedLocator(ticks))
         ax2.yaxis.set_major_formatter(FormatStrFormatter("%.3f"))
+        _set_ax(ax, vmax, "rain rate (" + ylabel + ")", min_y=vmin)
         ax3 = ax.twinx()
         ax3.plot(time, data, ".", alpha=0.8, color=_COLORS["darksky"], markersize=1)
         ax3.plot(time, rolling_mean, "o", fillstyle="full", color="darkblue", markersize=3)
         _set_ax(ax3, vmax, "", min_y=vmin)
         ax3.set_yticklabels([])
+        ax3.set_yticks([])
         ax3.set_frame_on(False)
 
 
@@ -1226,7 +1359,7 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: st
     ax.pcolor(time, np.linspace(vmin, vmax, 100), data_f.T, cmap=cmap, norm=norm)
 
     case_date = _read_date(nc_file)
-    gtim = _gap_array(time, case_date)
+    gtim = _gap_array(time, case_date, 15.0 / 60.0)
     if len(gtim) > 0:
         time_i, data_g = np.linspace(time[0], time[-1], len(time)), np.zeros(
             (len(time), 10), np.float32
@@ -1254,168 +1387,3 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: st
     ax.plot(
         time_f[int(width / 2 - 1) : int(-width / 2)], rolling_mean, color="wheat", linewidth=0.6
     )
-
-
-def _filter_noise(data: ndarray) -> ndarray:
-    """IIR filter"""
-    n = int(np.rint(np.nextafter((len(data) / 1000), (len(data) / 1000) + 1)))
-    if n <= 1:
-        n = 2
-    b = [1.0 / n] * n
-    a = 1
-    return filtfilt(b, a, data)
-
-
-def _get_freq_flag(data: ndarray, bits: ndarray) -> ndarray:
-    """Returns array of flag values for each frequency."""
-    flag = np.ones(data.shape) * np.nan
-    for i, bit in enumerate(bits):
-        flag[isbit(data, bit)] = i + 1
-    flag[isbit(data, 0)] = 0
-    return flag
-
-
-def _get_bit_flag(data: ndarray, bits: ndarray) -> ndarray:
-    """Returns array of flag values for each bit"""
-    flag = np.ones((len(data), len(bits))) * np.nan
-    for i, bit in enumerate(bits):
-        flag[isbit(data, bit), i] = i
-    return flag
-
-
-def _get_unmasked_values(data: ma.MaskedArray, time: ndarray) -> tuple[ndarray, ndarray]:
-    """Returns unmasked time and data"""
-    if ma.is_masked(data) is False:
-        return data, time
-    good_values = ~data.mask
-    return data[good_values], time[good_values]
-
-
-def _nan_time_gaps(time: ndarray, tgap: float = 5.0 / 60.0) -> ndarray:
-    """Finds time gaps bigger than 5min (default) and inserts nan."""
-    time_diff = np.diff(time)
-    gaps = np.where(time_diff > tgap)[0] + 1
-    if len(gaps) > 0:
-        time[gaps[0 : np.min([len(time), gaps[-1]])]] = np.nan
-    return time
-
-
-def _gap_array(time: ndarray, case_date, tgap: float = 5.0 / 60.0) -> ndarray:
-    """Returns edges of time gaps bigger than 5min (default).
-    End of gap for current day is current time."""
-    locale.setlocale(locale.LC_TIME, "en_US.UTF-8")
-    dtnow = datetime.now(tz=timezone.utc)
-    day_e = 24.0
-    if dtnow.strftime("%d %b %Y") == case_date.strftime("%d %b %Y"):
-        day_e = dtnow.hour + dtnow.minute / 60.0 + dtnow.second / 3600.0
-        if day_e - time[-1] < 2.0:
-            day_e = time[-1]
-    time_diff = np.diff(np.insert(time, [0, len(time)], [0.0, day_e]))
-    gaps = np.where(time_diff > tgap)[0]
-    gtim = np.zeros((len(gaps), 2), np.float32)
-    if len(gaps) > 0:
-        for i, ind in enumerate(gaps):
-            if ind < len(time):
-                gtim[i, :] = [time[ind - 1], time[ind]]
-    return gtim
-
-
-def _calculate_rolling_mean(time: ndarray, data: ndarray, win: float = 0.5) -> tuple[ndarray, int]:
-    """Returns rolling mean and used window width."""
-    width = len(time[time <= time[0] + win])
-    if (width % 2) != 0:
-        width = width + 1
-    if data.ndim == 1:
-        rolling_window = np.kaiser(width, 14)
-        rolling_mean = np.convolve(data, rolling_window, "valid")
-        rolling_mean = rolling_mean / np.sum(rolling_window)
-    else:
-        rolling_window = np.ones((1, width)) * np.blackman(width)
-        rolling_mean = convolve2DFFT(data, rolling_window.T, max_missing=0.1)
-    return rolling_mean, width
-
-
-def _init_colorbar(plot, axis):
-    """Returns colorbar."""
-    divider = make_axes_locatable(axis)
-    cax = divider.append_axes("right", size="1%", pad=0.25)
-    return plt.colorbar(plot, fraction=1.0, ax=axis, cax=cax)
-
-
-def _read_location(nc_file: str) -> str:
-    """Returns site name."""
-    with netCDF4.Dataset(nc_file) as nc:
-        site_name = nc.site_location
-    return site_name
-
-
-def _read_date(nc_file: str) -> date:
-    """Returns measurement date."""
-    locale.setlocale(locale.LC_TIME, "en_US.UTF-8")
-    with netCDF4.Dataset(nc_file) as nc:
-        case_date = datetime.strptime(nc.date, "%Y-%m-%d")
-    return case_date
-
-
-def _add_subtitle(fig, case_date: date, site_name: str):
-    """Adds subtitle into figure."""
-    text = _get_subtitle_text(case_date, site_name)
-    fig.suptitle(
-        text,
-        fontsize=13,
-        y=0.885,
-        x=0.07,
-        horizontalalignment="left",
-        verticalalignment="bottom",
-    )
-
-
-def _get_lev1(nc_file: str) -> str:
-    """Returns name of lev1 file."""
-    site = _read_location(nc_file)
-    global_attributes, params = read_yaml_config(site)
-    datef = datetime.strptime(nc_file[-11:-3], "%Y%m%d")
-    data_out_l1 = params["data_out"] + "level1/" + datef.strftime("%Y/%m/%d/")
-    lev1_file = (
-        data_out_l1
-        + "MWR_1C01_"
-        + global_attributes["wigos_station_id"]
-        + "_"
-        + datef.strftime("%Y%m%d")
-        + ".nc"
-    )
-    return lev1_file
-
-
-def _get_ret_flag(nc_file: str, time: ndarray) -> ndarray:
-    """Returns quality flag for frequencies used in retrieval."""
-    flag = np.zeros(len(time), np.int32)
-    lev1_file = _get_lev1(nc_file)
-    quality_flag = read_nc_fields(lev1_file, "quality_flag")
-    t_lev1 = read_nc_fields(lev1_file, "time")
-    f_lev1 = read_nc_fields(lev1_file, "frequency")
-    freq = get_ret_freq(nc_file)
-    _, freq_ind, _ = np.intersect1d(f_lev1.data, freq, assume_unique=False, return_indices=True)
-    _, t_ind, _ = np.intersect1d(
-        seconds2hours(t_lev1.data), time.data, assume_unique=False, return_indices=True
-    )
-    quality_flag = quality_flag[t_ind, :]
-    site = _read_location(nc_file)
-    _, params = read_yaml_config(site)
-    if params["flag_status"][3] == 0:
-        flag[np.sum(isbit(quality_flag[:, freq_ind], 3), axis=1) > 0] = 1
-    else:
-        flag[np.sum(quality_flag[:, freq_ind], axis=1) > 0] = 1
-    return flag
-
-
-def _get_subtitle_text(case_date: date, site_name: str) -> str:
-    """Returns string with site name and date."""
-    site_name = site_name.replace("-", " ")
-    return f"{site_name}, {case_date.strftime('%-d %b %Y')}"
-
-
-def _create_save_name(save_path: str, case_date: date, field_names: list, fix: str = "") -> str:
-    """Creates file name for saved images."""
-    date_string = case_date.strftime("%Y%m%d")
-    return f"{save_path}{date_string}_{'_'.join(field_names)}{fix}.png"

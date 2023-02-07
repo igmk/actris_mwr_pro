@@ -1,4 +1,4 @@
-# Config file for all HATPRO G5 instruments
+# Config file for all HATPRO instruments
 
 params:
     receiver_nb: [1, 2]
@@ -89,7 +89,7 @@ global_specs:
     instrument_model: HATPRO
     
     # Instrument generation
-    instrument_generation: G5
+    instrument_generation:
     
     # Specific to mainboard
     instrument_hw_id:

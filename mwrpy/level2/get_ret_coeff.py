@@ -303,8 +303,8 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
 
             coeff["ele"] = np.ones(N) * Fill_Value_Float
             coeff["freq"] = np.ones([len(freq), N]) * Fill_Value_Float
-            coeff["coeff_lin"] = np.zeros([N, 23])
-            coeff["coeff_quad"] = np.zeros([N, 23])
+            coeff["coeff_lin"] = np.zeros([N, len(freq)])
+            coeff["coeff_quad"] = np.zeros([N, len(freq)])
             coeff["offset"] = np.zeros(N)
             coeff["err_ran"] = np.ones(N) * Fill_Value_Float
             coeff["err_sys"] = np.ones(N) * Fill_Value_Float
@@ -354,8 +354,8 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
 
             coeff["ele"] = np.ones(N) * Fill_Value_Float
             coeff["freq"] = np.ones([len(freq), N]) * Fill_Value_Float
-            coeff["coeff_lin"] = np.zeros([N, n_height_grid, 23])
-            coeff["coeff_quad"] = np.zeros([N, n_height_grid, 23])
+            coeff["coeff_lin"] = np.zeros([N, n_height_grid, len(freq)])
+            coeff["coeff_quad"] = np.zeros([N, n_height_grid, len(freq)])
             coeff["offset"] = np.zeros([n_height_grid, N])
             coeff["err_ran"] = ma.masked_all((n_height_grid, N))
             coeff["err_sys"] = ma.masked_all((n_height_grid, N))

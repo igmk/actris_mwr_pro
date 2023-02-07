@@ -19,6 +19,8 @@ global_attributes, params = read_yaml_config(site)
 ID = global_attributes["wigos_station_id"]
 data_out_l1 = params["data_out"] + "level1/" + date.strftime("%Y/%m/%d/")
 data_out_l2 = params["data_out"] + "level2/" + date.strftime("%Y/%m/%d/")
+data_out_stat = params["data_out"] + "level1/" + date.strftime("%Y/")
+
 product = [
     ("1C01", ""),
     ("2I01", "lwp"),
@@ -156,3 +158,37 @@ for prod, var in product:
                 image_name=var,
             )
             _link_quicklook(link_dir, fig_name)
+
+            
+if not os.path.isdir(data_out_stat):
+    os.makedirs(data_out_stat)
+if params["flag_status"][3] == 1:
+    generate_stat(
+        site,
+        ["data_availability", "quality_flag"],
+        date.strftime("%Y"),
+        "data_stat",
+        data_out_stat,
+    )
+else:
+    generate_stat(
+        site,
+        ["data_availability", "quality_flag", "spectral_consistency"],
+        date.strftime("%Y"),
+        "data_stat",
+        data_out_stat,
+    )
+generate_stat(
+    site,
+    ["receiver_temperature", "receiver_stability"],
+    date.strftime("%Y"),
+    "receiver_stat",
+    data_out_stat,
+)
+generate_stat(
+    site,
+    ["ambient_target"],
+    date.strftime("%Y"),
+    "ambient_target_stat",
+    data_out_stat,
+)

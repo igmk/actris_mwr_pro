@@ -61,23 +61,21 @@ _COLORS = {
 
 _CLABEL = {
     "quality_flag_0": (
-        ("receiver1_sanity_failed", _COLORS["seaweed_roll"]),
-        ("receiver2_sanity_failed", _COLORS["lightbrown"]),
         ("rain_detected", _COLORS["blue"]),
         ("sun_in_beam", _COLORS["yellow"]),
     ),
     "quality_flag_1": (
-        ("missing_tb", _COLORS["darkgray"]),
-        ("spectral_consistency_failed", _COLORS["shockred"]),
+        ("receiver1_sanity_failed", _COLORS["seaweed_roll"]),
+        ("receiver2_sanity_failed", _COLORS["lightbrown"]),
     ),
     "quality_flag_2": (
         ("missing_tb", _COLORS["darkgray"]),
-        ("tb_below_threshold", _COLORS["darkpurple"]),
-        ("tb_above_threshold", _COLORS["orange"]),
+        ("spectral_consistency_failed", _COLORS["shockred"]),
     ),
     "quality_flag_3": (
-        ("missing_tb", _COLORS["mask"]),
-        ("tb_offset_above_threshold", _COLORS["lightbrown"]),
+        ("missing_tb", _COLORS["darkgray"]),
+        ("tb_below_threshold", _COLORS["darkpurple"]),
+        ("tb_above_threshold", _COLORS["orange"]),
     ),
     "met_quality_flag": (
         ("low_quality_air_temperature", _COLORS["shockred"]),
@@ -219,23 +217,23 @@ ATTRIBUTES = {
     ),
     "quality_flag": PlotMeta(name="Quality flag", source="qf"),
     "quality_flag_0": PlotMeta(
-        name="Sanity quality flag", clabel=_CLABEL["quality_flag_0"], source="qf"
+        name="Rain & sun quality flag", clabel=_CLABEL["quality_flag_0"], source="qf"
     ),
     "quality_flag_1": PlotMeta(
-        name="Spectral consistency quality flag",
-        clabel=_CLABEL["quality_flag_1"],
-        source="qf",
+        name="Receiver status quality flag", clabel=_CLABEL["quality_flag_1"], source="qf"
     ),
     "quality_flag_2": PlotMeta(
-        name="TB quality flag", clabel=_CLABEL["quality_flag_2"], source="qf"
+        name="Spectral consistency quality flag",
+        clabel=_CLABEL["quality_flag_2"],
+        source="qf",
     ),
     "quality_flag_3": PlotMeta(
-        name="TB offset quality flag", clabel=_CLABEL["quality_flag_3"], source="qf"
+        name="TB quality flag", clabel=_CLABEL["quality_flag_3"], source="qf"
     ),
     "irt": PlotMeta(
         name="Infrared brightness temperatures",
         ylabel=_K,
-        plot_range=(170, 310),
+        plot_range=(125, 310),
         plot_type="bar",
         source="irt",
     ),

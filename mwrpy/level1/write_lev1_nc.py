@@ -55,7 +55,7 @@ def lev1_to_nc(
     global_attributes, params = read_yaml_config(site)
     if data_type != "1C01":
         update_lev1_attributes(global_attributes, data_type)
-    rpg_bin = prepare_data(path_to_files, path_to_prev, path_to_next, data_type, params)
+    rpg_bin = prepare_data(path_to_files, path_to_prev, path_to_next, data_type, params, site)
     if data_type in ("1B01", "1C01"):
         apply_qc(site, rpg_bin.data, params)
         # rpg_cal = cal_his(params, global_attributes, rpg_bin.data["time"][0])
@@ -75,6 +75,7 @@ def prepare_data(
     path_to_next: str,
     data_type: str,
     params: dict,
+    site: str,
 ) -> dict:
     """Load and prepare data for netCDF writing"""
 
@@ -82,7 +83,8 @@ def prepare_data(
 
         file_list_brt = get_file_list(path_to_files, path_to_prev, path_to_next, "brt")
         rpg_bin = get_rpg_bin(file_list_brt)
-        rpg_bin.data["frequency"] = rpg_bin.header["_f"]
+        rpg_bin.data["tb"] = rpg_bin.data["tb"][:, np.argsort(params["bandwidth"])]
+        rpg_bin.data["frequency"] = rpg_bin.header["_f"][np.argsort(params["bandwidth"])]
         fields = [
             "bandwidth",
             "n_sidebands",
@@ -102,23 +104,34 @@ def prepare_data(
 
         file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, "hkd")
         rpg_hkd = get_rpg_bin(file_list_hkd)
+        rpg_bin.data["status"] = np.zeros(
+            (len(rpg_bin.data["time"]), len(params["receiver"])), np.int32
+        )
+        _, ind_brt, ind_hkd = np.intersect1d(
+            rpg_bin.data["time"], rpg_hkd.data["time"], assume_unique=False, return_indices=True
+        )
+        rpg_bin.data["status"][ind_brt, :] = hkd_sanity_check(
+            rpg_hkd.data["status"][ind_hkd], params
+        )
         if params["scan_time"] != Fill_Value_Int:
             try:
                 file_list_blb = get_file_list(path_to_files, path_to_prev, path_to_next, "blb")
                 rpg_blb = get_rpg_bin(file_list_blb)
-                _add_blb(rpg_bin, rpg_blb, rpg_hkd, params)
+                _add_blb(rpg_bin, rpg_blb, rpg_hkd, params, site)
             except:
                 print(["No binary files with extension blb found in directory " + path_to_files])
 
         if params["azi_cor"] != Fill_Value_Float:
             _azi_correction(rpg_bin.data, params)
+        if params["const_azi"] != Fill_Value_Float:
+            rpg_bin.data["azi"] = (rpg_bin.data["azi"] + params["const_azi"]) % 360
 
         if data_type == "1C01":
             if params["ir_flag"]:
                 try:
                     file_list_irt = get_file_list(path_to_files, path_to_prev, path_to_next, "irt")
                     rpg_irt = get_rpg_bin(file_list_irt)
-                    rpg_irt.data["irt"][rpg_irt.data["irt"] < 150.0] = Fill_Value_Float
+                    rpg_irt.data["irt"][rpg_irt.data["irt"] <= 125.5] = Fill_Value_Float
                     rpg_bin.data["ir_wavelength"] = rpg_irt.header["_f"]
                     rpg_bin.data["ir_bandwidth"] = params["ir_bandwidth"]
                     rpg_bin.data["ir_beamwidth"] = params["ir_beamwidth"]
@@ -250,38 +263,33 @@ def _append_hkd(file_list_hkd: list, rpg_bin: dict, data_type: str, params: dict
         add_interpol1d(rpg_bin.data, hkd.data["temp"][:, 2:4], hkd.data["time"], "t_rec")
         add_interpol1d(rpg_bin.data, hkd.data["stab"], hkd.data["time"], "t_sta")
 
-        # Check time intervals of +-15 min of .HKD data for sanity checks
-        rpg_bin.data["status"] = np.zeros(rpg_bin.data["tb"].shape, np.int32)
-        for i_time, v_time in enumerate(rpg_bin.data["time"]):
-            ind = np.where((hkd.data["time"] >= v_time - 900) & (hkd.data["time"] <= v_time + 900))
-            status = hkd.data["status"][ind]
-            for irec, nrec in enumerate(np.array(params["receiver_nb"])):
-                for bit in range(np.sum(np.array(params["receiver"]) == nrec)):
-                    # status flags for individual channels
-                    if np.any(~isbit(status, bit)):
-                        rpg_bin.data["status"][i_time, bit + irec] = 1
-                if nrec == 1:
-                    # receiver 1 thermal stability & ambient target stability & noise diode
-                    if np.any(
-                        isbit(status, 25)
-                        | isbit(status, 29)
-                        | ~isbit(status, 22)
-                        | (~isbit(status, 24) & ~isbit(status, 25))
-                    ):
-                        rpg_bin.data["status"][
-                            i_time, np.where(np.array(params["receiver"]) == nrec)[0]
-                        ] = 1
-                if nrec == 2:
-                    # receiver 2 thermal stability & ambient target stability & noise diode
-                    if np.any(
-                        isbit(status, 27)
-                        | isbit(status, 29)
-                        | ~isbit(status, 23)
-                        | (~isbit(status, 26) & ~isbit(status, 27))
-                    ):
-                        rpg_bin.data["status"][
-                            i_time, np.where(np.array(params["receiver"]) == nrec)[0]
-                        ] = 1
+
+def hkd_sanity_check(status: np.ndarray, params: dict) -> np.ndarray:
+    """Perform sanity checks for .HKD data"""
+    status_flag = np.zeros((len(status), len(params["receiver"])), np.int32)
+    for irec, nrec in enumerate(np.array(params["receiver"])):
+        # status flags for individual channels
+        status_flag[~isbit(status, irec + (nrec - 1) * (8 - irec)), irec] = 1
+        if nrec == 1:
+            # receiver 1 thermal stability & ambient target stability & noise diode
+            status_flag[
+                isbit(status, 25)
+                | isbit(status, 29)
+                | ~isbit(status, 22)
+                | (~isbit(status, 24) & ~isbit(status, 25)),
+                irec,
+            ] = 1
+        if nrec == 2:
+            # receiver 2 thermal stability & ambient target stability & noise diode
+            status_flag[
+                isbit(status, 27)
+                | isbit(status, 29)
+                | ~isbit(status, 23)
+                | (~isbit(status, 26) & ~isbit(status, 27)),
+                irec,
+            ] = 1
+
+    return status_flag
 
 
 def find_lwcl_free(lev1: dict, ix: np.ndarray) -> tuple:
@@ -319,18 +327,18 @@ def find_lwcl_free(lev1: dict, ix: np.ndarray) -> tuple:
     return np.nan_to_num(index, nan=2).astype(int), status
 
 
-def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
+def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
     """Add boundary-layer scans using a linear time axis"""
 
-    time_add, ele_add, azi_add, rain_add, tb_add = (
+    time_add, ele_add, azi_add, rain_add, tb_add, status_add = (
         np.empty([0], dtype=np.int32),
         [],
         [],
         [],
         [],
+        [],
     )
-    if params["const_azi"] == Fill_Value_Float:
-        params["const_azi"] = ma.median(brt.data["azi"][:])
+    const_azi = params["const_azi"]
     seqs = [(key, len(list(val))) for key, val in groupby(hkd.data["status"][:] & 2**18 > 0)]
     seqs = np.array(
         [
@@ -341,15 +349,17 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
     )
 
     for time_ind, time_blb in enumerate(blb.data["time"]):
-        seqi = np.where(np.abs(hkd.data["time"][seqs[:, 1] + seqs[:, 2] - 1] - time_blb) < 60)[0]
+
         if (
-            datetime.datetime.utcfromtimestamp(hkd.data["time"][0])
-            >= datetime.datetime(2022, 12, 1)
-        ) & (time_blb + int(params["scan_time"]) < hkd.data["time"][-1]):
+            (site in ["juelich", "cologne"])
+            & (
+                datetime.datetime.utcfromtimestamp(hkd.data["time"][0])
+                >= datetime.datetime(2022, 12, 1)
+            )
+            & (time_blb + int(params["scan_time"]) < hkd.data["time"][-1])
+        ):
             time_blb = time_blb + int(params["scan_time"])
-            seqi = np.where(np.abs(hkd.data["time"][seqs[:, 1] + seqs[:, 2] - 1] - time_blb) < 60)[
-                0
-            ]
+        seqi = np.where(np.abs(hkd.data["time"][seqs[:, 1] + seqs[:, 2] - 1] - time_blb) < 60)[0]
         if len(seqi) != 1:
             continue
 
@@ -389,12 +399,17 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
             time_add = np.append(time_add, time_blb - 1)
             # time_add = np.append(time_add, hkd.data['time'][seqs[seqi, 1] + seqs[seqi, 2]])
 
+            brt_ind = np.where(
+                (brt.data["time"] > time_blb - 3600) & (brt.data["time"] < time_blb + 3600)
+            )[0]
+            brt_azi = ma.median(brt.data["azi"][brt_ind])
             azi_add = np.concatenate(
                 (
                     azi_add,
-                    np.ones(blb.header["_n_ang"]) * ((scan_quadrant + params["const_azi"]) % 360),
+                    np.ones(blb.header["_n_ang"]) * ((scan_quadrant + brt_azi) % 360),
                 )
             )
+
             rain_add = np.concatenate(
                 (
                     rain_add,
@@ -403,6 +418,7 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
                 )
             )
             ele_add = np.concatenate((ele_add, blb.header["_ang"]))
+
             for ang in range(blb.header["_n_ang"]):
                 if len(tb_add) == 0:
                     tb_add = blb.data["tb"][time_ind, :, ang]
@@ -418,6 +434,17 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
                     add_time_bounds(np.array(time_add[-1], ndmin=1), params["int_time"]),
                 )
             )
+
+            blb_status = hkd_sanity_check(
+                hkd.data["status"][seqs[seqi, 1][0] : seqs[seqi, 1][0] + seqs[seqi, 2][0]], params
+            )
+            blb_status_add = np.zeros((blb.header["_n_ang"], len(params["receiver"])), np.int32)
+            for i_ch, _ in enumerate(params["receiver"]):
+                blb_status_add[:, i_ch] = int(np.any(blb_status[:, i_ch]))
+            if len(status_add) == 0:
+                status_add = blb_status_add
+            else:
+                status_add = np.concatenate((status_add, blb_status_add))
 
     if len(time_add) > 0:
         pointing_flag_add = np.ones(len(time_add), np.int32)
@@ -435,6 +462,7 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict) -> None:
             "pointing_flag",
             "liquid_cloud_flag",
             "liquid_cloud_flag_status",
+            "status",
         ]
         for var in names:
             brt.data[var] = np.concatenate((brt.data[var], eval(var + "_add")))

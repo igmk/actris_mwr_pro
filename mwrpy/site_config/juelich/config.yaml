@@ -1,6 +1,6 @@
 # Site config file
 
-type: hatpro_g5
+type: hatpro
 
 params:
     station_altitude: 108.
@@ -20,13 +20,12 @@ params:
     # integration time of measurements in seconds
     int_time: 1
 
-    # azimuth correction:
     # Azimuth angle is transformed to geographical coordinates (E=90 and W=270), currently only for RPG scanners.
-    # Set az_cor to the angle that RPG software gives when instrument is pointing to the North.
     # If you do not want to transform the coordinates set azi_cor to -999.
-    azi_cor: 0.
-    # constant azimuth angle (from .MDF; not transformed)
-    const_azi: 0.
+    azi_cor: -999.
+    # Azimuth correction:
+    # Set az_cor to the angle that RPG software gives when instrument is pointing to the North.
+    const_azi: -999.   
 
     # quality flag status for level 1 data; 0: flag active
     # Bit 1: missing_tb
@@ -70,6 +69,9 @@ global_specs:
     
     # Department responsible for the instrument
     principal_investigator: Institute for Geophysics and Meteorology (IGMK)
+    
+    # Instrument generation
+    instrument_generation: G5    
     
     # Specific to mainboard
     instrument_hw_id:
