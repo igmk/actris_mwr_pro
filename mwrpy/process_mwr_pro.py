@@ -5,6 +5,7 @@ import datetime
 from level1.write_lev1_nc import lev1_to_nc
 from level2.write_lev2_nc import lev2_to_nc
 from plots.generate_plots import generate_figure
+from plots.stat_plot import generate_stat
 from utils import read_yaml_config
 
 site = sys.argv[1]
