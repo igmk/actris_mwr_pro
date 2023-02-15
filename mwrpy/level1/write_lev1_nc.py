@@ -114,12 +114,21 @@ def prepare_data(
             rpg_hkd.data["status"][ind_hkd], params
         )
         if params["scan_time"] != Fill_Value_Int:
+            file_list_bls = []
             try:
-                file_list_blb = get_file_list(path_to_files, path_to_prev, path_to_next, "blb")
-                rpg_blb = get_rpg_bin(file_list_blb)
-                _add_blb(rpg_bin, rpg_blb, rpg_hkd, params, site)
+                file_list_bls = get_file_list(path_to_files, path_to_prev, path_to_next, "bls")
             except:
-                print(["No binary files with extension blb found in directory " + path_to_files])
+                print(["No binary files with extension bls found in directory " + path_to_files])            
+            if len(file_list_bls) > 0:
+                rpg_bls = get_rpg_bin(file_list_bls)
+                _add_bls(rpg_bin, rpg_bls, rpg_hkd, params, site)
+            else:
+                try:
+                    file_list_blb = get_file_list(path_to_files, path_to_prev, path_to_next, "blb")
+                    rpg_blb = get_rpg_bin(file_list_blb)
+                    _add_blb(rpg_bin, rpg_blb, rpg_hkd, params, site)
+                except:
+                    print(["No binary files with extension blb found in directory " + path_to_files])
 
         if params["azi_cor"] != Fill_Value_Float:
             _azi_correction(rpg_bin.data, params)
@@ -327,11 +336,49 @@ def find_lwcl_free(lev1: dict, ix: np.ndarray) -> tuple:
     return np.nan_to_num(index, nan=2).astype(int), status
 
 
-def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
-    """Add boundary-layer scans using a linear time axis"""
+def _add_bls(brt: dict, bls: dict, hkd: dict, params: dict, site: str) -> None:
+    """Add BLS boundary-layer scans using a linear time axis"""    
+    
+    bls.data["time_bnds"] = add_time_bounds(bls.data["time"] + 1, params["int_time"])
+    bls.data["status"] = np.zeros((len(bls.data["time"]), len(params["receiver"])), np.int32) 
+   
+    for time_ind, time_bls in enumerate(bls.data["time"]):        
+        if np.min(np.abs(hkd.data["time"] - time_bls)) <= params["int_time"]*2:        
+            ind_hkd = np.argmin(np.abs(hkd.data["time"] - time_bls))
+            bls.data["status"][time_ind, :] = hkd_sanity_check(np.array([hkd.data["status"][ind_hkd]], np.int32), params)
 
-    time_add, ele_add, azi_add, rain_add, tb_add, status_add = (
+    bls.data["pointing_flag"] = np.ones(len(bls.data["time"]), np.int32)
+    bls.data["liquid_cloud_flag"] = np.ones(len(bls.data["time"]), np.int32) * 2
+    bls.data["liquid_cloud_flag_status"] = np.ones(len(bls.data["time"]), np.int32) * Fill_Value_Int
+    brt.data["time"] = np.concatenate((brt.data["time"], bls.data["time"]))
+    ind = np.argsort(brt.data["time"])
+    brt.data["time"] = brt.data["time"][ind]
+    names = [
+        "time_bnds",
+        "ele",
+        "azi",
+        "rain",
+        "tb",
+        "pointing_flag",
+        "liquid_cloud_flag",
+        "liquid_cloud_flag_status",
+        "status",
+    ]
+    for var in names:
+        brt.data[var] = np.concatenate((brt.data[var], bls.data[var]))
+        if brt.data[var].ndim > 1:
+            brt.data[var] = brt.data[var][ind, :]
+        else:
+            brt.data[var] = brt.data[var][ind]
+    brt.header["n"] = len(brt.data["time"])       
+
+
+def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
+    """Add BLB boundary-layer scans using a linear time axis"""
+
+    time_add, time_bnds_add, ele_add, azi_add, rain_add, tb_add, status_add = (
         np.empty([0], dtype=np.int32),
+        [],
         [],
         [],
         [],
@@ -363,7 +410,7 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
         if len(seqi) != 1:
             continue
 
-        if np.abs(time_blb - hkd.data["time"][seqs[seqi, 1]][0]) >= len(blb.header["_ang"]):
+        if np.abs(time_blb - hkd.data["time"][seqs[seqi, 1]][0]) >= blb.header["_n_ang"]:
             scan_quadrant = 0.0  # scan quadrant, 0 deg: 1st, 180 deg: 2nd
             if (isbit(blb.data["rf_mod"][time_ind], 1)) & (
                 not isbit(blb.data["rf_mod"][time_ind], 2)
@@ -378,26 +425,24 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
                             hkd.data["time"][seqs[seqi, 1]]
                             + int(
                                 np.floor(
-                                    ((time_blb - 2) - hkd.data["time"][seqs[seqi, 1]])
-                                    / (blb.header["_n_ang"] - 1)
+                                    ((time_blb - 1) - hkd.data["time"][seqs[seqi, 1]])
+                                    / (blb.header["_n_ang"])
                                 )
                             ),
                             hkd.data["time"][seqs[seqi, 1]]
-                            + (blb.header["_n_ang"] - 1)
+                            + (blb.header["_n_ang"])
                             * int(
                                 np.floor(
-                                    ((time_blb - 2) - hkd.data["time"][seqs[seqi, 1]])
-                                    / (blb.header["_n_ang"] - 1)
+                                    ((time_blb - 1) - hkd.data["time"][seqs[seqi, 1]])
+                                    / (blb.header["_n_ang"])
                                 )
                             ),
-                            blb.header["_n_ang"] - 1,
+                            blb.header["_n_ang"],
                             dtype=np.int32,
                         )
                     ),
                 )
             )
-            time_add = np.append(time_add, time_blb - 1)
-            # time_add = np.append(time_add, hkd.data['time'][seqs[seqi, 1] + seqs[seqi, 2]])
 
             brt_ind = np.where(
                 (brt.data["time"] > time_blb - 3600) & (brt.data["time"] < time_blb + 3600)
@@ -425,15 +470,15 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
                 else:
                     tb_add = np.vstack((tb_add, blb.data["tb"][time_ind, :, ang]))
 
-            time_bnds_add = add_time_bounds(
-                time_add[0:-1], int(np.floor(params["scan_time"] / (blb.header["_n_ang"] - 1)))
-            )
-            time_bnds_add = np.concatenate(
-                (
-                    time_bnds_add,
-                    add_time_bounds(np.array(time_add[-1], ndmin=1), params["int_time"]),
+            if len(time_bnds_add) == 0:
+                time_bnds_add = add_time_bounds(time_add, int(np.floor(params["scan_time"] / (blb.header["_n_ang"]))))
+            else:                
+                time_bnds_add = np.concatenate(
+                    (
+                        time_bnds_add,
+                        add_time_bounds(time_add, int(np.floor(params["scan_time"] / (blb.header["_n_ang"]))))
+                    )
                 )
-            )
 
             blb_status = hkd_sanity_check(
                 hkd.data["status"][seqs[seqi, 1][0] : seqs[seqi, 1][0] + seqs[seqi, 2][0]], params
@@ -470,7 +515,7 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
                 brt.data[var] = brt.data[var][ind, :]
             else:
                 brt.data[var] = brt.data[var][ind]
-        brt.header["n"] = brt.header["n"] + blb.header["n"] * blb.header["_n_ang"]
+        brt.header["n"] = len(brt.data["time"]) #brt.header["n"] + blb.header["n"] * blb.header["_n_ang"]
 
 
 def _azi_correction(brt: dict, params: dict) -> None:

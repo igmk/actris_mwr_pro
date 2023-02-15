@@ -46,8 +46,8 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                         coeff["ret_type"] = int(l_split[1].split("#")[0])
                     if l_split[0] == "AG":
                         coeff["ele"] = np.ones(N) * Fill_Value_Float
-                        coeff["ele"][i_file:N] = np.array(
-                            [float(x) for x in l_split[1].split()], np.float32
+                        coeff["ele"][i_file:N] = np.sort(
+                            np.array([float(x) for x in l_split[1].split()], np.float32)
                         )
                     if l_split[0] == "FR":
                         freq_ret = np.array(
@@ -415,7 +415,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
             if len(freq_coeff) < len(c_file["freq"][:]):
                 raise RuntimeError(["Instrument and retrieval frequencies do not match."])
 
-            coeff["ele"] = c_file["elevation_predictor"][:]
+            coeff["ele"] = np.sort(c_file["elevation_predictor"][:])
             coeff["height_grid"] = c_file["height_grid"]
             coeff["freq"] = c_file["freq"]
             coeff["freq_bl"] = c_file["freq_bl"]

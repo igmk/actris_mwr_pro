@@ -326,23 +326,23 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
 
         ix0 = (
             np.where(
-                (lev1["ele"][:] > coeff["ele"][-1] - 0.5)
-                & (lev1["ele"][:] < coeff["ele"][-1] + 0.5)
+                (lev1["ele"][:] > coeff["ele"][0] - 0.5)
+                & (lev1["ele"][:] < coeff["ele"][0] + 0.5)
                 & (lev1["pointing_flag"][:] == 1)
             )[0]
-            + 1
         )
         ibl, tb = (
             np.empty([0, len(coeff["ele"])], np.int32),
             np.ones((len(freq_ind), len(coeff["ele"]), 0), np.float32) * Fill_Value_Float,
         )
+
         for ix0v in ix0:
-            if np.allclose(lev1["ele"][ix0v - len(coeff["ele"]) : ix0v], coeff["ele"], atol=0.5):
-                ibl = np.append(ibl, [np.array(range(ix0v - len(coeff["ele"]), ix0v))], axis=0)
+            if np.allclose(lev1["ele"][ix0v : ix0v + len(coeff["ele"])], coeff["ele"], atol=0.5):
+                ibl = np.append(ibl, [np.array(range(ix0v, ix0v + len(coeff["ele"])))], axis=0)
                 tb = np.concatenate(
                     (
                         tb,
-                        np.expand_dims(lev1["tb"][ix0v - len(coeff["ele"]) : ix0v, freq_ind].T, 2),
+                        np.expand_dims(lev1["tb"][ix0v : ix0v + len(coeff["ele"]), freq_ind].T, 2),
                     ),
                     axis=2,
                 )
@@ -610,20 +610,20 @@ def retrieval_input(lev1: dict, coeff: list) -> np.ndarray:
 
     if coeff["ret_type"] < 2:
         ret_in = lev1["tb"][:, :]
-        for field in fields:
-            if field in lev1.variables:
-                if lev1[field].ndim == 1:
-                    ret_in = np.concatenate(
-                        (
-                            ret_in,
-                            np.reshape(lev1[field][:].data, (len(lev1["time"][:]), 1)),
-                        ),
-                        axis=1,
-                    )
-                else:
-                    ret_in = np.concatenate((ret_in, lev1[field][:, :]), axis=1)
-            else:
-                ret_in = np.concatenate((ret_in, eval(field)), axis=1)
+        # for field in fields:
+        #     if field in lev1.variables:
+        #         if lev1[field].ndim == 1:
+        #             ret_in = np.concatenate(
+        #                 (
+        #                     ret_in,
+        #                     np.reshape(lev1[field][:].data, (len(lev1["time"][:]), 1)),
+        #                 ),
+        #                 axis=1,
+        #             )
+        #         else:
+        #             ret_in = np.concatenate((ret_in, lev1[field][:, :]), axis=1)
+        #     else:
+        #         ret_in = np.concatenate((ret_in, eval(field)), axis=1)
     else:
         ret_in = np.concatenate((bias, lev1["tb"][:, :]), axis=1)
         for i, field in enumerate(coeff["aux"]):

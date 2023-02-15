@@ -156,7 +156,6 @@ def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
     and returns indices to be flagged"""
 
     flag_ind = np.zeros(data["tb"].shape, dtype=np.int32)
-    flag_tmp = np.ones(data["tb"].shape) * np.nan
     abs_diff = ma.masked_all(data["tb"].shape, dtype=np.float32)
     tb_ret = np.ones(data["tb"].shape) * np.nan
 
@@ -175,35 +174,31 @@ def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
             )[0]
 
             if (ele_ind.size > 0) & (freq_ind.size > 0):
-                tb_ret[:, ifreq] = (
+                tb_ret[ele_ind, ifreq] = (
                     coeff["offset_mvr"][:]
                     + np.sum(
-                        coeff["coefficient_mvr"][coeff_ind].T * data["tb"][:, freq_ind],
+                        coeff["coefficient_mvr"][coeff_ind].T * np.array(data["tb"])[np.ix_(ele_ind, freq_ind)],
                         axis=1,
                     )
                     + np.sum(
                         coeff["coefficient_mvr"][coeff_ind + (len(data["frequency"]) - 1)].T
-                        * data["tb"][:, freq_ind] ** 2,
+                        * np.array(data["tb"])[np.ix_(ele_ind, freq_ind)] ** 2,
                         axis=1,
                     )
                 )
+
                 tb_df = pd.DataFrame(
-                    {"Tb": (data["tb"][ele_ind, ifreq] - tb_ret[ele_ind, ifreq])},
-                    index=pd.to_datetime(data["time"][ele_ind], unit="s"),
+                    {"Tb": (data["tb"][:, ifreq] - tb_ret[:, ifreq])},
+                    index=pd.to_datetime(data["time"][:], unit="s"),
                 )
                 tb_mean = tb_df.resample(
                     "20min", origin="start", closed="left", label="left", offset="10min"
                 ).mean()
-                tb_org = pd.DataFrame(
-                    {"Tb": tb_ret[:, ifreq]},
-                    index=pd.to_datetime(data["time"][:], unit="s"),
-                )
-                tb_df = tb_df.reindex(tb_org.index, method="pad")
-                tb_mean = tb_mean.reindex(tb_org.index, method="pad")
+                tb_mean = tb_mean.reindex(tb_df.index, method="nearest")
 
                 fact = [2.5, 3.5]  # factor for receiver retrieval uncertainty
                 # flag for individual channels based on channel retrieval uncertainty
-                flag_tmp[
+                flag_ind[
                     ele_ind[
                         (
                             np.abs(tb_df["Tb"].values[ele_ind] - tb_mean["Tb"].values[ele_ind])
@@ -212,26 +207,17 @@ def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
                     ],
                     ifreq,
                 ] = 1
-                abs_diff[ele_ind, ifreq] = np.abs(tb_df["Tb"].values[ele_ind])
+                abs_diff[:, ifreq] = ma.masked_invalid(np.abs(data["tb"][:, ifreq] - tb_ret[:, ifreq]))
+                
 
     th_rec = [1.0, 2.0]  # threshold for receiver mean absolute difference
     # receiver flag based on mean absolute difference
     for _, rec in enumerate(data["receiver_nb"]):
-        flag_tmp[
+        flag_ind[
             np.ix_(
                 ma.mean(abs_diff[:, data["receiver"] == rec], axis=1) > th_rec[rec - 1],
                 data["receiver"] == rec,
             )
         ] = 1
-
-    # adding flag for +- 2min
-    for ifreq, _ in enumerate(data["frequency"]):
-        df = pd.DataFrame(
-            {"Flag": flag_tmp[:, ifreq]},
-            index=pd.to_datetime(data["time"][:], unit="s"),
-        )
-        df = df.fillna(method="bfill", limit=120)
-        df = df.fillna(method="ffill", limit=120)
-        flag_ind[((df["Flag"].values == 1)), ifreq] = 1  # & (data['pointing_flag'][:] == 0)
-
+        
     return flag_ind, tb_ret

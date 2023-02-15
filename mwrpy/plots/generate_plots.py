@@ -400,7 +400,9 @@ def _plot_segment_data(ax, data: ma.MaskedArray, name: str, axes: tuple, nc_file
         clabel = [x[0] for x in variables.clabel]
         cbar = [x[1] for x in variables.clabel]
         cmap = ListedColormap(cbar)
-        pl = ax.pcolor(*axes, data.T, cmap=cmap, shading="nearest", vmin=-0.5, vmax=len(cbar) - 0.5)
+        x, y = axes[0], axes[1]
+        x[1:] = x[1:] - np.diff(x)
+        pl = ax.pcolor(x, y, data.T, cmap=cmap, shading="nearest", vmin=-0.5, vmax=len(cbar) - 0.5)
         ax.grid(axis="y")
         colorbar = _init_colorbar(pl, ax)
         colorbar.set_ticks(np.arange(len(clabel)))
@@ -1356,7 +1358,7 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: st
     data_f[flag > 0, :] = 1.0
     cmap = ListedColormap([_COLORS["lightgray"], _COLORS["gray"]])
     norm = BoundaryNorm([0, 1, 2], cmap.N)
-    ax.pcolor(time, np.linspace(vmin, vmax, 100), data_f.T, cmap=cmap, norm=norm)
+    ax.pcolormesh(time, np.linspace(vmin, vmax, 100), data_f.T, cmap=cmap, norm=norm)
 
     case_date = _read_date(nc_file)
     gtim = _gap_array(time, case_date, 15.0 / 60.0)

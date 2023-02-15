@@ -43,7 +43,7 @@ def stack_files(file_list):
                 target[name] = value
 
     ext = str(file_list[0][-3:]).lower()
-    if ext not in ("brt", "irt", "met", "hkd", "blb", "spc", "his", "iwv", "tpb", "tpc"):
+    if ext not in ("brt", "irt", "met", "hkd", "blb", "bls", "spc", "his", "iwv", "tpb", "tpc"):
         raise RuntimeError(["Error: no reader for file type " + ext])
     reader_name = str("read_" + ext)
     data, header = {}, {}
@@ -361,6 +361,81 @@ def read_iwv(file_name: str) -> dict:
         header = _get_header()
         data = _get_data()
         return header, data
+    
+    
+def read_bls(file_name: str) -> dict:
+    """This function reads RPG MWR .BLS binary files."""
+
+    with open(file_name, "rb") as file:
+
+        code = np.fromfile(file, np.int32, 1)
+        if code != 567846000:
+            raise RuntimeError(["Error: BLS file code " + str(code) + " not suported"])
+
+        def _get_header():
+            """Read header info"""
+
+            n = int(np.fromfile(file, np.uint32, 1))
+            n_f = int(np.fromfile(file, np.int32, 1))
+            xmin = np.fromfile(file, np.float32, n_f)
+            xmax = np.fromfile(file, np.float32, n_f)
+            time_ref = np.fromfile(file, np.uint32, 1)
+            f = np.fromfile(file, np.float32, n_f)
+            n_ang = int(np.fromfile(file, np.int32, 1))
+            ang = np.fromfile(file, np.float32, n_ang)
+
+            header_names = ["_code", "n", "_n_f", "_xmin", "_xmax", "_time_ref", "_f", "_n_ang", "_ang"]
+            header_values = [code, n, n_f, xmin, xmax, time_ref, f, n_ang, ang]
+            header = dict(zip(header_names, header_values))
+            return header
+
+        def _create_variables():
+            """Initialize data arrays"""
+
+            vrs = {
+                "time": np.ones(header["n"] * header["_n_ang"], np.int32) * Fill_Value_Int,
+                "rain": np.ones(header["n"] * header["_n_ang"], np.byte) * Fill_Value_Int,
+                "tb": np.ones([header["n"] * header["_n_ang"], header["_n_f"]], np.float32) * Fill_Value_Float,
+                "ele": np.ones(header["n"] * header["_n_ang"], np.float32) * Fill_Value_Float,
+                "azi": np.ones(header["n"] * header["_n_ang"], np.float32) * Fill_Value_Float,
+            }
+            return vrs
+
+        def _angle_calc(ang, code):
+            """Convert angle"""
+
+            a_str = str(ang[0])
+            if a_str[0:-5].isnumeric():
+                el = float(a_str[0:-5]) / 100.0
+            else:
+                el = Fill_Value_Float
+            if a_str[-5:].isnumeric():
+                az = float(a_str[-5:]) / 100.0
+            else:
+                az = Fill_Value_Float
+
+            return el, az
+
+        def _get_data():
+            """Loop over file to read data"""
+
+            data = _create_variables()
+            for sample in range(header["n"] * header["_n_ang"]):
+
+                data["time"][sample] = np.fromfile(file, np.int32, 1)
+                data["rain"][sample] = np.fromfile(file, np.byte, 1)
+                temp_sfc = np.fromfile(file, np.float32, 1)
+                data["tb"][
+                    sample,
+                ] = np.fromfile(file, np.float32, header["_n_f"])
+                ang = np.fromfile(file, np.int32, 1)
+                data["ele"][sample], data["azi"][sample] = _angle_calc(ang, code)
+            file.close()
+            return data
+
+        header = _get_header()
+        data = _get_data()
+        return header, data    
 
 
 def read_brt(file_name: str) -> dict:
@@ -629,8 +704,8 @@ def read_blb(file_name: str) -> dict:
             if code == 567845847:
                 n_f = int(np.fromfile(file, np.int32, 1))
             f = np.fromfile(file, np.float32, n_f)
-            n_ang = int(np.fromfile(file, np.int32, 1)) + 1
-            ang = np.append(np.fromfile(file, np.float32, n_ang - 1), 0)
+            n_ang = int(np.fromfile(file, np.int32, 1))
+            ang = np.flip(np.fromfile(file, np.float32, n_ang))
             if ang[0] > 1000.0:
                 for ind, val in enumerate(ang):
                     sign = 1
@@ -677,6 +752,7 @@ def read_blb(file_name: str) -> dict:
                         sample,
                         freq,
                     ] = np.fromfile(file, np.float32, header["_n_ang"])
+                    temp_sfc = np.fromfile(file, np.float32, 1)
             file.close()
             return data
 
