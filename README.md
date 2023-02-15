@@ -32,7 +32,7 @@ This folder contains configuration files for each instrument type in `instrument
     # Bit 8: tb_offset_above_threshold
     
 #### Level 1 Data Types
-* 1B01: MWR brightnesss temperatures from .BRT and .BLB files
+* 1B01: MWR brightnesss temperatures from .BRT and .BLB/.BLS files
 * 1B11: IR brightnesss temperatures from .IRT files
 * 1B21: Weather station data from .MET files
 * 1C01: Combined data type with time corresponding to 1B01
