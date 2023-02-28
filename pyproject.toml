@@ -1,0 +1,75 @@
+
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mwrpy"
+authors = [
+    { name="University of Cologne", email="actris-ccres-mwr@uni-koeln.de"},
+]
+description="Python package for Microwave Radiometer processing in ACTRIS"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: GNU Affero General Public License v3',
+        'Natural Language :: English',
+        'Programming Language :: Python :: Implementation :: CPython',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+]
+keywords=['mwrpy', "hatpro", "radiometer"]
+dependencies=[
+    "scipy",
+    "netCDF4",
+    "matplotlib",
+    "metpy",
+    "ephem",
+    "pandas",
+    "pyyaml",
+    "timezonefinder"
+    ]
+# Dynamic for setuptools
+dynamic = ["version"]
+
+[project.license]
+file = "LICENSE"
+
+[project.urls]
+homepage = "https://github.com/igmk/actris_mwr_pro"
+documentation = "https://github.com/igmk/actris_mwr_pro#readme"
+repository = "https://github.com/igmk/actris_mwr_pro"
+changelog = "https://github.com/igmk/actris_mwr_pro/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/igmk/actris_mwr_pro/issues"
+
+[project.optional-dependencies]
+test = [
+    "mwrpy",
+
+    # Style
+    "pylint",
+    "mypy",
+]
+
+[project.scripts]
+mwrpy = "mwrpy.mwrpy:main"
+
+[tool.setuptools]
+zip-safe=false
+
+[tool.setuptools.packages.find]
+include = ["mwrpy", "mwrpy.*"]
+
+[tool.mypy]
+explicit_package_bases = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+exclude = ['build/','venv', "tests", "docs"]
+
+[tool.docformatter]
+recursive = true
+blank = true
+syntax= "numpy"
