@@ -27,24 +27,20 @@ def correct_lwp_offset(lev1: dict, lwp_org: np.ndarray, index: np.ndarray, site:
 
     lwcl_i, _ = find_lwcl_free(lev1, index)
     lwp = np.copy(lwp_org)
-    lwp[(lwcl_i != 0) | (lwp > 0.05) | (lev1["ele"][index] < 89.0)] = np.nan
+    lwp[(lwcl_i != 0) | (lwp > 0.04) | (lev1["ele"][index] < 89.0)] = np.nan
     time = lev1["time"][index]
     lwp_df = pd.DataFrame({"Lwp": lwp}, index=pd.to_datetime(time, unit="s"))
     lwp_std = lwp_df.rolling("2min", center=True, min_periods=10).std()
     lwp_max = lwp_std.rolling("20min", center=True, min_periods=100).max()
-    lwp_df[lwp_max > 0.0025] = np.nan
+    lwp_df[lwp_max > 0.002] = np.nan
+    lwp_offset = lwp_df.rolling("20min", center=True, min_periods=100).mean()
 
-    lwp_offset = lwp_df.resample(
-        "20min", origin="start", closed="left", label="left", offset="10min"
-    ).mean()
-    lwp_offset = lwp_offset.reindex(lwp_df.index, method="pad")
-
+    # use previously determined offset (within 2h) and write current offset in csv file
     t1 = gmtime(time.data[0])
     if not os.path.isfile("site_config/" + site + "/lwp_offset_" + str(t1[0]) + ".csv"):
         df = pd.DataFrame({"date": [], "offset": []})
         df.to_csv("site_config/" + site + "/lwp_offset_" + str(t1[0]) + ".csv")
 
-    # use previously determined offset (within 2h) and write current offset in csv file
     csv_off = pd.read_csv(
         "site_config/" + site + "/lwp_offset_" + str(t1[0]) + ".csv",
         usecols=["date", "offset"],

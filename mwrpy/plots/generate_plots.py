@@ -1354,11 +1354,11 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: st
         vmin = np.max([np.nanmin(data0) - 0.05, vmin])
     _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
 
-    data_f = np.zeros((len(time), 100), np.float32)
+    data_f = np.zeros((len(time), 10), np.float32)
     data_f[flag > 0, :] = 1.0
     cmap = ListedColormap([_COLORS["lightgray"], _COLORS["gray"]])
     norm = BoundaryNorm([0, 1, 2], cmap.N)
-    ax.pcolormesh(time, np.linspace(vmin, vmax, 100), data_f.T, cmap=cmap, norm=norm)
+    ax.pcolor(time, np.linspace(vmin, vmax, 10), data_f.T, cmap=cmap, norm=norm)
 
     case_date = _read_date(nc_file)
     gtim = _gap_array(time, case_date, 15.0 / 60.0)

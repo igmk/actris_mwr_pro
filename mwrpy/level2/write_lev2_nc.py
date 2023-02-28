@@ -324,13 +324,11 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
             coeff["freq"], coeff["freq_bl"], assume_unique=False, return_indices=True
         )
 
-        ix0 = (
-            np.where(
-                (lev1["ele"][:] > coeff["ele"][0] - 0.5)
-                & (lev1["ele"][:] < coeff["ele"][0] + 0.5)
-                & (lev1["pointing_flag"][:] == 1)
-            )[0]
-        )
+        ix0 = np.where(
+            (lev1["ele"][:] > coeff["ele"][0] - 0.5)
+            & (lev1["ele"][:] < coeff["ele"][0] + 0.5)
+            & (lev1["pointing_flag"][:] == 1)
+        )[0]
         ibl, tb = (
             np.empty([0, len(coeff["ele"])], np.int32),
             np.ones((len(freq_ind), len(coeff["ele"]), 0), np.float32) * Fill_Value_Float,

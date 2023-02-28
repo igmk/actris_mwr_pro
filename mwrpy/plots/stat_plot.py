@@ -220,10 +220,10 @@ def calc_stat(
     if name == "receiver_stability":
         var_names = ["t_sta"]
         labels = ["Receiver 1", "Receiver 2"]
-        ax2 = fig.add_subplot(111)        
-        max_x = .003
+        ax2 = fig.add_subplot(111)
+        max_x = 0.003
         ax.set_xlim([0, max_x])
-        ax2.set_xlim([0, max_x])         
+        ax2.set_xlim([0, max_x])
         for month in range(1, 13):
             data = _find_valid_fields(year, month, var_names, params, global_attributes)
             if bool(data):
@@ -231,7 +231,7 @@ def calc_stat(
                 boxplot(
                     ax,
                     data["t_sta"][:, 0],
-                    bar_txt=bar_txt,                    
+                    bar_txt=bar_txt,
                     labels=x_labels,
                     position=month,
                     color="sienna",
@@ -250,7 +250,7 @@ def calc_stat(
 
         pos = ax.get_position().get_points()
         ax.set_position([0.06, 0.11, 0.31, pos[1, 1] - 0.12])
-        ax2.set_position([0.42, 0.11, 0.31, pos[1, 1] - 0.12])       
+        ax2.set_position([0.42, 0.11, 0.31, pos[1, 1] - 0.12])
         ax2.set_title("Receiver 2 Stability (% above range)", fontsize=14)
         ax2.text(
             ax2.get_xlim()[1] + 0.0005,
@@ -606,14 +606,14 @@ def boxplot(ax, data, bar_txt=0.0, labels=None, position=0, color=None, name=Non
         medianprops=dict(color=color, linewidth=2),
         boxprops=dict(facecolor="w"),
     )
-    if round(bar_txt, 2) > 0.:
+    if round(bar_txt, 2) > 0.0:
         ax.text(
             ax.get_xlim()[1],
-            position+.1,
+            position + 0.1,
             str(round(bar_txt, 2)) + " %",
             ha="center",
             weight="bold",
-        )     
+        )
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
     ax.set_xlabel(ATTRIBUTES[name].ylabel)

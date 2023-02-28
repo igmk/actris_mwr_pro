@@ -361,8 +361,8 @@ def read_iwv(file_name: str) -> dict:
         header = _get_header()
         data = _get_data()
         return header, data
-    
-    
+
+
 def read_bls(file_name: str) -> dict:
     """This function reads RPG MWR .BLS binary files."""
 
@@ -384,7 +384,17 @@ def read_bls(file_name: str) -> dict:
             n_ang = int(np.fromfile(file, np.int32, 1))
             ang = np.fromfile(file, np.float32, n_ang)
 
-            header_names = ["_code", "n", "_n_f", "_xmin", "_xmax", "_time_ref", "_f", "_n_ang", "_ang"]
+            header_names = [
+                "_code",
+                "n",
+                "_n_f",
+                "_xmin",
+                "_xmax",
+                "_time_ref",
+                "_f",
+                "_n_ang",
+                "_ang",
+            ]
             header_values = [code, n, n_f, xmin, xmax, time_ref, f, n_ang, ang]
             header = dict(zip(header_names, header_values))
             return header
@@ -395,7 +405,8 @@ def read_bls(file_name: str) -> dict:
             vrs = {
                 "time": np.ones(header["n"] * header["_n_ang"], np.int32) * Fill_Value_Int,
                 "rain": np.ones(header["n"] * header["_n_ang"], np.byte) * Fill_Value_Int,
-                "tb": np.ones([header["n"] * header["_n_ang"], header["_n_f"]], np.float32) * Fill_Value_Float,
+                "tb": np.ones([header["n"] * header["_n_ang"], header["_n_f"]], np.float32)
+                * Fill_Value_Float,
                 "ele": np.ones(header["n"] * header["_n_ang"], np.float32) * Fill_Value_Float,
                 "azi": np.ones(header["n"] * header["_n_ang"], np.float32) * Fill_Value_Float,
             }
@@ -435,7 +446,7 @@ def read_bls(file_name: str) -> dict:
 
         header = _get_header()
         data = _get_data()
-        return header, data    
+        return header, data
 
 
 def read_brt(file_name: str) -> dict:

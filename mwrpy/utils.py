@@ -3,9 +3,10 @@
 import glob
 import re
 import time
+from typing import Iterator
 import yaml
 from yaml.loader import SafeLoader
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import netCDF4
 import numpy as np
@@ -407,3 +408,50 @@ def convolve2DFFT(slab, kernel, max_missing=0.1):
     result[(result_mask < valid_threshold)] = np.nan
 
     return result
+
+
+def date_string_to_date(date_string: str) -> datetime.date:
+    """Convert YYYY-MM-DD to Python date."""
+    date_arr = [int(x) for x in date_string.split("-")]
+    return date(*date_arr)
+
+
+def get_time() -> str:
+    """Returns current UTC-time."""
+    return f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} +00:00"
+
+
+def get_date_from_past(n: int, reference_date: str | None = None) -> str:
+    """Return date N-days ago.
+    Args:
+        n: Number of days to skip (can be negative, when it means the future).
+        reference_date: Date as "YYYY-MM-DD". Default is the current date.
+    Returns:
+        str: Date as "YYYY-MM-DD".
+    """
+    reference = reference_date or get_time().split()[0]
+    date = date_string_to_date(reference) - timedelta(n)
+    return str(date)
+
+
+def get_processing_dates(args) -> tuple[str, str]:
+    """Returns processing dates."""
+    if args.date is not None:
+        start_date = args.date
+        stop_date = get_date_from_past(-1, start_date)
+    else:
+        start_date = args.start
+        stop_date = args.stop
+    start_date = str(date_string_to_date(start_date))
+    stop_date = str(date_string_to_date(stop_date))
+    return start_date, stop_date
+
+
+def isodate2date(date_str: str) -> datetime.date:
+    return datetime.strptime(date_str, "%Y-%m-%d").date()
+
+
+def date_range(start_date: datetime.date, end_date: datetime.date) -> Iterator[datetime.date]:
+    """Returns range between two dates (datetimes)."""
+    for n in range(int((end_date - start_date).days)):
+        yield start_date + timedelta(n)

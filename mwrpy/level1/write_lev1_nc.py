@@ -97,10 +97,19 @@ def prepare_data(
             rpg_bin.data[name] = np.array(params[name])
         rpg_bin.data["time_bnds"] = add_time_bounds(rpg_bin.data["time"], params["int_time"])
         rpg_bin.data["pointing_flag"] = np.zeros(len(rpg_bin.data["time"]), np.int32)
-        (
-            rpg_bin.data["liquid_cloud_flag"],
-            rpg_bin.data["liquid_cloud_flag_status"],
-        ) = find_lwcl_free(rpg_bin.data, np.arange(len(rpg_bin.data["time"])))
+
+        if data_type == "1B01":
+            (
+                rpg_bin.data["liquid_cloud_flag"],
+                rpg_bin.data["liquid_cloud_flag_status"],
+            ) = find_lwcl_free(rpg_bin.data, np.arange(len(rpg_bin.data["time"])))
+        else:
+            (
+                rpg_bin.data["liquid_cloud_flag"],
+                rpg_bin.data["liquid_cloud_flag_status"],
+            ) = np.ones(len(rpg_bin.data["time"]), np.int32) * 2, np.ones(
+                len(rpg_bin.data["time"]), np.int32
+            )
 
         file_list_hkd = get_file_list(path_to_files, path_to_prev, path_to_next, "hkd")
         rpg_hkd = get_rpg_bin(file_list_hkd)
@@ -118,7 +127,7 @@ def prepare_data(
             try:
                 file_list_bls = get_file_list(path_to_files, path_to_prev, path_to_next, "bls")
             except:
-                print(["No binary files with extension bls found in directory " + path_to_files])            
+                print(["No binary files with extension bls found in directory " + path_to_files])
             if len(file_list_bls) > 0:
                 rpg_bls = get_rpg_bin(file_list_bls)
                 _add_bls(rpg_bin, rpg_bls, rpg_hkd, params, site)
@@ -128,7 +137,9 @@ def prepare_data(
                     rpg_blb = get_rpg_bin(file_list_blb)
                     _add_blb(rpg_bin, rpg_blb, rpg_hkd, params, site)
                 except:
-                    print(["No binary files with extension blb found in directory " + path_to_files])
+                    print(
+                        ["No binary files with extension blb found in directory " + path_to_files]
+                    )
 
         if params["azi_cor"] != Fill_Value_Float:
             _azi_correction(rpg_bin.data, params)
@@ -155,6 +166,11 @@ def prepare_data(
                     print(
                         ["No binary files with extension irt found in directory " + path_to_files]
                     )
+
+            (
+                rpg_bin.data["liquid_cloud_flag"],
+                rpg_bin.data["liquid_cloud_flag_status"],
+            ) = find_lwcl_free(rpg_bin.data, np.arange(len(rpg_bin.data["time"])))
 
             try:
                 file_list_met = get_file_list(path_to_files, path_to_prev, path_to_next, "met")
@@ -317,35 +333,40 @@ def find_lwcl_free(lev1: dict, ix: np.ndarray) -> tuple:
         tb_mx = tb_std.rolling("20min", center=True, min_periods=100).max()
 
         if "irt" in lev1:
-            irt = lev1["irt"][ix, 0]
+            tb_thres = 0.1
+            irt = lev1["irt"][ix, :]
+            irt[irt == Fill_Value_Float] = np.nan
+            irt = np.nanmean(irt, axis=1)
             irt[(lev1["pointing_flag"][ix] == 1) | (lev1["ele"][ix] < 89.0)] = np.nan
             irt_df = pd.DataFrame({"Irt": irt[:]}, index=pd.to_datetime(time, unit="s"))
             irt_mx = irt_df.rolling("20min", center=True, min_periods=100).max()
-            index[(irt_mx["Irt"] > 233.15) & (tb_mx["Tb"] > 0.3)] = 1
+            index[(irt_mx["Irt"] > 263.15) & (tb_mx["Tb"] > tb_thres)] = 1
             status[:] = 0
-        else:
-            index[(tb_mx["Tb"] > 0.3)] = 1
 
+        tb_thres = 0.2
+        index[(tb_mx["Tb"] > tb_thres)] = 1
         df = pd.DataFrame({"index": index}, index=pd.to_datetime(time, unit="s"))
         df = df.fillna(method="bfill", limit=120)
         df = df.fillna(method="ffill", limit=120)
         index = np.array(df["index"])
-        index[(tb_mx["Tb"] < 0.3) & (index != 1.0)] = 0.0
+        index[(tb_mx["Tb"] < tb_thres) & (index != 1.0)] = 0.0
         index[(lev1["ele"][ix] < 89.0) & (index != 1.0)] = 2.0
 
     return np.nan_to_num(index, nan=2).astype(int), status
 
 
 def _add_bls(brt: dict, bls: dict, hkd: dict, params: dict, site: str) -> None:
-    """Add BLS boundary-layer scans using a linear time axis"""    
-    
+    """Add BLS boundary-layer scans using a linear time axis"""
+
     bls.data["time_bnds"] = add_time_bounds(bls.data["time"] + 1, params["int_time"])
-    bls.data["status"] = np.zeros((len(bls.data["time"]), len(params["receiver"])), np.int32) 
-   
-    for time_ind, time_bls in enumerate(bls.data["time"]):        
-        if np.min(np.abs(hkd.data["time"] - time_bls)) <= params["int_time"]*2:        
+    bls.data["status"] = np.zeros((len(bls.data["time"]), len(params["receiver"])), np.int32)
+
+    for time_ind, time_bls in enumerate(bls.data["time"]):
+        if np.min(np.abs(hkd.data["time"] - time_bls)) <= params["int_time"] * 2:
             ind_hkd = np.argmin(np.abs(hkd.data["time"] - time_bls))
-            bls.data["status"][time_ind, :] = hkd_sanity_check(np.array([hkd.data["status"][ind_hkd]], np.int32), params)
+            bls.data["status"][time_ind, :] = hkd_sanity_check(
+                np.array([hkd.data["status"][ind_hkd]], np.int32), params
+            )
 
     bls.data["pointing_flag"] = np.ones(len(bls.data["time"]), np.int32)
     bls.data["liquid_cloud_flag"] = np.ones(len(bls.data["time"]), np.int32) * 2
@@ -370,7 +391,7 @@ def _add_bls(brt: dict, bls: dict, hkd: dict, params: dict, site: str) -> None:
             brt.data[var] = brt.data[var][ind, :]
         else:
             brt.data[var] = brt.data[var][ind]
-    brt.header["n"] = len(brt.data["time"])       
+    brt.header["n"] = len(brt.data["time"])
 
 
 def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
@@ -471,12 +492,16 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
                     tb_add = np.vstack((tb_add, blb.data["tb"][time_ind, :, ang]))
 
             if len(time_bnds_add) == 0:
-                time_bnds_add = add_time_bounds(time_add, int(np.floor(params["scan_time"] / (blb.header["_n_ang"]))))
-            else:                
+                time_bnds_add = add_time_bounds(
+                    time_add, int(np.floor(params["scan_time"] / (blb.header["_n_ang"])))
+                )
+            else:
                 time_bnds_add = np.concatenate(
                     (
                         time_bnds_add,
-                        add_time_bounds(time_add, int(np.floor(params["scan_time"] / (blb.header["_n_ang"]))))
+                        add_time_bounds(
+                            time_add, int(np.floor(params["scan_time"] / (blb.header["_n_ang"])))
+                        ),
                     )
                 )
 
@@ -515,7 +540,9 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
                 brt.data[var] = brt.data[var][ind, :]
             else:
                 brt.data[var] = brt.data[var][ind]
-        brt.header["n"] = len(brt.data["time"]) #brt.header["n"] + blb.header["n"] * blb.header["_n_ang"]
+        brt.header["n"] = len(
+            brt.data["time"]
+        )  # brt.header["n"] + blb.header["n"] * blb.header["_n_ang"]
 
 
 def _azi_correction(brt: dict, params: dict) -> None:

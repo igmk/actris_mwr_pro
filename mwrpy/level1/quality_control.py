@@ -177,7 +177,8 @@ def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
                 tb_ret[ele_ind, ifreq] = (
                     coeff["offset_mvr"][:]
                     + np.sum(
-                        coeff["coefficient_mvr"][coeff_ind].T * np.array(data["tb"])[np.ix_(ele_ind, freq_ind)],
+                        coeff["coefficient_mvr"][coeff_ind].T
+                        * np.array(data["tb"])[np.ix_(ele_ind, freq_ind)],
                         axis=1,
                     )
                     + np.sum(
@@ -207,8 +208,9 @@ def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
                     ],
                     ifreq,
                 ] = 1
-                abs_diff[:, ifreq] = ma.masked_invalid(np.abs(data["tb"][:, ifreq] - tb_ret[:, ifreq]))
-                
+                abs_diff[:, ifreq] = ma.masked_invalid(
+                    np.abs(data["tb"][:, ifreq] - tb_ret[:, ifreq])
+                )
 
     th_rec = [1.0, 2.0]  # threshold for receiver mean absolute difference
     # receiver flag based on mean absolute difference
@@ -219,5 +221,5 @@ def spectral_consistency(data: dict, c_file: list) -> np.ndarray:
                 data["receiver"] == rec,
             )
         ] = 1
-        
+
     return flag_ind, tb_ret
