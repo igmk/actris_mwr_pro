@@ -14,10 +14,10 @@ import pandas as pd
 from matplotlib.ticker import FormatStrFormatter
 from numpy import ma
 
-from plots.generate_plots import Dimensions, _initialize_figure
-from plots.plot_utils import annotate_heatmap, heatmap
-from plots.stat_meta import _COLORS, ATTRIBUTES
-from utils import append_data, isbit, read_yaml_config
+from mwrpy.plots.generate_plots import Dimensions, _initialize_figure
+from mwrpy.plots.plot_utils import annotate_heatmap, heatmap
+from mwrpy.plots.stat_meta import _COLORS, ATTRIBUTES
+from mwrpy.utils import append_data, isbit, read_yaml_config
 
 
 def generate_stat(

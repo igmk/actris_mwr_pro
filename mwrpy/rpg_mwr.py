@@ -6,9 +6,9 @@ import netCDF4
 import numpy as np
 from numpy import ma
 
-import utils
-import version
-from level1.lev1_meta_nc import MetaData
+import mwrpy.utils as utils
+import mwrpy.version as version
+from mwrpy.level1.lev1_meta_nc import MetaData
 
 
 class RpgArray:
@@ -259,7 +259,7 @@ def _write_vars2nc(nc: netCDF4.Dataset, mwr_variables: dict) -> None:
 
 
 def _add_standard_global_attributes(nc: netCDF4.Dataset, att_global) -> None:
-    nc.mwrpy_version = version.__version__
+    nc.mwrpy_version = version.version
     locale.setlocale(locale.LC_TIME, "en_US.UTF-8")
     nc.processed = datetime.now(tz=timezone.utc).strftime("%d %b %Y %H:%M:%S") + " UTC"
     for name, value in att_global.items():

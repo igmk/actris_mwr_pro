@@ -3,7 +3,7 @@ import netCDF4 as nc
 import numpy as np
 from numpy import ma
 
-from utils import get_coeff_list
+from mwrpy.utils import get_coeff_list
 
 Fill_Value_Float = -999.0
 Fill_Value_Int = -99

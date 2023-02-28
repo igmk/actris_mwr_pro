@@ -8,13 +8,13 @@ import pytz
 from numpy import ma
 from timezonefinder import TimezoneFinder
 
-import rpg_mwr
-from atmos import eq_pot_tem, pot_tem, rel_hum, rh_err
-from level1.quality_control import spectral_consistency
-from level2.get_ret_coeff import get_mvr_coeff
-from level2.lev2_meta_nc import get_data_attributes
-from level2.lwp_offset import correct_lwp_offset
-from utils import (
+import mwrpy.rpg_mwr as rpg_mwr
+from mwrpy.atmos import eq_pot_tem, pot_tem, rel_hum, rh_err
+from mwrpy.level1.quality_control import spectral_consistency
+from mwrpy.level2.get_ret_coeff import get_mvr_coeff
+from mwrpy.level2.lev2_meta_nc import get_data_attributes
+from mwrpy.level2.lwp_offset import correct_lwp_offset
+from mwrpy.utils import (
     add_time_bounds,
     get_coeff_list,
     get_ret_ang,

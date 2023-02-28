@@ -7,7 +7,7 @@ import netCDF4
 import numpy as np
 from numpy import ma, ndarray
 
-from utils import (
+from mwrpy.utils import (
     convolve2DFFT,
     get_ret_freq,
     isbit,
