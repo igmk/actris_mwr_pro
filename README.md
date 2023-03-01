@@ -56,14 +56,26 @@ This folder contains configuration files for each instrument type in `instrument
 
 <b>*generate_figure*</b> in `generate_plots.py` creates .png figures using plot specific metadata defined in `plot_meta.py`.
 
+<b>*generate_stat*</b> in `stat_plot.py` creates statistic plots (called by `stats` as product, see below) as .png figures using plot specific metadata defined in `stat_meta.py`.
+
 ## How to run the software
 
-Running the software is based on a shell script (`mwrpy/actris_process_mwr.sh`) and calls `mwrpy/process_mwr_pro.py`, where functions for generating and visualizing Level 1 and Level 2 products are called (<b>*lev1_to_nc*, *lev2_to_nc*, *generate_figure*</b>).
+Running the software is based on a wrapper script `mwrpy/mwrpy.py`:
 
-```
-mwrpy/actris_process_mwr.sh --site site_name
-```
-This call runs the software for the current day and reprocesses the previous day as default. The site name must be same as the subfolder name in `mwrpy/site_config/`.
+    usage: mwrpy.py [-h] -s SITE [-d YYYY-MM-DD] [--start YYYY-MM-DD]
+                           [--stop YYYY-MM-DD] [-p ...] COMMAND ...
 
-Adding the option `--date YYYYMMDD` allows to process a single day and the option `--date_e YYYYMMDD` defines a date range to be processed between *date* and *date_e*.
+With the COMMAND `process` the script `mwrpy/process_mwrpy.py`, where functions for generating and visualizing Level 1 and Level 2 products are called (<b>*lev1_to_nc*, *lev2_to_nc*, *generate_figure*</b>), runs for the current day and reprocesses the previous day as default. The site name is required and must be same as the subfolder name in `mwrpy/site_config/`. 
+
+The following arguments can be used and must be issued before the command argument:
+
+
+| Short | Long         | Default           | Description                                                                        |
+|:------|:-------------|:------------------|:-----------------------------------------------------------------------------------|
+| `-h`  | `--help`     |                   | Show help and exit.                                                                |
+| `-s`  | `--site`     |                   | Site to process data from, e.g, `hyytiala`. Required.                              |
+| `-d`  | `--date`     |                   | Single date to be processed. Alternatively, `--start` and `--stop` can be defined. |
+|       | `--start`    | `current day - 1` | Starting date.                                                                     |
+|       | `--stop`     | `current day `    | Stopping date.                                                                     |
+| `-p`  | `--products` | all               | Processed products, e.g, `1C01, 2I02, 2P03, stats`.                                |
 
