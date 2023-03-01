@@ -13,9 +13,9 @@ from matplotlib.transforms import Affine2D, Bbox, ScaledTranslation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from numpy import ma, ndarray
 
-from atmos import abs_hum, dir_avg, t_dew_rh
-from plots.plot_meta import _COLORS, ATTRIBUTES
-from plots.plot_utils import (
+from mwrpy.atmos import abs_hum, dir_avg, t_dew_rh
+from mwrpy.plots.plot_meta import _COLORS, ATTRIBUTES
+from mwrpy.plots.plot_utils import (
     _calculate_rolling_mean,
     _gap_array,
     _get_bit_flag,
@@ -26,7 +26,7 @@ from plots.plot_utils import (
     _nan_time_gaps,
     _read_location,
 )
-from utils import (
+from mwrpy.utils import (
     get_ret_ang,
     isbit,
     read_nc_field_name,

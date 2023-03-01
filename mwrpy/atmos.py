@@ -4,7 +4,7 @@ from numpy import ma
 import metpy.calc as mpcalc
 from metpy.units import masked_array
 import scipy.constants
-import constants as con
+import mwrpy.constants as con
 
 HPA_TO_P = 100
 

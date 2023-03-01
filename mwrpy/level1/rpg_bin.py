@@ -4,7 +4,7 @@ import logging
 
 import numpy as np
 
-import utils
+import mwrpy.utils as utils
 
 Fill_Value_Float = -999.0
 Fill_Value_Int = -99

@@ -6,14 +6,14 @@ import numpy as np
 import pandas as pd
 from numpy import ma
 
-import rpg_mwr
-from level1.lev1_meta_nc import get_data_attributes
-from level1.met_quality_control import apply_met_qc
-from level1.quality_control import apply_qc
-from level1.rpg_bin import get_rpg_bin
+import mwrpy.rpg_mwr
+from mwrpy.level1.lev1_meta_nc import get_data_attributes
+from mwrpy.level1.met_quality_control import apply_met_qc
+from mwrpy.level1.quality_control import apply_qc
+from mwrpy.level1.rpg_bin import get_rpg_bin
 
 # from level1.tb_offset import correct_tb_offset
-from utils import (
+from mwrpy.utils import (
     add_interpol1d,
     add_time_bounds,
     epoch2unix,

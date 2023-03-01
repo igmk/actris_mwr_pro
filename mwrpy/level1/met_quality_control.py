@@ -1,7 +1,7 @@
 """Module for meteorological sensor quality control"""
 import numpy as np
 
-from utils import setbit
+from mwrpy.utils import setbit
 
 
 def apply_met_qc(data: dict, params: dict) -> None:

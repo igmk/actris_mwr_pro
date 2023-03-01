@@ -5,8 +5,8 @@
 import argparse
 import sys
 import os
-import utils
-import process_mwrpy
+import mwrpy.utils as utils
+import mwrpy.process_mwrpy as process_mwrpy
 
 """All modules MUST have an add_arguments function which adds the subcommand to the subparser."""
 modules = {
@@ -14,14 +14,13 @@ modules = {
 }
 
 
-def main(args):
-    os.chdir("/home/hatpro/mwr_pro_actris/")
-    args = _parse_args(args)
+def main():
+    args = _parse_args()
     cmd = args.cmd
     modules[cmd].main(args)
 
 
-def _parse_args(args):
+def _parse_args():
     parser = argparse.ArgumentParser(
         description="MWRpy processing main wrapper.", epilog="Have fun!"
     )
@@ -70,8 +69,8 @@ def _parse_args(args):
     group.add_argument(
         "-d", "--date", type=str, metavar="YYYY-MM-DD", help="Single date to be processed."
     )
-    return parser.parse_args(args)
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

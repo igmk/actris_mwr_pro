@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from numpy import ma
 
-from utils import get_coeff_list, setbit
+from mwrpy.utils import get_coeff_list, setbit
 
 Fill_Value_Float = -999.0
 Fill_Value_Int = -99
