@@ -354,7 +354,7 @@ def read_nc_fields(nc_file: str, names: str | list) -> ma.MaskedArray | list:
     return data[0] if len(data) == 1 else data
 
 
-def append_data(data_in: dict, key: str, array: np.ndarray) -> dict:
+def append_data(data_in: dict, key: str, array: ma.MaskedArray) -> dict:
     """Appends data to a dictionary field (creates the field if not yet present).
     Args:
         data_in: Dictionary where data will be appended.
@@ -364,9 +364,9 @@ def append_data(data_in: dict, key: str, array: np.ndarray) -> dict:
     data = data_in.copy()
     if key not in data:
         if array.ndim == 1:
-            data[key] = array[:].data
+            data[key] = array[:]
         else:
-            data[key] = array[:, :].data
+            data[key] = array[:, :]
     else:
         data[key] = ma.concatenate((data[key], array))
     return data

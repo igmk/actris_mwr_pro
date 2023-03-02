@@ -103,12 +103,12 @@ def orbpos(data: dict, params: dict) -> np.ndarray:
     sun = {}
     sun["azi"] = np.zeros(data["time"].shape) * Fill_Value_Float
     sun["ele"] = np.zeros(data["time"].shape) * Fill_Value_Float
-    # moon = dict()
-    # moon['azi'] = np.zeros(data['time'].shape) * Fill_Value_Float
-    # moon['ele'] = np.zeros(data['time'].shape) * Fill_Value_Float
+    moon = dict()
+    moon['azi'] = np.zeros(data['time'].shape) * Fill_Value_Float
+    moon['ele'] = np.zeros(data['time'].shape) * Fill_Value_Float
 
     sol = ephem.Sun()
-    # lun = ephem.Moon()
+    lun = ephem.Moon()
     obs_loc = ephem.Observer()
 
     for ind, time in enumerate(data["time"]):
@@ -121,31 +121,37 @@ def orbpos(data: dict, params: dict) -> np.ndarray:
         sol.compute(obs_loc)
         sun["ele"][ind] = np.rad2deg(sol.alt)
         sun["azi"][ind] = np.rad2deg(sol.az)
-        # lun.compute(obs_loc)
-        # moon['ele'][ind] = np.rad2deg(lun.alt)
-        # moon['azi'][ind] = np.rad2deg(lun.az)
+        lun.compute(obs_loc)
+        moon['ele'][ind] = np.rad2deg(lun.alt)
+        moon['azi'][ind] = np.rad2deg(lun.az)
 
-    sun["sunrise"] = data["time"][0]
-    sun["sunset"] = data["time"][0] + 24.0 * 3600.0
+    sun["rise"], moon["rise"] = data["time"][0], data["time"][0]
+    sun["set"], moon["set"] = data["time"][0] + 24.0 * 3600.0, data["time"][0] + 24.0 * 3600.0
     i_sun = np.where(sun["ele"] > 0.0)[0]
-
     if len(i_sun) > 0:
-        sun["sunrise"] = data["time"][i_sun[0]]
-        sun["sunset"] = data["time"][i_sun[-1]]
-
-    # exclude added surface observations from sun flagging
-    ele_tmp = np.copy(data["ele"][:])
-    ele_tmp[(data["ele"][:] == 0.0) & (data["pointing_flag"][:] == 1)] = Fill_Value_Float
+        sun["rise"] = data["time"][i_sun[0]]
+        sun["set"] = data["time"][i_sun[-1]]       
+    i_moon = np.where(moon["ele"] > 0.0)[0]
+    if len(i_moon) > 0:
+        moon["rise"] = data["time"][i_moon[0]]
+        moon["set"] = data["time"][i_moon[-1]]        
 
     flag_ind = np.where(
-        (ele_tmp != Fill_Value_Float)
-        & (ele_tmp <= np.max(sun["ele"]) + 10.0)
-        & (data["time"] >= sun["sunrise"])
-        & (data["time"] <= sun["sunset"])
-        & (ele_tmp >= sun["ele"][:] - params["saf"])
-        & (ele_tmp <= sun["ele"][:] + params["saf"])
-        & (data["azi"] >= sun["azi"][:] - params["saf"])
-        & (data["azi"] <= sun["azi"][:] + params["saf"])
+        ((data["ele"] != Fill_Value_Float)
+        & (data["ele"] <= np.max(sun["ele"]) + 10.0)
+        & (data["time"] >= sun["rise"])
+        & (data["time"] <= sun["set"])
+        & (data["ele"] >= sun["ele"] - params["saf"])
+        & (data["ele"] <= sun["ele"] + params["saf"])
+        & (data["azi"] >= sun["azi"] - params["saf"])
+        & (data["azi"] <= sun["azi"] + params["saf"]))
+        | ((data["ele"] <= np.max(moon["ele"]) + 10.0)
+        & (data["time"] >= moon["rise"])
+        & (data["time"] <= moon["set"])
+        & (data["ele"] >= moon["ele"] - params["saf"])
+        & (data["ele"] <= moon["ele"] + params["saf"])
+        & (data["azi"] >= moon["azi"] - params["saf"])
+        & (data["azi"] <= moon["azi"] + params["saf"]))
     )
 
     return flag_ind

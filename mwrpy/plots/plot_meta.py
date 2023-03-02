@@ -62,7 +62,7 @@ _COLORS = {
 _CLABEL = {
     "quality_flag_0": (
         ("rain_detected", _COLORS["blue"]),
-        ("sun_in_beam", _COLORS["yellow"]),
+        ("sun_moon_in_beam", _COLORS["purple"]),
     ),
     "quality_flag_1": (
         ("receiver1_sanity_failed", _COLORS["seaweed_roll"]),

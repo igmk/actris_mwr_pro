@@ -23,6 +23,7 @@ product = [
     ("2P07", "potential_temperature"),
     ("2P08", "equivalent_potential_temperature"),
     ("2S02", "tb_spectrum"),
+    ("stats", ""),
 ]
 
 
@@ -50,12 +51,9 @@ def process_product(prod: str, date, site: str):
     global_attributes, params = read_yaml_config(site)
     ID = global_attributes["wigos_station_id"]
     data_out_l1 = params["data_out"] + "level1/" + date.strftime("%Y/%m/%d/")
-    data_out_l2 = params["data_out"] + "level2/" + date.strftime("%Y/%m/%d/")
-    data_out_stat = params["data_out"] + "level1/" + date.strftime("%Y/")
-    prv = date - datetime.timedelta(days=1)
-    nex = date + datetime.timedelta(days=1)
 
-    if prod == "1C01":
+    # Level 1
+    if prod[0] == "1":
         link_dir = (
             "/home/hatpro/public_html/quicklooks/"
             + params["data_out"][6:]
@@ -65,6 +63,8 @@ def process_product(prod: str, date, site: str):
         if not os.path.isdir(data_out_l1):
             os.makedirs(data_out_l1)
         lev1_data = data_out_l1 + "MWR_" + prod + "_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"
+        prv = date - datetime.timedelta(days=1)
+        nex = date + datetime.timedelta(days=1)        
         lev1_to_nc(
             site,
             prod,
@@ -139,13 +139,23 @@ def process_product(prod: str, date, site: str):
             )
             _link_quicklook(link_dir, fig_name)
 
-    elif os.path.isdir("site_config/" + site + "/coefficients/"):
+    # Level 2
+    elif (
+        (prod[0] == "2") 
+        & (
+            os.path.isdir("site_config/" + site + "/coefficients/")
+        ) & (
+            os.path.isfile(data_out_l1 + "MWR_1C01_" + ID + "_" + date.strftime("%Y%m%d") + ".nc")
+        )
+    ):
         link_dir = (
             "/home/hatpro/public_html/quicklooks/"
             + params["data_out"][6:]
             + "level2/"
             + date.strftime("%Y/%m/%d/")
         )
+        data_out_l1 = params["data_out"] + "level1/" + date.strftime("%Y/%m/%d/")
+        data_out_l2 = params["data_out"] + "level2/" + date.strftime("%Y/%m/%d/")
         if not os.path.isdir(data_out_l2):
             os.makedirs(data_out_l2)
         lev1_data = data_out_l1 + "MWR_1C01_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"
@@ -166,39 +176,42 @@ def process_product(prod: str, date, site: str):
                 image_name=var,
             )
             _link_quicklook(link_dir, fig_name)
-
-    if not os.path.isdir(data_out_stat):
-        os.makedirs(data_out_stat)
-    if params["flag_status"][3] == 1:
+    
+    # Statistics
+    elif prod == "stats":
+        data_out_stat = params["data_out"] + "level1/" + date.strftime("%Y/")
+        if not os.path.isdir(data_out_stat):
+            os.makedirs(data_out_stat)
+        if params["flag_status"][3] == 1:
+            generate_stat(
+                site,
+                ["data_availability", "quality_flag"],
+                date.strftime("%Y"),
+                "data_stat",
+                data_out_stat,
+            )
+        else:
+            generate_stat(
+                site,
+                ["data_availability", "quality_flag", "spectral_consistency"],
+                date.strftime("%Y"),
+                "data_stat",
+                data_out_stat,
+            )
         generate_stat(
             site,
-            ["data_availability", "quality_flag"],
+            ["receiver_temperature", "receiver_stability"],
             date.strftime("%Y"),
-            "data_stat",
+            "receiver_stat",
             data_out_stat,
         )
-    else:
         generate_stat(
             site,
-            ["data_availability", "quality_flag", "spectral_consistency"],
+            ["ambient_target"],
             date.strftime("%Y"),
-            "data_stat",
+            "ambient_target_stat",
             data_out_stat,
         )
-    generate_stat(
-        site,
-        ["receiver_temperature", "receiver_stability"],
-        date.strftime("%Y"),
-        "receiver_stat",
-        data_out_stat,
-    )
-    generate_stat(
-        site,
-        ["ambient_target"],
-        date.strftime("%Y"),
-        "ambient_target_stat",
-        data_out_stat,
-    )
 
 
 def add_arguments(subparser):

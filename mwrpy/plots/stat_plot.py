@@ -146,9 +146,10 @@ def calc_stat(
             data = _find_valid_fields(year, month, var_names, params, global_attributes)
             if bool(data):
                 for ibit, bit in enumerate(bits):
-                    stat[month - 1, ibit] = len(
-                        np.where(np.any(isbit(data["quality_flag"], bit), axis=1))[0]
-                    ) / len(np.where(np.any(data["quality_flag"] > 0, axis=1))[0])
+                    if len(np.where(np.any(data["quality_flag"] > 0, axis=1))[0]) > 0.:
+                        stat[month - 1, ibit] = len(
+                            np.where(np.any(isbit(data["quality_flag"], bit), axis=1))[0]
+                        ) / len(np.where(np.any(data["quality_flag"] > 0, axis=1))[0])
 
     if name == "spectral_consistency":
         var_names = ["quality_flag", "time_bnds"]
@@ -218,36 +219,56 @@ def calc_stat(
                 )
 
     if name == "receiver_stability":
+        lab_pos = np.ones((12, 2), np.float32) * .003
         var_names = ["t_sta"]
         labels = ["Receiver 1", "Receiver 2"]
         ax2 = fig.add_subplot(111)
-        max_x = 0.003
-        ax.set_xlim([0, max_x])
-        ax2.set_xlim([0, max_x])
         for month in range(1, 13):
             data = _find_valid_fields(year, month, var_names, params, global_attributes)
             if bool(data):
-                bar_txt = len(np.where(data["t_sta"][:, 0] > max_x)[0]) / len(data["t_sta"]) * 100
-                boxplot(
+                lab_pos[month - 1, 0] = np.nanpercentile(data["t_sta"][:, 0].filled(np.nan), 75)
+                _boxplot(
                     ax,
                     data["t_sta"][:, 0],
-                    bar_txt=bar_txt,
                     labels=x_labels,
                     position=month,
                     color="sienna",
                     name=name,
                 )
-                bar_txt = len(np.where(data["t_sta"][:, 1] > max_x)[0]) / len(data["t_sta"]) * 100
-                boxplot(
+                lab_pos[month - 1, 1] = np.nanpercentile(data["t_sta"][:, 1].filled(np.nan), 75)
+                _boxplot(
                     ax2,
                     data["t_sta"][:, 1],
-                    bar_txt=bar_txt,
                     labels=x_labels,
                     position=month,
                     color=_COLORS["shockred"],
                     name=name,
                 )
-
+        x_max = np.max(lab_pos) + .001
+        ax.set_xlim([0., x_max])
+        ax2.set_xlim([0., x_max])
+        for month in range(1, 13):
+            data = _find_valid_fields(year, month, var_names, params, global_attributes)
+            if bool(data):        
+                bar_txt = len(np.where(data["t_sta"][:, 0] > x_max)[0]) / len(data["t_sta"]) * 100
+                if round(bar_txt, 2) > 0.0:
+                    ax.text(
+                        ax.get_xlim()[1],
+                        month + 0.1,
+                        str(round(bar_txt, 2)) + " %",
+                        ha="center",
+                        weight="bold",
+                    )
+                bar_txt = len(np.where(data["t_sta"][:, 1] > x_max)[0]) / len(data["t_sta"]) * 100
+                if round(bar_txt, 2) > 0.0:
+                    ax2.text(
+                        ax2.get_xlim()[1],
+                        month + 0.1,
+                        str(round(bar_txt, 2)) + " %",
+                        ha="center",
+                        weight="bold",
+                    )                    
+        
         pos = ax.get_position().get_points()
         ax.set_position([0.06, 0.11, 0.31, pos[1, 1] - 0.12])
         ax2.set_position([0.42, 0.11, 0.31, pos[1, 1] - 0.12])
@@ -580,6 +601,7 @@ def _plot_lines_amb(ax, name: str, stat: np.ndarray, labels: list):
     )
 
     ax.set_ylabel(ATTRIBUTES[name].ylabel)
+    ax2.set_ylim([0., np.min([.3, ma.max(stat["t_amb_diff_max"]) + .01])])
     ax2.set_ylabel("Daily mean and range of sensor difference (K)")
     ax2.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
     lines, labels = ax.get_legend_handles_labels()
@@ -591,9 +613,7 @@ def _plot_lines_amb(ax, name: str, stat: np.ndarray, labels: list):
         legobj.set_linewidth(2.0)
 
 
-def boxplot(ax, data, bar_txt=0.0, labels=None, position=0, color=None, name=None):
-    """Creates a standard box plot."""
-
+def _boxplot(ax, data, labels=None, position=0, color=None, name=None):
     ax.boxplot(
         data,
         vert=False,
@@ -606,14 +626,6 @@ def boxplot(ax, data, bar_txt=0.0, labels=None, position=0, color=None, name=Non
         medianprops=dict(color=color, linewidth=2),
         boxprops=dict(facecolor="w"),
     )
-    if round(bar_txt, 2) > 0.0:
-        ax.text(
-            ax.get_xlim()[1],
-            position + 0.1,
-            str(round(bar_txt, 2)) + " %",
-            ha="center",
-            weight="bold",
-        )
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
     ax.set_xlabel(ATTRIBUTES[name].ylabel)

@@ -434,10 +434,14 @@ def _plot_colormesh_data(ax, data_in: ma.MaskedArray, name: str, axes: tuple, nc
         nlev = 16
 
     assert variables.plot_range is not None
+    
+    if name == "potential_temperature":
+        hum_file = nc_file.replace("2P07", "2P03")
 
     if name == "equivalent_potential_temperature":
         nbin = 9
         nlev1 = 41
+        hum_file = nc_file.replace("2P08", "2P03")
 
     if name == "water_vapor_vmr":
         nbin = 6
@@ -448,7 +452,15 @@ def _plot_colormesh_data(ax, data_in: ma.MaskedArray, name: str, axes: tuple, nc
         data[data < 0.0] = 0.0
         data *= 100.0
         nbin = 6
-
+        hum_file = nc_file.replace("2P04", "2P03")
+        
+    if name in ("relative_humidity", "potential_temperature", "equivalent_potential_temperature"):
+        hum_time = read_nc_fields(hum_file, "time")
+        hum_flag = _get_ret_flag(hum_file, seconds2hours(hum_time))
+        hum_flag = np.interp(axes[0], seconds2hours(hum_time), hum_flag)
+    else:
+        hum_flag = np.zeros(len(axes[0]), np.int32)
+        
     if variables.plot_type == "bit":
         cmap = ListedColormap(variables.cbar)
         pos = ax.get_position()
@@ -482,9 +494,9 @@ def _plot_colormesh_data(ax, data_in: ma.MaskedArray, name: str, axes: tuple, nc
         alpha=0.5,
     )
 
-    data = data_in
+    data = np.copy(data_in)
     flag = _get_ret_flag(nc_file, axes[0])
-    data_in[flag == 1, :] = np.nan
+    data_in[flag + hum_flag > 0, :] = np.nan
 
     if np.ma.median(np.diff(axes[0][:])) < 5 / 60:
         data, _ = _calculate_rolling_mean(axes[0], data_in, win=15 / 60)
@@ -720,7 +732,7 @@ def _plot_sen(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
         data_in[np.any(qf == 1, axis=1)],
         "r.",
         linewidth=1,
-        label="sun_in_beam",
+        label="sun_moon_in_beam",
     )
     ax.set_ylim((vmin, vmax))
     ax.legend(loc="upper right")

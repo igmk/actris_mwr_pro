@@ -1,4 +1,3 @@
-#!/bin/bash
 #!/usr/bin/env python3
 """A wrapper script for calling data processing functions."""
 
@@ -6,7 +5,12 @@ import argparse
 import sys
 import os
 import utils
+import warnings
+
 import process_mwrpy
+
+warnings.simplefilter("ignore", UserWarning)
+warnings.simplefilter("ignore", RuntimeWarning)
 
 """All modules MUST have an add_arguments function which adds the subcommand to the subparser."""
 modules = {
@@ -37,7 +41,7 @@ def _parse_args(args):
     group.add_argument(
         "-p",
         "--products",
-        help="Products to be processed, e.g., 1C01, 2I01, 2P02.\
+        help="Products to be processed, e.g., 1C01, 2I02, 2P03, stats.\
                         Default is all regular products.",
         type=lambda s: s.split(","),
         default=[
@@ -51,6 +55,7 @@ def _parse_args(args):
             "2P07",
             "2P08",
             "2S02",
+            "stats",
         ],
     )
     group.add_argument(

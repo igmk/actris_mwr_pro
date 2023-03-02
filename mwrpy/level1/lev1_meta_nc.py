@@ -83,7 +83,7 @@ DEFINITIONS_1B01 = {
         "Bit 4: spectral_consistency_above_threshold\n"
         "Bit 5: receiver_sanity_failed\n"
         "Bit 6: rain_detected\n"
-        "Bit 7: sun_in_beam\n"
+        "Bit 7: sun_moon_in_beam\n"
         "Bit 8: tb_offset_above_threshold"
     ),
     "quality_flag_status": (
@@ -94,7 +94,7 @@ DEFINITIONS_1B01 = {
         "Bit 4: spectral_consistency_not_checked\n"
         "Bit 5: receiver_sanity_not_checked\n"
         "Bit 6: rain_not_checked\n"
-        "Bit 7: sun_in_beam_not_checked\n"
+        "Bit 7: sun_moon_in_beam_not_checked\n"
         "Bit 8: tb_offset_not_checked"
     ),
 }
