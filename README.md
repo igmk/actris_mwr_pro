@@ -19,7 +19,7 @@ This folder contains configuration files for each instrument type in `instrument
 
 ### `mwrpy/level1/`
 
-<b>*lev1_to_nc*</b> in `write_lev1.py` reads the raw binary files (.BRT, .BLB, .IRT, .MET, .HKD) stored in the same folder containing data of one day, applies quality control (`quality_control.py`) and writes it into a netCDF4 file using metadata defined in `lev1_meta_nc.py`.
+<b>*lev1_to_nc*</b> in `write_lev1.py` reads the raw binary files (.BRT, .BLB/.BLS, .IRT, .MET, .HKD) stored in the same folder containing data of one day, applies quality control (`quality_control.py`) and writes it into a netCDF4 file using metadata defined in `lev1_meta_nc.py`.
 
 #### Quality flags (bit variable)
     # Bit 1: missing_tb
@@ -64,10 +64,9 @@ Running the software is based on a wrapper script `mwrpy/mwrpy.py`:
 
     usage: mwrpy.py [-h] -s SITE [-d YYYY-MM-DD] [--start YYYY-MM-DD]
                            [--stop YYYY-MM-DD] [-p ...] COMMAND ...
-
-With the COMMAND `process` the script `mwrpy/process_mwrpy.py`, where functions for generating and visualizing Level 1 and Level 2 products are called (<b>*lev1_to_nc*, *lev2_to_nc*, *generate_figure*</b>), runs for the current day and reprocesses the previous day as default. The site name is required and must be same as the subfolder name in `mwrpy/site_config/`. 
-
-The following arguments can be used and must be issued before the command argument:
+                           
+                           
+The following general arguments can be used and must be issued before the command argument:
 
 
 | Short | Long         | Default           | Description                                                                        |
@@ -79,3 +78,15 @@ The following arguments can be used and must be issued before the command argume
 |       | `--stop`     | `current day `    | Stopping date.                                                                     |
 | `-p`  | `--products` | all               | Processed products, e.g, `1C01, 2I02, 2P03, stats`.                                |
 
+                           
+### Commands
+
+### `process`
+
+The `process` command processes standard MWR products using the script `mwrpy/process_mwrpy.py`, where functions for generating and visualizing Level 1 and Level 2 products are called (<b>*lev1_to_nc*, *lev2_to_nc*, *generate_figure*</b>).
+
+In addition to the general arguments, it accepts the following special arguments.
+
+| Short | Long                   | Default | Description                                                                        |
+|:------|:-----------------------|:--------|:-----------------------------------------------------------------------------------|
+| `-f`  | `--figure`             | `False` | Produce figures only; no processing. 
