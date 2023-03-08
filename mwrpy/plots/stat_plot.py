@@ -134,7 +134,7 @@ def calc_stat(
                 "spectral_consistency_above_threshold",
                 "receiver_sanity_failed",
                 "rain_detected",
-                "sun_in_beam",
+                "sun_moon_in_beam",
                 "tb_offset_above_threshold",
             ]
         )

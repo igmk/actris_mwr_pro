@@ -328,6 +328,7 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
             (lev1["ele"][:] > coeff["ele"][0] - 0.5)
             & (lev1["ele"][:] < coeff["ele"][0] + 0.5)
             & (lev1["pointing_flag"][:] == 1)
+            & (np.arange(len(lev1["time"])) + len(coeff["ele"]) < len(lev1["time"]))
         )[0]
         ibl, tb = (
             np.empty([0, len(coeff["ele"])], np.int32),
@@ -335,7 +336,7 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
         )
 
         for ix0v in ix0:
-            if np.allclose(lev1["ele"][ix0v : ix0v + len(coeff["ele"])], coeff["ele"], atol=0.5):
+            if (ix0v + len(coeff["ele"]) < len(lev1["time"])) & (np.allclose(lev1["ele"][ix0v : ix0v + len(coeff["ele"])], coeff["ele"], atol=0.5)):
                 ibl = np.append(ibl, [np.array(range(ix0v, ix0v + len(coeff["ele"])))], axis=0)
                 tb = np.concatenate(
                     (

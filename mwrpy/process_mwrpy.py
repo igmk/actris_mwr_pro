@@ -33,18 +33,25 @@ def main(args):
     stop_date = isodate2date(_stop_date)
     for date in date_range(start_date, stop_date):
         for product in args.products:
-            print(f"Processing {product} product, {args.site} {date}")
-            process_product(product, date, args.site)
-
-
+            if args.figure:
+                print(f"Plotting {product} product, {args.site} {date}")
+                plot_product(product, date, args.site)
+            else:
+                print(f"Processing {product} product, {args.site} {date}")
+                process_product(product, date, args.site)
+                print(f"Plotting {product} product, {args.site} {date}")
+                plot_product(product, date, args.site)
+                
+            
 def _link_quicklook(link_direc: str, figure_name: str) -> None:
-    if not os.path.isdir(link_direc):
-        os.makedirs(link_direc)
-    link_rr = link_direc + figure_name.rsplit("/")[-1]
+    if len(figure_name) > 0:
+        if not os.path.isdir(link_direc):
+            os.makedirs(link_direc)
+        link_rr = link_direc + figure_name.rsplit("/")[-1]
 
-    if not os.path.islink(link_rr):
-        print('linking: ln -s "%s" "%s"' % (figure_name, link_rr))
-        os.symlink(figure_name, link_rr)
+        if not os.path.islink(link_rr):
+            print('linking: ln -s "%s" "%s"' % (figure_name, link_rr))
+            os.symlink(figure_name, link_rr)            
 
 
 def process_product(prod: str, date, site: str):
@@ -54,12 +61,6 @@ def process_product(prod: str, date, site: str):
 
     # Level 1
     if prod[0] == "1":
-        link_dir = (
-            "/home/hatpro/public_html/quicklooks/"
-            + params["data_out"][6:]
-            + "level1/"
-            + date.strftime("%Y/%m/%d/")
-        )
         if not os.path.isdir(data_out_l1):
             os.makedirs(data_out_l1)
         lev1_data = data_out_l1 + "MWR_" + prod + "_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"
@@ -74,70 +75,103 @@ def process_product(prod: str, date, site: str):
             lev1_data,
         )
 
-        fig_name = generate_figure(
-            lev1_data,
-            ["tb"],
-            ele_range=[89.0, 91.0],
-            save_path=data_out_l1,
-            image_name="tb",
+    # Level 2
+    elif (
+        (prod[0] == "2") 
+        & (
+            os.path.isdir("site_config/" + site + "/coefficients/")
+        ) & (
+            os.path.isfile(data_out_l1 + "MWR_1C01_" + ID + "_" + date.strftime("%Y%m%d") + ".nc")
         )
-        _link_quicklook(link_dir, fig_name)
-        fig_name = generate_figure(
-            lev1_data, ["ele", "azi"], save_path=data_out_l1, image_name="sen"
+    ):
+        data_out_l2 = params["data_out"] + "level2/" + date.strftime("%Y/%m/%d/")
+        if not os.path.isdir(data_out_l2):
+            os.makedirs(data_out_l2)
+        lev1_data = data_out_l1 + "MWR_1C01_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"
+        lev2_to_nc(date.strftime("%Y%m%d"), site, prod, lev1_data, data_out_l2)
+        
+        
+def plot_product(prod: str, date, site: str):
+    global_attributes, params = read_yaml_config(site)
+    ID = global_attributes["wigos_station_id"]
+    data_out_l1 = params["data_out"] + "level1/" + date.strftime("%Y/%m/%d/")
+
+    # Level 1
+    if prod[0] == "1":
+        link_dir = (
+            "/home/hatpro/public_html/quicklooks/"
+            + params["data_out"][6:]
+            + "level1/"
+            + date.strftime("%Y/%m/%d/")
         )
-        _link_quicklook(link_dir, fig_name)
-        fig_name = generate_figure(
-            lev1_data,
-            ["quality_flag"],
-            save_path=data_out_l1,
-            image_name="quality_flag",
-        )
-        _link_quicklook(link_dir, fig_name)
-        fig_name = generate_figure(
-            lev1_data,
-            ["met_quality_flag"],
-            save_path=data_out_l1,
-            image_name="met_quality_flag",
-        )
-        _link_quicklook(link_dir, fig_name)
-        fig_name = generate_figure(
-            lev1_data,
-            ["t_amb", "t_rec", "t_sta"],
-            save_path=data_out_l1,
-            image_name="hkd",
-        )
-        _link_quicklook(link_dir, fig_name)
-        fig_name = generate_figure(
-            lev1_data,
-            [
-                "air_temperature",
-                "relative_humidity",
-                "rain_rate",
-            ],
-            save_path=data_out_l1,
-            image_name="met",
-        )
-        _link_quicklook(link_dir, fig_name)
-        fig_name = generate_figure(
-            lev1_data,
-            [
-                "air_pressure",
-                "wind_direction",
-                "wind_speed",
-            ],
-            save_path=data_out_l1,
-            image_name="met2",
-        )
-        _link_quicklook(link_dir, fig_name)
-        if params["ir_flag"]:
+        
+        lev1_data = data_out_l1 + "MWR_" + prod + "_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"        
+        if os.path.isfile(lev1_data):
+
             fig_name = generate_figure(
                 lev1_data,
-                ["irt"],
+                ["tb"],
                 ele_range=[89.0, 91.0],
                 save_path=data_out_l1,
-                image_name="irt",
+                image_name="tb",
             )
             _link_quicklook(link_dir, fig_name)
+            fig_name = generate_figure(
+                lev1_data, ["ele", "azi"], save_path=data_out_l1, image_name="sen"
+            )
+            _link_quicklook(link_dir, fig_name)
+            fig_name = generate_figure(
+                lev1_data,
+                ["quality_flag"],
+                save_path=data_out_l1,
+                image_name="quality_flag",
+            )
+            _link_quicklook(link_dir, fig_name)
+            fig_name = generate_figure(
+                lev1_data,
+                ["met_quality_flag"],
+                save_path=data_out_l1,
+                image_name="met_quality_flag",
+            )
+            _link_quicklook(link_dir, fig_name)
+            fig_name = generate_figure(
+                lev1_data,
+                ["t_amb", "t_rec", "t_sta"],
+                save_path=data_out_l1,
+                image_name="hkd",
+            )
+            _link_quicklook(link_dir, fig_name)
+            fig_name = generate_figure(
+                lev1_data,
+                [
+                    "air_temperature",
+                    "relative_humidity",
+                    "rain_rate",
+                ],
+                save_path=data_out_l1,
+                image_name="met",
+            )
+            _link_quicklook(link_dir, fig_name)
+            fig_name = generate_figure(
+                lev1_data,
+                [
+                    "air_pressure",
+                    "wind_direction",
+                    "wind_speed",
+                ],
+                save_path=data_out_l1,
+                image_name="met2",
+            )
+            _link_quicklook(link_dir, fig_name)
+            if params["ir_flag"]:
+                fig_name = generate_figure(
+                    lev1_data,
+                    ["irt"],
+                    ele_range=[89.0, 91.0],
+                    save_path=data_out_l1,
+                    image_name="irt",
+                )
+                _link_quicklook(link_dir, fig_name)
 
     # Level 2
     elif (
@@ -154,12 +188,8 @@ def process_product(prod: str, date, site: str):
             + "level2/"
             + date.strftime("%Y/%m/%d/")
         )
-        data_out_l1 = params["data_out"] + "level1/" + date.strftime("%Y/%m/%d/")
         data_out_l2 = params["data_out"] + "level2/" + date.strftime("%Y/%m/%d/")
-        if not os.path.isdir(data_out_l2):
-            os.makedirs(data_out_l2)
-        lev1_data = data_out_l1 + "MWR_1C01_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"
-        lev2_to_nc(date.strftime("%Y%m%d"), site, prod, lev1_data, data_out_l2)
+
         if prod in ("2I01", "2I02"):
             elevation = [89.0, 91.0]
         else:
@@ -216,5 +246,11 @@ def process_product(prod: str, date, site: str):
 
 def add_arguments(subparser):
     parser = subparser.add_parser("process", help="Process MWR Level 1 and 2 data.")
-
+    parser.add_argument(
+        "-f",
+        "--figure",
+        action="store_true",
+        help="Produce figures only; no processing",
+        default=False,
+    )
     return subparser

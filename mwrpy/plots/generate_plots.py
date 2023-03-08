@@ -455,9 +455,11 @@ def _plot_colormesh_data(ax, data_in: ma.MaskedArray, name: str, axes: tuple, nc
         hum_file = nc_file.replace("2P04", "2P03")
         
     if name in ("relative_humidity", "potential_temperature", "equivalent_potential_temperature"):
-        hum_time = read_nc_fields(hum_file, "time")
-        hum_flag = _get_ret_flag(hum_file, seconds2hours(hum_time))
-        hum_flag = np.interp(axes[0], seconds2hours(hum_time), hum_flag)
+        hum_time = seconds2hours(read_nc_fields(hum_file, "time"))
+        hum_flag = _get_ret_flag(hum_file, hum_time)
+        hum_tmp, width = _calculate_rolling_mean(hum_time, hum_flag, win=15 / 60)
+        # hum_flag = np.interp(hum_time, hum_time[int(width / 2 - 1) : int(-width / 2)], hum_tmp)
+        hum_flag = np.interp(axes[0], hum_time[int(width / 2 - 1) : int(-width / 2)], hum_tmp)
     else:
         hum_flag = np.zeros(len(axes[0]), np.int32)
         
@@ -496,12 +498,15 @@ def _plot_colormesh_data(ax, data_in: ma.MaskedArray, name: str, axes: tuple, nc
 
     data = np.copy(data_in)
     flag = _get_ret_flag(nc_file, axes[0])
-    data_in[flag + hum_flag > 0, :] = np.nan
 
     if np.ma.median(np.diff(axes[0][:])) < 5 / 60:
+        flag_tmp, width = _calculate_rolling_mean(axes[0], flag, win=15 / 60)
+        flag = np.interp(axes[0], axes[0][int(width / 2 - 1) : int(-width / 2)], flag_tmp)    
+        data_in[(flag > 0) | (hum_flag > 0), :] = np.nan        
         data, _ = _calculate_rolling_mean(axes[0], data_in, win=15 / 60)
         time, data = _mark_gaps(axes[0][:], data, 35, 10)
     else:
+        data_in[(flag > 0) | (hum_flag > 0), :] = np.nan 
         time, data = _mark_gaps(
             axes[0][:],
             data_in,
@@ -1366,11 +1371,18 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: st
         vmin = np.max([np.nanmin(data0) - 0.05, vmin])
     _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
 
-    data_f = np.zeros((len(time), 10), np.float32)
-    data_f[flag > 0, :] = 1.0
+    flag_tmp, width = _calculate_rolling_mean(time, flag, win=1 / 60)
+    data_f = np.zeros((len(flag_tmp), 10), np.float32)
+    data_f[flag_tmp > 0, :] = 1.0
     cmap = ListedColormap([_COLORS["lightgray"], _COLORS["gray"]])
-    norm = BoundaryNorm([0, 1, 2], cmap.N)
-    ax.pcolor(time, np.linspace(vmin, vmax, 10), data_f.T, cmap=cmap, norm=norm)
+    norm = BoundaryNorm([0, 1, 2], cmap.N)   
+    ax.pcolormesh(
+        time[int(width / 2 - 1) : int(-width / 2)], 
+        np.linspace(vmin, vmax, 10), 
+        data_f.T, 
+        cmap=cmap, 
+        norm=norm
+    )
 
     case_date = _read_date(nc_file)
     gtim = _gap_array(time, case_date, 15.0 / 60.0)
@@ -1392,12 +1404,11 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: st
 
     ax.plot(time, data_in, ".", color="royalblue", markersize=1)
     ax.axhline(linewidth=0.8, color="k")
-    data, time_f = data0, time0
-    rolling_mean, width = _calculate_rolling_mean(time, data)
-    time_f = _nan_time_gaps(time_f)
+    rolling_mean, width = _calculate_rolling_mean(time0, data0)
+    time0 = _nan_time_gaps(time0)
     ax.plot(
-        time_f[int(width / 2 - 1) : int(-width / 2)], rolling_mean, color="sienna", linewidth=2.0
+        time0[int(width / 2 - 1) : int(-width / 2)], rolling_mean, color="sienna", linewidth=2.0
     )
     ax.plot(
-        time_f[int(width / 2 - 1) : int(-width / 2)], rolling_mean, color="wheat", linewidth=0.6
+        time0[int(width / 2 - 1) : int(-width / 2)], rolling_mean, color="wheat", linewidth=0.6
     )
