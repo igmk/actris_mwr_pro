@@ -26,17 +26,17 @@ def _get_ret_flag(nc_file: str, time: ndarray) -> ndarray:
     f_lev1 = read_nc_fields(lev1_file, "frequency")
     freq = get_ret_freq(nc_file)
     _, freq_ind, _ = np.intersect1d(f_lev1.data, freq, assume_unique=False, return_indices=True)
-    _, t_ind, _ = np.intersect1d(
+    _, q_ind, t_ind = np.intersect1d(
         seconds2hours(t_lev1.data), time.data, assume_unique=False, return_indices=True
     )
-    quality_flag = quality_flag[t_ind, :]
+    quality_flag = quality_flag[q_ind, :]
     site = _read_location(nc_file)
     _, params = read_yaml_config(site)
 
     if params["flag_status"][3] == 0:
-        flag[np.sum(isbit(quality_flag[:, freq_ind], 3), axis=1) > 0] = 1
+        flag[t_ind[np.sum(isbit(quality_flag[:, freq_ind], 3), axis=1) > 0]] = 1
     else:
-        flag[np.sum(quality_flag[:, freq_ind], axis=1) > 0] = 1
+        flag[t_ind[np.sum(quality_flag[:, freq_ind], axis=1) > 0]] = 1
     return flag
 
 
