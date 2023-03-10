@@ -3,19 +3,19 @@
 type: hatpro
 
 params:
-    station_altitude: 108.
-    station_longitude: 6.407
-    station_latitude: 50.906
+    station_altitude: 70.
+    station_longitude: 6.935
+    station_latitude: 50.928
     
     # path to level1 data and path for processed files
-    data_in: /data/obs/site/jue/tophat/l1/
-    data_out: /data/obs/site/jue/tophat/actris/
+    data_in: /home/hatpro/mwr_pro_clu/data/
+    data_out: /home/hatpro/mwr_pro_clu/data/
     
     # path to ABSCAL.HIS file
-    path_to_cal: /data/obs/site/jue/tophat/calibration/LOG_TRANSFER/CALIB/
+    path_to_cal: 
 
     # integration time for BL scans in seconds 
-    scan_time: 50.
+    scan_time: 100.
 
     # integration time of measurements in seconds
     int_time: 1
@@ -25,7 +25,7 @@ params:
     azi_cor: -999.
     # Azimuth correction:
     # Set az_cor to the angle that RPG software gives when instrument is pointing to the North.
-    const_azi: -999.   
+    const_azi: -999.
 
     # quality flag status for level 1 data; 0: flag active
     # Bit 1: missing_tb
@@ -36,15 +36,15 @@ params:
     # Bit 6: rain_detected
     # Bit 7: sun_moon_in_beam
     # Bit 8: tb_offset_above_threshold
-    flag_status: [0, 0, 0, 0, 0, 0, 0, 1]
+    flag_status: [0, 0, 0, 1, 0, 0, 0, 1]
     
     # availability of IR
-    ir_flag: True
+    ir_flag: False
 
 
 global_specs:
     # A succinct description of what is in the dataset, composed of instrument type and site name
-    title: HATPRO G5 MWR at Juelich, Germany
+    title: HATPRO G5 MWR at Cologne, Germany
     
     # Versioning of the datasets (containing date and software version)
     history:
@@ -59,13 +59,13 @@ global_specs:
     references:
     
     # Name of measurement station
-    site_location: juelich
+    site_location: cologne
     
     # E-PROFILE instrument identifier. “A” if there is only one instrument on the station. Additional instruments are identified with the letters B, C, etc.
-    instrument_id:
+    instrument_id: A
     
     # WIGOS Station identifier acording to WIGOS convention
-    wigos_station_id: 0-276-0-10508
+    wigos_station_id: XXX
     
     # Department responsible for the instrument
     principal_investigator: Institute for Geophysics and Meteorology (IGMK)
@@ -77,7 +77,7 @@ global_specs:
     instrument_hw_id:
     
     # Name of network(s) that instrument may be part of
-    network_name: ACTRIS
+    network_name:
     
     # Name of campaign instrument may collect data for
     campaign_name:
@@ -86,7 +86,7 @@ global_specs:
     dependencies:
     
     # Data license
-    license:
+    license:  
     
     # Logbook repair/replacement work performed
     instrument_history:

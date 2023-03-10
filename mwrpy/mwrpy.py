@@ -19,7 +19,7 @@ modules = {
 
 
 def main(args):
-    os.chdir("/home/hatpro/mwr_pro_actris/")
+    os.chdir("/home/hatpro/mwr_pro_clu/")
     args = _parse_args(args)
     cmd = args.cmd
     modules[cmd].main(args)
@@ -41,7 +41,7 @@ def _parse_args(args):
     group.add_argument(
         "-p",
         "--products",
-        help="Products to be processed, e.g., 1C01, 2I02, 2P03, stats.\
+        help="Products to be processed, e.g., 1C01, 2I02, 2P03.\
                         Default is all regular products.",
         type=lambda s: s.split(","),
         default=[
@@ -54,8 +54,6 @@ def _parse_args(args):
             "2P04",
             "2P07",
             "2P08",
-            "2S02",
-            "stats",
         ],
     )
     group.add_argument(

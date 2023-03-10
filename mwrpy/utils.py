@@ -197,7 +197,7 @@ def add_time_bounds(time_arr: np.ndarray, int_time: int) -> np.ndarray:
 
 
 def get_coeff_list(site: str, prefix: str):
-    "Returns list of .nc coefficient file(s)"
+    "Returns list of coefficient file(s)"
 
     s_list = [
         glob.glob("site_config/" + site + "/coefficients/" + prefix.lower() + "*"),

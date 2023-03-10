@@ -52,7 +52,6 @@ def lev2_to_nc(date_in: str, site: str, data_type: str, lev1_path: str, lev2_pat
         "2P08",
         "2I01",
         "2I02",
-        "2S02",
     ):
         raise RuntimeError(["Data type " + data_type + " not supported for file writing."])
 
@@ -124,7 +123,7 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
 
         coeff = get_mvr_coeff(site, product, lev1["frequency"][:])
         if coeff[0]["ret_type"] < 2:
-            coeff, offset, lin, quad, ran_err, sys_err = get_mvr_coeff(
+            coeff, offset, lin, quad = get_mvr_coeff(
                 site, product, lev1["frequency"][:]
             )
         else:
@@ -173,8 +172,6 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
                 + np.sum(coeff_lin * ret_in[index, :], axis=1)
                 + np.sum(coeff_quad * ret_in[index, :] ** 2, axis=1)
             )
-            rpg_dat[str(product + "_random_error")] = ran_err(lev1["ele"][index])
-            rpg_dat[str(product + "_systematic_error")] = sys_err(lev1["ele"][index])
 
         else:
             tmp_product = np.ones(len(index), np.float32) * Fill_Value_Float
@@ -209,13 +206,13 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
 
     elif data_type in ("2P01", "2P03"):
         if data_type == "2P01":
-            product, ret = "temperature", "tze"
+            product, ret = "temperature", "tpt"
         else:
-            product, ret = "water_vapor_vmr", "hze"
+            product, ret = "water_vapor_vmr", "hpt"
 
         coeff = get_mvr_coeff(site, ret, lev1["frequency"][:])
         if coeff[0]["ret_type"] < 2:
-            coeff, offset, lin, quad, ran_err, sys_err = get_mvr_coeff(
+            coeff, offset, lin, quad = get_mvr_coeff(
                 site, ret, lev1["frequency"][:]
             )
         else:
@@ -273,8 +270,6 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
                     + np.sum(coeff_lin[:, ialt, :] * ret_in[index, :], axis=1)
                     + np.sum(coeff_quad[:, ialt, :] * ret_in[index, :] ** 2, axis=1)
                 )
-            rpg_dat[str(product + "_random_error")] = ran_err(lev1["ele"][index])
-            rpg_dat[str(product + "_systematic_error")] = sys_err(lev1["ele"][index])
 
         else:
             c_w1, c_w2, fac = (
@@ -296,22 +291,17 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
                 )
                 if product == "water_vapor_vmr":
                     rpg_dat[product][ix, :] = rpg_dat[product][ix, :] / 1000.0
-            rpg_dat[str(product + "_random_error")] = (
-                np.ones(rpg_dat[product].shape, np.float32) * Fill_Value_Float
-            )
-            rpg_dat[str(product + "_systematic_error")] = (
-                np.ones(rpg_dat[product].shape, np.float32) * Fill_Value_Float
-            )
 
     elif data_type == "2P02":
 
-        coeff = get_mvr_coeff(site, "tel", lev1["frequency"][:])
+        coeff = get_mvr_coeff(site, "tpb", lev1["frequency"][:])
         if coeff[0]["ret_type"] < 2:
-            coeff, offset, lin, quad, ran_err, sys_err = get_mvr_coeff(
-                site, "tel", lev1["frequency"][:]
+            coeff, offset, lin, quad = get_mvr_coeff(
+                site, "tpb", lev1["frequency"][:]
             )
         else:
-            coeff, _, _, _, _, _, _, _ = get_mvr_coeff(site, "tel", lev1["frequency"][:])
+            coeff, _, _, _, _, _, _, _ = get_mvr_coeff(site, "tpb", lev1["frequency"][:])
+            coeff["ele"] = np.sort(coeff["ele"])
         ret_in = retrieval_input(lev1, coeff)
 
         _, freq_ind, _ = np.intersect1d(
@@ -367,12 +357,6 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
                     lin[:, ialt] * tb_alg[:, :].T, axis=1
                 )
 
-            rpg_dat["temperature_random_error"] = (
-                np.repeat(ran_err, len(index)).reshape((len(ran_err), len(index))).T
-            )
-            rpg_dat["temperature_systematic_error"] = (
-                np.repeat(sys_err, len(index)).reshape((len(sys_err), len(index))).T
-            )
         else:
             for ix in range(ibl.shape[0]):
                 ret_array = np.reshape(
@@ -391,12 +375,6 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
                     * coeff["output_scale"][0, :]
                     + coeff["output_offset"][0, :]
                 )
-            rpg_dat["temperature_random_error"] = (
-                np.ones(rpg_dat["temperature"].shape, np.float32) * Fill_Value_Float
-            )
-            rpg_dat["temperature_systematic_error"] = (
-                np.ones(rpg_dat["temperature"].shape, np.float32) * Fill_Value_Float
-            )
 
     elif data_type in ("2P04", "2P07", "2P08"):
 
@@ -422,33 +400,11 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
             hum_dat.variables["water_vapor_vmr"][:, :],
             tem_dat.variables["time"][:],
         )
-        hum_re = interpol_2d(
-            hum_dat.variables["time"][:],
-            hum_dat.variables["water_vapor_vmr_random_error"][:, :],
-            tem_dat.variables["time"][:],
-        )
-        hum_se = interpol_2d(
-            hum_dat.variables["time"][:],
-            hum_dat.variables["water_vapor_vmr_systematic_error"][:, :],
-            tem_dat.variables["time"][:],
-        )
 
         rpg_dat["altitude"] = tem_dat.variables["altitude"][:]
         pres = np.interp(tem_dat.variables["time"][:], lev1["time"][:], lev1["air_pressure"][:])
         if data_type == "2P04":
             rpg_dat["relative_humidity"] = rel_hum(tem_dat.variables["temperature"][:, :], hum_int)
-            rpg_dat["relative_humidity_random_error"] = rh_err(
-                tem_dat.variables["temperature"][:, :],
-                hum_int,
-                tem_dat.variables["temperature_random_error"],
-                hum_re,
-            )
-            rpg_dat["relative_humidity_systematic_error"] = rh_err(
-                tem_dat.variables["temperature"][:, :],
-                hum_int,
-                tem_dat.variables["temperature_systematic_error"],
-                hum_se,
-            )
         if data_type == "2P07":
             rpg_dat["potential_temperature"] = pot_tem(
                 tem_dat.variables["temperature"][:, :], hum_int, pres, rpg_dat["altitude"]
@@ -465,23 +421,6 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
             data_type,
             params,
         )
-
-    elif data_type == "2S02":
-
-        c_list = get_coeff_list(site, "tbx")
-        coeff, _, _, _, _, _ = get_mvr_coeff(site, "tbx", lev1["frequency"][:])
-        index = np.where(
-            (lev1["ele"][:] > coeff["ele"] - 0.5)
-            & (lev1["ele"][:] < coeff["ele"] + 0.5)
-            & (lev1["pointing_flag"][:] == 0)
-        )[0]
-        _, tb_ret = spectral_consistency(lev1, c_list)
-        rpg_dat["tb_spectrum"] = tb_ret[index, :]
-        rpg_dat["tb"] = lev1["tb"][index, :]
-        fields = ["frequency", "receiver_nb", "receiver"]
-        for name in fields:
-            rpg_dat[name] = lev1[name][:]
-        rpg_dat["data_quality"] = np.array(np.zeros(len(index)), dtype=np.int32)
 
     return rpg_dat, coeff, index
 
@@ -555,7 +494,7 @@ def load_product(site: str, date_in: str, product: str):
 def _test_BL_scan(site: str, lev1: dict) -> bool:
     "Check for existing BL scans in lev1 data"
     BL_scan = True
-    coeff = get_mvr_coeff(site, "tel", lev1["frequency"][:])
+    coeff = get_mvr_coeff(site, "tpb", lev1["frequency"][:])
     BL_ind = np.where(
         (lev1["ele"][:] > coeff[0]["ele"][0] - 0.5)
         & (lev1["ele"][:] < coeff[0]["ele"][0] + 0.5)
@@ -609,20 +548,6 @@ def retrieval_input(lev1: dict, coeff: list) -> np.ndarray:
 
     if coeff["ret_type"] < 2:
         ret_in = lev1["tb"][:, :]
-        # for field in fields:
-        #     if field in lev1.variables:
-        #         if lev1[field].ndim == 1:
-        #             ret_in = np.concatenate(
-        #                 (
-        #                     ret_in,
-        #                     np.reshape(lev1[field][:].data, (len(lev1["time"][:]), 1)),
-        #                 ),
-        #                 axis=1,
-        #             )
-        #         else:
-        #             ret_in = np.concatenate((ret_in, lev1[field][:, :]), axis=1)
-        #     else:
-        #         ret_in = np.concatenate((ret_in, eval(field)), axis=1)
     else:
         ret_in = np.concatenate((bias, lev1["tb"][:, :]), axis=1)
         for i, field in enumerate(coeff["aux"]):

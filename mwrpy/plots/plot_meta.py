@@ -117,7 +117,6 @@ ATTRIBUTES = {
         nlev=11,
     ),
     "temperature": PlotMeta(
-        # name='Retrieved temperature profile',
         cbar="RdBu_r",
         clabel=_K,
         plot_range=(245.0, 305.0),
@@ -191,12 +190,6 @@ ATTRIBUTES = {
     ),
     "tb": PlotMeta(
         name="Microwave brightness temperatures",
-        ylabel=_K,
-        plot_type="bar",
-        source="tb",
-    ),
-    "tb_spectrum": PlotMeta(
-        name="Microwave brightness temperature spectrum",
         ylabel=_K,
         plot_type="bar",
         source="tb",

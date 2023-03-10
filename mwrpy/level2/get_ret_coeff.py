@@ -46,8 +46,8 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                         coeff["ret_type"] = int(l_split[1].split("#")[0])
                     if l_split[0] == "AG":
                         coeff["ele"] = np.ones(N) * Fill_Value_Float
-                        coeff["ele"][i_file:N] = np.sort(
-                            np.array([float(x) for x in l_split[1].split()], np.float32)
+                        coeff["ele"][i_file:N] = np.array(
+                            [float(x) for x in l_split[1].split()], np.float32
                         )
                     if l_split[0] == "FR":
                         freq_ret = np.array(
@@ -72,6 +72,42 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                             [float(x) for x in l_split[1].split()], np.float32
                         )
                         coeff["n_height_grid"] = len(coeff["height_grid"])
+                        
+                    # Regression
+                    if coeff["ret_type"] < 2:
+                        coeff["aux"] = ["TS", "HS", "PS", "IS"]
+                        if "aux_flg" not in coeff:
+                            coeff["aux_flg"] = np.zeros(len(coeff["aux"]), np.int32)
+                        for ii, aux_i in enumerate(coeff["aux"]):
+                            if l_split[0] == aux_i:
+                                coeff["aux_flg"][ii] = int(l_split[1])
+                        if l_split[0] == "OS":
+                            for jj in range(N):
+                                if ":" in lines[il + jj]:
+                                    cll = lines[il + jj].split(":")
+                                else:
+                                    cll = lines[il + jj].split("=")
+                                    coeff["offset"][i + jj] = float(cll[1].split("#")[0])
+                        if l_split[0] == "TL":
+                            for jj in range(N):
+                                if ":" in lines[il + jj]:
+                                    cll = lines[il + jj].split(":")
+                                else:
+                                    cll = lines[il + jj].split("=")
+                                coeff["coeff_lin"][i + jj, freq_ind] = np.array(
+                                [float(idx) for idx in cll[1].split()[0 : len(freq_coeff)]],
+                                np.float32,
+                                )
+                        if (l_split[0] == "TQ") & (coeff["ret_type"] == 1):
+                            for jj in range(N):
+                                if ":" in lines[il + jj]:
+                                    cll = lines[il + jj].split(":")
+                                else:
+                                    cll = lines[il + jj].split("=")
+                                coeff["coeff_quad"][i + jj, freq_ind] = np.array(
+                                [float(idx) for idx in cll[1].split()[0 : len(freq_coeff)]],
+                                np.float32,
+                                )
 
                     # Neural Network
                     if coeff["ret_type"] == 2:
@@ -110,7 +146,7 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                         if l_split[0] == "NS":
                             cll = l_split[1].split()
                             if "output_offset" not in coeff:
-                                if prefix == "tel":
+                                if prefix == "tpb":
                                     nn = (
                                         len(freq_coeff) * len(coeff["ele"])
                                         + np.sum(coeff["aux_flag"])
@@ -263,71 +299,8 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
 
                 f.close()
 
-        def input_scale(x):
-            return np.array(
-                [coeff["input_scale"][(np.abs(coeff["ele"] - v)).argmin(), :] for v in x]
-            )
-
-        def input_offset(x):
-            return np.array(
-                [coeff["input_offset"][(np.abs(coeff["ele"] - v)).argmin(), :] for v in x]
-            )
-
-        def output_scale(x):
-            return np.array(
-                [coeff["output_scale"][(np.abs(coeff["ele"] - v)).argmin(), :] for v in x]
-            )
-
-        def output_offset(x):
-            return np.array(
-                [coeff["output_offset"][(np.abs(coeff["ele"] - v)).argmin(), :] for v in x]
-            )
-
-        def Weights1(x):
-            return np.array(
-                [coeff["weights1"][(np.abs(coeff["ele"] - v)).argmin(), :, :] for v in x]
-            )
-
-        def Weights2(x):
-            return np.array(
-                [coeff["weights2"][(np.abs(coeff["ele"] - v)).argmin(), :, :] for v in x]
-            )
-
-        def factor(x):
-            return np.array([coeff["factor"][(np.abs(coeff["ele"] - v)).argmin()] for v in x])
-
-    else:
-        N = len(c_list)
-
-        if prefix in ("lwp", "iwv"):
-
-            coeff["ele"] = np.ones(N) * Fill_Value_Float
-            coeff["freq"] = np.ones([len(freq), N]) * Fill_Value_Float
-            coeff["coeff_lin"] = np.zeros([N, len(freq)])
-            coeff["coeff_quad"] = np.zeros([N, len(freq)])
-            coeff["offset"] = np.zeros(N)
-            coeff["err_ran"] = np.ones(N) * Fill_Value_Float
-            coeff["err_sys"] = np.ones(N) * Fill_Value_Float
-
-            for i_file, file in enumerate(c_list):
-                c_file = nc.Dataset(file)
-                coeff["ele"][i_file] = c_file["elevation_predictor"][i_file]
-                _, freq_ind, freq_coeff = np.intersect1d(
-                    freq[:], c_file["freq"][:], assume_unique=False, return_indices=True
-                )
-                if len(freq_coeff) < len(c_file["freq"][:]):
-                    raise RuntimeError(["Instrument and retrieval frequencies do not match."])
-
-                coeff["freq"][freq_ind, i_file] = c_file["freq"][freq_coeff]
-                coeff["coeff_lin"][i_file, freq_ind] = c_file["coefficient_mvr"][freq_coeff]
-                if c_file.regression_type == "quadratic":
-                    coeff["coeff_quad"][i_file, freq_ind] = c_file["coefficient_mvr"][
-                        freq_coeff + len(freq_coeff)
-                    ]
-                coeff["offset"][i_file] = c_file["offset_mvr"][0]
-                coeff["err_ran"][i_file] = c_file["predictand_err"][0]
-                coeff["err_sys"][i_file] = c_file["predictand_err_sys"][0]
-
+        if coeff["ret_type"] < 2:
+            
             def f_offset(x):
                 return np.array([coeff["offset"][(np.abs(coeff["ele"] - v)).argmin()] for v in x])
 
@@ -340,130 +313,57 @@ def get_mvr_coeff(site: str, prefix: str, freq: np.ndarray):
                 return np.array(
                     [coeff["coeff_quad"][(np.abs(coeff["ele"] - v)).argmin(), :] for v in x]
                 )
-
-            def e_ran(x):
-                return np.array([coeff["err_ran"][(np.abs(coeff["ele"] - v)).argmin()] for v in x])
-
-            def e_sys(x):
-                return np.array([coeff["err_sys"][(np.abs(coeff["ele"] - v)).argmin()] for v in x])
-
-        elif prefix in ("tze", "hze"):
-
-            c_file = nc.Dataset(c_list[0])
-            n_height_grid = c_file.dimensions["n_height_grid"].size
-
-            coeff["ele"] = np.ones(N) * Fill_Value_Float
-            coeff["freq"] = np.ones([len(freq), N]) * Fill_Value_Float
-            coeff["coeff_lin"] = np.zeros([N, n_height_grid, len(freq)])
-            coeff["coeff_quad"] = np.zeros([N, n_height_grid, len(freq)])
-            coeff["offset"] = np.zeros([n_height_grid, N])
-            coeff["err_ran"] = ma.masked_all((n_height_grid, N))
-            coeff["err_sys"] = ma.masked_all((n_height_grid, N))
-            coeff["n_height_grid"] = n_height_grid
-            coeff["height_grid"] = c_file["height_grid"]
-
-            for i_file, file in enumerate(c_list):
-                c_file = nc.Dataset(file)
-                coeff["ele"][i_file] = c_file["elevation_predictor"][i_file]
-                _, freq_ind, freq_coeff = np.intersect1d(
-                    freq[:], c_file["freq"][:], assume_unique=False, return_indices=True
-                )
-                if len(freq_coeff) < len(c_file["freq"][:]):
-                    raise RuntimeError(["Instrument and retrieval frequencies do not match."])
-
-                coeff["freq"][freq_ind, i_file] = c_file["freq"][freq_coeff]
-                coeff["coeff_lin"][i_file, :, freq_ind] = c_file["coefficient_mvr"][freq_coeff, :]
-                if c_file.regression_type == "quadratic":
-                    coeff["coeff_quad"][i_file, :, freq_ind] = c_file["coefficient_mvr"][
-                        freq_coeff + len(freq_coeff), :
-                    ]
-                coeff["offset"][:, i_file] = c_file["offset_mvr"][:]
-                coeff["err_ran"][:, i_file] = c_file["predictand_err"][:]
-                coeff["err_sys"][:, i_file] = c_file["predictand_err_sys"][:]
-
-            def f_offset(x):
-                return np.array(
-                    [coeff["offset"][:, (np.abs(coeff["ele"] - v)).argmin()] for v in x]
-                )
-
-            def f_lin(x):
-                return np.array(
-                    [coeff["coeff_lin"][(np.abs(coeff["ele"] - v)).argmin(), :, :] for v in x]
-                )
-
-            def f_quad(x):
-                return np.array(
-                    [coeff["coeff_quad"][(np.abs(coeff["ele"] - v)).argmin(), :, :] for v in x]
-                )
-
-            def e_ran(x):
-                return np.array(
-                    [coeff["err_ran"][:, (np.abs(coeff["ele"] - v)).argmin()] for v in x]
-                )
-
-            def e_sys(x):
-                return np.array(
-                    [coeff["err_sys"][:, (np.abs(coeff["ele"] - v)).argmin()] for v in x]
-                )
-
-        elif prefix == "tel":
-
-            c_file = nc.Dataset(c_list[0])
-            _, freq_ind, freq_coeff = np.intersect1d(
-                freq[:], c_file["freq"][:], assume_unique=False, return_indices=True
-            )
-            if len(freq_coeff) < len(c_file["freq"][:]):
-                raise RuntimeError(["Instrument and retrieval frequencies do not match."])
-
-            coeff["ele"] = np.sort(c_file["elevation_predictor"][:])
-            coeff["height_grid"] = c_file["height_grid"]
-            coeff["freq"] = c_file["freq"]
-            coeff["freq_bl"] = c_file["freq_bl"]
-            coeff["n_height_grid"] = c_file.dimensions["n_height_grid"].size
-            f_offset = c_file["offset_mvr"][:]
-            f_lin, f_quad = c_file["coefficient_mvr"][:, :], []
-            e_ran = c_file["predictand_err"][:]
-            e_sys = c_file["predictand_err_sys"][:]
-
-        elif prefix == "tbx":
-            coeff["ele"] = np.ones((N, 1)) * Fill_Value_Float
-            c_file = nc.Dataset(c_list[0])
-
-            coeff["ele"] = c_file["elevation_predictor"][:]
-            coeff["freq"] = freq[:]
-            e_ran = c_file["predictand_err"][:]
-            e_sys = c_file["predictand_err_sys"][:]
-            f_offset, f_lin, f_quad, = (
-                [],
-                [],
-                [],
-            )
-
+            
         else:
-            raise RuntimeError(
-                ["Prefix " + prefix + " not recognized for retrieval coefficient file(s)."]
-            )
+        
+            def input_scale(x):
+                return np.array(
+                    [coeff["input_scale"][(np.abs(coeff["ele"] - v)).argmin(), :] for v in x]
+                )
+
+            def input_offset(x):
+                return np.array(
+                    [coeff["input_offset"][(np.abs(coeff["ele"] - v)).argmin(), :] for v in x]
+                )
+
+            def output_scale(x):
+                return np.array(
+                    [coeff["output_scale"][(np.abs(coeff["ele"] - v)).argmin(), :] for v in x]
+                )
+
+            def output_offset(x):
+                return np.array(
+                    [coeff["output_offset"][(np.abs(coeff["ele"] - v)).argmin(), :] for v in x]
+                )
+
+            def Weights1(x):
+                return np.array(
+                    [coeff["weights1"][(np.abs(coeff["ele"] - v)).argmin(), :, :] for v in x]
+                )
+
+            def Weights2(x):
+                return np.array(
+                    [coeff["weights2"][(np.abs(coeff["ele"] - v)).argmin(), :, :] for v in x]
+                )
+
+            def factor(x):
+                return np.array([coeff["factor"][(np.abs(coeff["ele"] - v)).argmin()] for v in x])
+
 
     if str(c_list[0][-3:]).lower() == "ret":
         retrieval_type = ["linear regression", "quadratic regression", "neural network"]
         coeff["retrieval_type"] = retrieval_type[coeff["ret_type"]]
         coeff["retrieval_elevation_angles"] = str(coeff["ele"])
         coeff["retrieval_frequencies"] = str(coeff["freq"][:])
-        if np.sum(coeff["aux_flag"]) == 0:
-            coeff["retrieval_auxiliary_input"] = "no_surface"
-        else:
-            coeff["retrieval_auxiliary_input"] = "surface"
-        coeff["retrieval_description"] = "Neural network"
-
+    if np.sum(coeff["aux_flag"]) == 0:
+        coeff["retrieval_auxiliary_input"] = "no_surface"
     else:
-        coeff["retrieval_type"] = c_file.regression_type
-        coeff["retrieval_elevation_angles"] = str(coeff["ele"])
-        coeff["retrieval_frequencies"] = str(c_file["freq"][:])
-        coeff["retrieval_auxiliary_input"] = c_file.surface_mode
-        coeff["retrieval_description"] = c_file.retrieval_version
+        coeff["retrieval_auxiliary_input"] = "surface"
+    coeff["retrieval_description"] = "Neural network"
+
 
     return (
-        (coeff, f_offset, f_lin, f_quad, e_ran, e_sys)
+        (coeff, f_offset, f_lin, f_quad)
         if (coeff["ret_type"] < 2)
         else (
             coeff,

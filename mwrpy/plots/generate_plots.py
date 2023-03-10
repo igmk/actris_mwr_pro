@@ -458,7 +458,6 @@ def _plot_colormesh_data(ax, data_in: ma.MaskedArray, name: str, axes: tuple, nc
         hum_time = seconds2hours(read_nc_fields(hum_file, "time"))
         hum_flag = _get_ret_flag(hum_file, hum_time)
         hum_tmp, width = _calculate_rolling_mean(hum_time, hum_flag, win=15 / 60)
-        # hum_flag = np.interp(hum_time, hum_time[int(width / 2 - 1) : int(-width / 2)], hum_tmp)
         hum_flag = np.interp(axes[0], hum_time[int(width / 2 - 1) : int(-width / 2)], hum_tmp)
     else:
         hum_flag = np.zeros(len(axes[0]), np.int32)
@@ -554,7 +553,6 @@ def _plot_colormesh_data(ax, data_in: ma.MaskedArray, name: str, axes: tuple, nc
     if variables.plot_type != "bit":
         colorbar = _init_colorbar(pl, ax)
         locator = colorbar.ax.yaxis.get_major_locator()
-        # locator, formatter = colorbar._get_ticker_locator_formatter()
         locator.set_params(nbins=nbin)
         colorbar.update_ticks()
         colorbar.set_label(variables.clabel, fontsize=13)
@@ -908,26 +906,11 @@ def _plot_tb(
     site = _read_location(nc_file)
     _, params = read_yaml_config(site)
     frequency = read_nc_fields(nc_file, "frequency")
-    if name == "tb":
-        quality_flag = read_nc_fields(nc_file, "quality_flag")
-        data_in = _pointing_filter(nc_file, data_in, ele_range, pointing)
-        time = _pointing_filter(nc_file, time, ele_range, pointing)
-        quality_flag = _elevation_filter(nc_file, quality_flag, ele_range)
-        quality_flag = _pointing_filter(nc_file, quality_flag, ele_range, pointing)
-    else:
-        sc = {}
-        sc["tb"] = read_nc_fields(nc_file, "tb")
-        sc["receiver_nb"] = read_nc_fields(nc_file, "receiver_nb")
-        sc["receiver"] = read_nc_fields(nc_file, "receiver")
-        sc["time"] = read_nc_fields(nc_file, "time")
-        ang = get_ret_ang(nc_file)
-        lev1_file = _get_lev1(nc_file)
-        quality_flag = read_nc_fields(lev1_file, "quality_flag")
-        quality_flag = _elevation_filter(lev1_file, quality_flag, [ang[-1] - 0.5, ang[-1] + 0.5])
-        quality_flag = _pointing_filter(lev1_file, quality_flag, [ang[-1] - 0.5, ang[-1] + 0.5], 0)
-        qf = np.copy(quality_flag)
-        quality_flag[~isbit(quality_flag, 3)] = 0
-        data_in = sc["tb"] - data_in
+    quality_flag = read_nc_fields(nc_file, "quality_flag")
+    data_in = _pointing_filter(nc_file, data_in, ele_range, pointing)
+    time = _pointing_filter(nc_file, time, ele_range, pointing)
+    quality_flag = _elevation_filter(nc_file, quality_flag, ele_range)
+    quality_flag = _pointing_filter(nc_file, quality_flag, ele_range, pointing)
 
     fig.clear()
     fig, axs = plt.subplots(
@@ -938,36 +921,19 @@ def _plot_tb(
         ylabel = "Brightness Temperature (single pointing) [K]"
     else:
         ylabel = "Brightness Temperature (multiple pointing) [K]"
-    if name == "tb":
-        fig.text(
-            0.06,
-            0.5,
-            ylabel,
-            va="center",
-            rotation="vertical",
-            fontsize=20,
-        )
-        if len(frequency) % 6 == 2:
-            fig.text(0.445, 0.09, "flagged data", va="center", fontsize=20, color="r")
-        else:
-            fig.text(0.795, 0.09, "flagged data", va="center", fontsize=20, color="r")
+
+    fig.text(
+        0.06,
+        0.5,
+        ylabel,
+        va="center",
+        rotation="vertical",
+        fontsize=20,
+    )
+    if len(frequency) % 6 == 2:
+        fig.text(0.445, 0.09, "flagged data", va="center", fontsize=20, color="r")
     else:
-        fig.text(
-            0.06,
-            0.5,
-            "Brightness Temperature (Observed - Retrieved) [K]",
-            va="center",
-            rotation="vertical",
-            fontsize=20,
-        )
-        fig.text(
-            0.37,
-            0.085,
-            "spectral consistency failed",
-            va="center",
-            fontsize=20,
-            color="r",
-        )
+        fig.text(0.795, 0.09, "flagged data", va="center", fontsize=20, color="r")
 
     if axs.ndim > 1:
         axs[0, 0].set_title(
@@ -1050,141 +1016,96 @@ def _plot_tb(
     for pos in ["right", "top", "bottom", "left"]:
         axa.spines[pos].set_visible(False)
 
-    if name == "tb":
-        axa.set_facecolor(_COLORS["lightgray"])
-        axaK = fig.add_subplot(121)
-        axaK.set_position([0.125, -0.05, 0.36, 0.125])
-        axaK.plot(frequency, tb_m, "ko", markerfacecolor="k", markersize=4)
-        axaK.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle="", capsize=8, color="k")
-        axaK.set_xticks(frequency)
-        axaK.set_xticklabels(axaK.get_xticks(), rotation=30)
-        axaK.set_xlim(
-            [
-                np.floor(np.min(frequency[np.array(params["receiver"]) == 1]) - 0.1),
-                np.ceil(np.max(frequency[np.array(params["receiver"]) == 1]) + 0.1),
-            ]
-        )
-        minv = np.nanmin(
-            tb_m[np.array(params["receiver"]) == 1] - tb_s[np.array(params["receiver"]) == 1]
-        )
-        maxv = np.nanmax(
-            tb_m[np.array(params["receiver"]) == 1] + tb_s[np.array(params["receiver"]) == 1]
-        )
-        axaK.set_ylim([np.nanmax([0, minv - 0.05 * minv]), maxv + 0.05 * maxv])
-        axaK.tick_params(axis="both", labelsize=12)
-        axaK.set_facecolor(_COLORS["lightgray"])
-        axaK.plot(
-            frequency[np.array(params["receiver"]) == 1],
-            tb_m[np.array(params["receiver"]) == 1],
-            "k-",
-            linewidth=2,
-        )
+    axa.set_facecolor(_COLORS["lightgray"])
+    axaK = fig.add_subplot(121)
+    axaK.set_position([0.125, -0.05, 0.36, 0.125])
+    axaK.plot(frequency, tb_m, "ko", markerfacecolor="k", markersize=4)
+    axaK.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle="", capsize=8, color="k")
+    axaK.set_xticks(frequency)
+    axaK.set_xticklabels(axaK.get_xticks(), rotation=30)
+    axaK.set_xlim(
+        [
+            np.floor(np.min(frequency[np.array(params["receiver"]) == 1]) - 0.1),
+            np.ceil(np.max(frequency[np.array(params["receiver"]) == 1]) + 0.1),
+        ]
+    )
+    minv = np.nanmin(
+        tb_m[np.array(params["receiver"]) == 1] - tb_s[np.array(params["receiver"]) == 1]
+    )
+    maxv = np.nanmax(
+        tb_m[np.array(params["receiver"]) == 1] + tb_s[np.array(params["receiver"]) == 1]
+    )
+    axaK.set_ylim([np.nanmax([0, minv - 0.05 * minv]), maxv + 0.05 * maxv])
+    axaK.tick_params(axis="both", labelsize=12)
+    axaK.set_facecolor(_COLORS["lightgray"])
+    axaK.plot(
+        frequency[np.array(params["receiver"]) == 1],
+        tb_m[np.array(params["receiver"]) == 1],
+        "k-",
+        linewidth=2,
+    )
 
-        axaV = fig.add_subplot(122)
-        axaV.set_position([0.54, -0.05, 0.36, 0.125])
-        axaV.plot(frequency, tb_m, "ko", markerfacecolor="k", markersize=4)
-        axaV.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle="", capsize=8, color="k")
-        axaV.set_xticks(frequency)
-        axaV.set_xticklabels(axaV.get_xticks(), rotation=30)
-        axaV.set_xlim(
-            [
-                np.floor(np.min(frequency[np.array(params["receiver"]) == 2]) - 0.1),
-                np.ceil(np.max(frequency[np.array(params["receiver"]) == 2]) + 0.1),
-            ]
-        )
-        minv = np.nanmin(
-            tb_m[np.array(params["receiver"]) == 2] - tb_s[np.array(params["receiver"]) == 2]
-        )
-        maxv = np.nanmax(
-            tb_m[np.array(params["receiver"]) == 2] + tb_s[np.array(params["receiver"]) == 2]
-        )
-        axaV.set_ylim([np.nanmax([0, minv - 0.05 * minv]), maxv + 0.05 * maxv])
-        axaV.tick_params(axis="both", labelsize=12)
-        axaV.set_facecolor(_COLORS["lightgray"])
-        axaV.plot(
-            frequency[np.array(params["receiver"]) == 2],
-            tb_m[np.array(params["receiver"]) == 2],
-            "k-",
-            linewidth=2,
-        )
+    axaV = fig.add_subplot(122)
+    axaV.set_position([0.54, -0.05, 0.36, 0.125])
+    axaV.plot(frequency, tb_m, "ko", markerfacecolor="k", markersize=4)
+    axaV.errorbar(frequency, tb_m, yerr=tb_s, xerr=None, linestyle="", capsize=8, color="k")
+    axaV.set_xticks(frequency)
+    axaV.set_xticklabels(axaV.get_xticks(), rotation=30)
+    axaV.set_xlim(
+        [
+            np.floor(np.min(frequency[np.array(params["receiver"]) == 2]) - 0.1),
+            np.ceil(np.max(frequency[np.array(params["receiver"]) == 2]) + 0.1),
+        ]
+    )
+    minv = np.nanmin(
+        tb_m[np.array(params["receiver"]) == 2] - tb_s[np.array(params["receiver"]) == 2]
+    )
+    maxv = np.nanmax(
+        tb_m[np.array(params["receiver"]) == 2] + tb_s[np.array(params["receiver"]) == 2]
+    )
+    axaV.set_ylim([np.nanmax([0, minv - 0.05 * minv]), maxv + 0.05 * maxv])
+    axaV.tick_params(axis="both", labelsize=12)
+    axaV.set_facecolor(_COLORS["lightgray"])
+    axaV.plot(
+        frequency[np.array(params["receiver"]) == 2],
+        tb_m[np.array(params["receiver"]) == 2],
+        "k-",
+        linewidth=2,
+    )
 
-        axaK.spines["right"].set_visible(False)
-        axaV.spines["left"].set_visible(False)
-        axaV.yaxis.tick_right()
-        d = 0.015
-        axaK.plot((1 - d, 1 + d), (-d, +d), transform=axaK.transAxes, color="k", clip_on=False)
-        axaK.plot(
-            (1 - d, 1 + d),
-            (1 - d, 1 + d),
-            transform=axaK.transAxes,
-            color="k",
-            clip_on=False,
-        )
-        axaV.plot((-d, +d), (1 - d, 1 + d), transform=axaV.transAxes, color="k", clip_on=False)
-        axaV.plot((-d, +d), (-d, +d), transform=axaV.transAxes, color="k", clip_on=False)
-        axaK.set_ylabel("Brightness Temperature [K]", fontsize=12)
-        axaV.text(
-            -0.08,
-            0.9,
-            "TB daily means +/- standard deviation",
-            fontsize=13,
-            horizontalalignment="center",
-            transform=axaV.transAxes,
-            color=_COLORS["darkgray"],
-            fontweight="bold",
-        )
-        axaV.text(
-            -0.08,
-            -0.35,
-            "Frequency [GHz]",
-            fontsize=13,
-            horizontalalignment="center",
-            transform=axaV.transAxes,
-        )
-
-    else:
-        tb_m = np.ones((len(sc["time"]), len(sc["receiver_nb"]))) * np.nan
-        axa = fig.subplots(1, 2)
-        ticks_x_labels = _get_standard_time_ticks()
-        axa[0].set_ylabel("Mean absolute difference [K]", fontsize=12)
-
-        for irec, rec in enumerate(sc["receiver_nb"]):
-            axa[irec].set_position([0.125 + irec * 0.415, -0.05, 0.36, 0.125])
-            no_flag = np.where(np.sum(quality_flag[:, sc["receiver"] == rec], axis=1) == 0)[0]
-            if len(no_flag) == 0:
-                no_flag = np.arange(len(sc["time"]))
-            tb_m[:, irec] = ma.mean(np.abs(data_in[:, sc["receiver"] == rec]), axis=1)
-            axa[irec].plot(
-                time,
-                tb_m[:, irec],
-                "o",
-                color="black",
-                markersize=0.75,
-                fillstyle="full",
-            )
-            axa[irec].set_facecolor(_COLORS["lightgray"])
-            flag = np.where(np.sum(quality_flag[:, sc["receiver"] == rec], axis=1) > 0)[0]
-            axa[irec].plot(time[flag], tb_m[flag, irec], "ro", markersize=0.75, fillstyle="full")
-            axa[irec].set_xticks(np.arange(0, 25, 4, dtype=int))
-            axa[irec].set_xticklabels(ticks_x_labels, fontsize=12)
-            axa[irec].set_xlim(0, 24)
-            axa[irec].set_xlabel("Time (UTC)", fontsize=12)
-            axa[irec].set_ylim([0, np.nanmax(tb_m[no_flag, irec]) + 0.5])
-
-            if len(np.where(isbit(qf[:, 0], 5))[0]) > 0:
-                data_g = np.zeros((len(time), 10), np.float32)
-                data_g[isbit(qf[:, 0], 5), :] = 1.0
-                _plot_segment_data(
-                    axa[irec],
-                    data_g,
-                    "tb_missing",
-                    (time, np.linspace(0, np.nanmax(tb_m[no_flag, irec]) + 0.5, 10)),
-                    nc_file,
-                )
-                handles, labels = axa[irec].get_legend_handles_labels()
-                handles.append(Patch(facecolor=_COLORS["gray"]))
-                labels.append("rain_detected")
-                axa[irec].legend(handles, labels, loc="upper right")
+    axaK.spines["right"].set_visible(False)
+    axaV.spines["left"].set_visible(False)
+    axaV.yaxis.tick_right()
+    d = 0.015
+    axaK.plot((1 - d, 1 + d), (-d, +d), transform=axaK.transAxes, color="k", clip_on=False)
+    axaK.plot(
+        (1 - d, 1 + d),
+        (1 - d, 1 + d),
+        transform=axaK.transAxes,
+        color="k",
+        clip_on=False,
+    )
+    axaV.plot((-d, +d), (1 - d, 1 + d), transform=axaV.transAxes, color="k", clip_on=False)
+    axaV.plot((-d, +d), (-d, +d), transform=axaV.transAxes, color="k", clip_on=False)
+    axaK.set_ylabel("Brightness Temperature [K]", fontsize=12)
+    axaV.text(
+        -0.08,
+        0.9,
+        "TB daily means +/- standard deviation",
+        fontsize=13,
+        horizontalalignment="center",
+        transform=axaV.transAxes,
+        color=_COLORS["darkgray"],
+        fontweight="bold",
+    )
+    axaV.text(
+        -0.08,
+        -0.35,
+        "Frequency [GHz]",
+        fontsize=13,
+        horizontalalignment="center",
+        transform=axaV.transAxes,
+    )
 
 
 def _plot_met(ax, data_in: ndarray, name: str, time: ndarray, nc_file: str):
@@ -1369,9 +1290,11 @@ def _plot_int(ax, data_in: ma.MaskedArray, name: str, time: ndarray, nc_file: st
     else:
         vmax = np.min([np.nanmax(data0) + 0.05, vmax])
         vmin = np.max([np.nanmin(data0) - 0.05, vmin])
+    if vmax < vmin:
+        vmax = np.nanmax(data0)
     _set_ax(ax, vmax, ATTRIBUTES[name].ylabel, min_y=vmin)
 
-    flag_tmp, width = _calculate_rolling_mean(time, flag, win=1 / 60)
+    flag_tmp, width = _calculate_rolling_mean(time, flag, win=5 / 60)
     data_f = np.zeros((len(flag_tmp), 10), np.float32)
     data_f[flag_tmp > 0, :] = 1.0
     cmap = ListedColormap([_COLORS["lightgray"], _COLORS["gray"]])

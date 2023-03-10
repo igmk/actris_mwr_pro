@@ -12,7 +12,6 @@ from level1.met_quality_control import apply_met_qc
 from level1.quality_control import apply_qc
 from level1.rpg_bin import get_rpg_bin
 
-# from level1.tb_offset import correct_tb_offset
 from utils import (
     add_interpol1d,
     add_time_bounds,
@@ -58,9 +57,6 @@ def lev1_to_nc(
     rpg_bin = prepare_data(path_to_files, path_to_prev, path_to_next, data_type, params, site)
     if data_type in ("1B01", "1C01"):
         apply_qc(site, rpg_bin.data, params)
-        # rpg_cal = cal_his(params, global_attributes, rpg_bin.data["time"][0])
-        # if rpg_cal != []:
-        #     correct_tb_offset(site, rpg_bin.data, params, global_attributes, rpg_cal)
     if data_type in ("1B21", "1C01"):
         apply_met_qc(rpg_bin.data, params)
     hatpro = rpg_mwr.Rpg(rpg_bin.data)
@@ -542,7 +538,7 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
                 brt.data[var] = brt.data[var][ind]
         brt.header["n"] = len(
             brt.data["time"]
-        )  # brt.header["n"] + blb.header["n"] * blb.header["_n_ang"]
+        )
 
 
 def _azi_correction(brt: dict, params: dict) -> None:
@@ -553,59 +549,3 @@ def _azi_correction(brt: dict, params: dict) -> None:
     brt["azi"][ind360] = 360.0 + params["azi_cor"] - brt["azi"][ind360]
     brt["azi"][brt["azi"][:] < 0] += 360.0
 
-
-def cal_his(params: dict, glob_att: dict, time0: int) -> dict:
-    """Load and add information from ABSCAL.HIS file"""
-    file_list_cal, rpg_cal = [], []
-    cal_type = [
-        "instrument performs no absolute calibration",
-        "liquid nitrogen calibration",
-        "sky tipping calibration",
-    ]
-    try:
-        file_list_cal = get_file_list(params["path_to_cal"], " ", " ", "his")
-    except:
-        print(["No binary files with extension his found in directory " + params["path_to_cal"]])
-
-    if file_list_cal != []:
-        rpg_cal = get_rpg_bin(file_list_cal)
-        cal_times1 = epoch2unix(rpg_cal.data["t1"], rpg_cal.header["_time_ref"])
-        cal_times2 = epoch2unix(rpg_cal.data["t2"], rpg_cal.header["_time_ref"])
-        cal_ind1 = np.where(cal_times1 < time0)[0]
-        cal_ind2 = np.where(cal_times2 < time0)[0]
-
-        if (len(cal_ind1) > 0) & (len(cal_ind2) > 0):
-            if (
-                (rpg_cal.data["cal1_t"][cal_ind1[-1]] > 0)
-                & (rpg_cal.data["cal2_t"][cal_ind2[-1]] > 0)
-                & ((time0 - cal_times1[cal_ind1[-1]]) / 86400.0 < 183.0)
-                & ((time0 - cal_times2[cal_ind2[-1]]) / 86400.0 < 183.0)
-            ):
-                glob_att["instrument_calibration_status"] = "calibrated"
-            else:
-                glob_att["instrument_calibration_status"] = "needs calibration"
-
-            glob_att[
-                "receiver1_date_of_last_absolute_calibration"
-            ] = datetime.datetime.utcfromtimestamp(
-                epoch2unix(rpg_cal.data["t1"][cal_ind1[-1]], rpg_cal.header["_time_ref"])
-            ).strftime(
-                "%Y%m%d"
-            )
-            glob_att["receiver1_type_of_last_absolute_calibration"] = cal_type[
-                int(rpg_cal.data["cal1_t"][cal_ind1[-1]])
-            ]
-            glob_att[
-                "receiver2_date_of_last_absolute_calibration"
-            ] = datetime.datetime.utcfromtimestamp(
-                epoch2unix(rpg_cal.data["t2"][cal_ind2[-1]], rpg_cal.header["_time_ref"])
-            ).strftime(
-                "%Y%m%d"
-            )
-            glob_att["receiver2_type_of_last_absolute_calibration"] = cal_type[
-                int(rpg_cal.data["cal2_t"][cal_ind2[-1]])
-            ]
-        else:
-            glob_att["instrument_calibration_status"] = "needs calibration"
-
-    return rpg_cal
