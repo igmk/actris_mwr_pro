@@ -27,7 +27,7 @@ def apply_met_qc(data: dict, params: dict) -> None:
         "air_temperature",
         "relative_humidity",
         "air_pressure",
-        "rain_rate",
+        "rainfall_rate",
         "wind_direction",
         "wind_speed",
     ]

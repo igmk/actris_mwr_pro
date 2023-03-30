@@ -238,11 +238,11 @@ def get_file_list(path_to_files: str, path_to_prev: str, path_to_next: str, exte
             ]
         )
     if (len(f_list_p) > 0) & (len(f_list_n) > 0):
-        f_list = [f_list_p[-1], *f_list, f_list_n[0]]
+        f_list = [*f_list_p, *f_list, *f_list_n]
     elif (len(f_list_p) > 0) & (len(f_list_n) == 0):
-        f_list = [f_list_p[-1], *f_list]
+        f_list = [*f_list_p, *f_list]
     elif (len(f_list_p) == 0) & (len(f_list_n) > 0):
-        f_list = [*f_list, f_list_n[0]]
+        f_list = [*f_list, *f_list_n]
     return f_list
 
 

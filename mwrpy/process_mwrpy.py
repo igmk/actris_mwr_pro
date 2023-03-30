@@ -18,7 +18,7 @@ product = [
     ("2I02", "iwv"),
     ("2P01", "temperature"),
     ("2P02", "temperature"),
-    ("2P03", "water_vapor_vmr"),
+    ("2P03", "absolute_humidity"),
     ("2P04", "relative_humidity"),
     ("2P07", "potential_temperature"),
     ("2P08", "equivalent_potential_temperature"),
@@ -98,12 +98,12 @@ def plot_product(prod: str, date, site: str):
 
     # Level 1
     if prod[0] == "1":
-        link_dir = (
-            "/home/hatpro/public_html/quicklooks/"
-            + params["data_out"][6:]
-            + "level1/"
-            + date.strftime("%Y/%m/%d/")
-        )
+        # link_dir = (
+        #     "/home/hatpro/public_html/quicklooks/"
+        #     + params["data_out"][6:]
+        #     + "level1/"
+        #     + date.strftime("%Y/%m/%d/")
+        # )
         
         lev1_data = data_out_l1 + "MWR_" + prod + "_" + ID + "_" + date.strftime("%Y%m%d") + ".nc"        
         if os.path.isfile(lev1_data):
@@ -115,32 +115,32 @@ def plot_product(prod: str, date, site: str):
                 save_path=data_out_l1,
                 image_name="tb",
             )
-            _link_quicklook(link_dir, fig_name)
+            # _link_quicklook(link_dir, fig_name)
             fig_name = generate_figure(
-                lev1_data, ["ele", "azi"], save_path=data_out_l1, image_name="sen"
+                lev1_data, ["elevation_angle", "azimuth_angle"], save_path=data_out_l1, image_name="sen"
             )
-            _link_quicklook(link_dir, fig_name)
+            # _link_quicklook(link_dir, fig_name)
             fig_name = generate_figure(
                 lev1_data,
                 ["quality_flag"],
                 save_path=data_out_l1,
                 image_name="quality_flag",
             )
-            _link_quicklook(link_dir, fig_name)
+            # _link_quicklook(link_dir, fig_name)
             fig_name = generate_figure(
                 lev1_data,
                 ["met_quality_flag"],
                 save_path=data_out_l1,
                 image_name="met_quality_flag",
             )
-            _link_quicklook(link_dir, fig_name)
+            # _link_quicklook(link_dir, fig_name)
             fig_name = generate_figure(
                 lev1_data,
                 ["t_amb", "t_rec", "t_sta"],
                 save_path=data_out_l1,
                 image_name="hkd",
             )
-            _link_quicklook(link_dir, fig_name)
+            # _link_quicklook(link_dir, fig_name)
             fig_name = generate_figure(
                 lev1_data,
                 [
@@ -151,7 +151,7 @@ def plot_product(prod: str, date, site: str):
                 save_path=data_out_l1,
                 image_name="met",
             )
-            _link_quicklook(link_dir, fig_name)
+            # _link_quicklook(link_dir, fig_name)
             fig_name = generate_figure(
                 lev1_data,
                 [
@@ -162,7 +162,7 @@ def plot_product(prod: str, date, site: str):
                 save_path=data_out_l1,
                 image_name="met2",
             )
-            _link_quicklook(link_dir, fig_name)
+            # _link_quicklook(link_dir, fig_name)
             if params["ir_flag"]:
                 fig_name = generate_figure(
                     lev1_data,
@@ -171,7 +171,7 @@ def plot_product(prod: str, date, site: str):
                     save_path=data_out_l1,
                     image_name="irt",
                 )
-                _link_quicklook(link_dir, fig_name)
+                # _link_quicklook(link_dir, fig_name)
 
     # Level 2
     elif (
@@ -182,12 +182,12 @@ def plot_product(prod: str, date, site: str):
             os.path.isfile(data_out_l1 + "MWR_1C01_" + ID + "_" + date.strftime("%Y%m%d") + ".nc")
         )
     ):
-        link_dir = (
-            "/home/hatpro/public_html/quicklooks/"
-            + params["data_out"][6:]
-            + "level2/"
-            + date.strftime("%Y/%m/%d/")
-        )
+        # link_dir = (
+        #     "/home/hatpro/public_html/quicklooks/"
+        #     + params["data_out"][6:]
+        #     + "level2/"
+        #     + date.strftime("%Y/%m/%d/")
+        # )
         data_out_l2 = params["data_out"] + "level2/" + date.strftime("%Y/%m/%d/")
 
         if prod in ("2I01", "2I02"):
@@ -205,7 +205,7 @@ def plot_product(prod: str, date, site: str):
                 save_path=data_out_l2,
                 image_name=var,
             )
-            _link_quicklook(link_dir, fig_name)
+            # _link_quicklook(link_dir, fig_name)
     
     # Statistics
     elif prod == "stats":

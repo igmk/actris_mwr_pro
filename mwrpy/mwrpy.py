@@ -19,7 +19,7 @@ modules = {
 
 
 def main(args):
-    os.chdir("/home/hatpro/mwr_pro_actris/")
+    os.chdir("/home/tmarke/Dokumente/GitHub/actris_mwr_pro/mwrpy/")
     args = _parse_args(args)
     cmd = args.cmd
     modules[cmd].main(args)

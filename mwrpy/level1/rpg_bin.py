@@ -1,6 +1,7 @@
 """This module contains all functions to read in RPG MWR binary files"""
 import datetime
 import logging
+import time
 
 import numpy as np
 
@@ -10,11 +11,11 @@ Fill_Value_Float = -999.0
 Fill_Value_Int = -99
 
 
-def get_rpg_bin(file_list: list) -> np.ndarray:
+def get_rpg_bin(file_list: list, date) -> np.ndarray:
     """This function reads one day of a RPG MWR binary file type and concatenates the data.
     Args:
         file_list: List of files for one day of a RPG MWR binary file type.
-
+        date: Date for processing.
     Returns:
         Data array
 
@@ -24,7 +25,7 @@ def get_rpg_bin(file_list: list) -> np.ndarray:
 
     """
 
-    rpg_bin = RpgBin(file_list)
+    rpg_bin = RpgBin(file_list, date)
     return rpg_bin
 
 
@@ -54,8 +55,9 @@ def stack_files(file_list):
         except (TypeError, ValueError) as err:
             logging.warning(err)
             continue
-        _stack_header(header_tmp, header, np.add)
-        _stack_data(data_tmp, data, np.concatenate)
+        if (len(header_tmp) > 0) & (len(data_tmp) > 0):
+            _stack_header(header_tmp, header, np.add)
+            _stack_data(data_tmp, data, np.concatenate)
 
     return header, data
 
@@ -63,10 +65,19 @@ def stack_files(file_list):
 class RpgBin:
     """Class for RPG binary files"""
 
-    def __init__(self, file_list):
+    def __init__(self, file_list, date):
+        
         self.header, self.raw_data = stack_files(file_list)
-        self.raw_data["time"] = utils.epoch2unix(self.raw_data["time"], self.header["_time_ref"])
-        self.date = self._get_date()
+        today = float(datetime.datetime.today().strftime("%Y"))
+        date_ref = self._get_date()
+        if float(date_ref[0]) > today:
+            self.raw_data["time"] = utils.epoch2unix(self.raw_data["time"], self.header["_time_ref"], (1970, 1, 1))
+        else:
+            self.raw_data["time"] = utils.epoch2unix(self.raw_data["time"], self.header["_time_ref"])
+        if len(date) == 0:
+            self.date = self._get_date()
+        else:
+            self.date = date
         self.data = {}
         self._init_data()
         if str(file_list[0][-3:]).lower() != "his":
@@ -77,23 +88,21 @@ class RpgBin:
             self.data[key] = data
 
     def _get_date(self):
-        time_median = float(np.ma.median(self.raw_data["time"]))
+        date_time = datetime.datetime(1990, 1, 1)
+        # import pdb
+        # pdb.set_trace()        
+        time_median = float(
+            np.ma.median(self.raw_data["time"][
+                self.raw_data["time"] > time.mktime(date_time.timetuple())
+            ])
+        )
         date = (
             datetime.datetime.utcfromtimestamp(
-                utils.epoch2unix(time_median, self.header["_time_ref"])
+                time_median
             )
             .strftime("%Y %m %d")
             .split()
         )
-        today = float(datetime.datetime.today().strftime("%Y"))
-        if float(date[0]) > today:
-            date = (
-                datetime.datetime.utcfromtimestamp(
-                    utils.epoch2unix(time_median, self.header["_time_ref"], (1970, 1, 1))
-                )
-                .strftime("%Y %m %d")
-                .split()
-            )
         return date
 
     def find_valid_times(self):
@@ -127,7 +136,7 @@ class RpgBin:
                 else:
                     screened_data = data[ind, :]
                 self.data[key] = screened_data
-
+                
 
 def read_tpc(file_name: str) -> dict:
     """This function reads RPG MWR .TPC binary files."""
@@ -407,8 +416,8 @@ def read_bls(file_name: str) -> dict:
                 "rain": np.ones(header["n"] * header["_n_ang"], np.byte) * Fill_Value_Int,
                 "tb": np.ones([header["n"] * header["_n_ang"], header["_n_f"]], np.float32)
                 * Fill_Value_Float,
-                "ele": np.ones(header["n"] * header["_n_ang"], np.float32) * Fill_Value_Float,
-                "azi": np.ones(header["n"] * header["_n_ang"], np.float32) * Fill_Value_Float,
+                "elevation_angle": np.ones(header["n"] * header["_n_ang"], np.float32) * Fill_Value_Float,
+                "azimuth_angle": np.ones(header["n"] * header["_n_ang"], np.float32) * Fill_Value_Float,
             }
             return vrs
 
@@ -440,7 +449,7 @@ def read_bls(file_name: str) -> dict:
                     sample,
                 ] = np.fromfile(file, np.float32, header["_n_f"])
                 ang = np.fromfile(file, np.int32, 1)
-                data["ele"][sample], data["azi"][sample] = _angle_calc(ang, code)
+                data["elevation_angle"][sample], data["azimuth_angle"][sample] = _angle_calc(ang, code)
             file.close()
             return data
 
@@ -480,8 +489,8 @@ def read_brt(file_name: str) -> dict:
                 "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
                 "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
                 "tb": np.ones([header["n"], header["_n_f"]], np.float32) * Fill_Value_Float,
-                "ele": np.ones(header["n"], np.float32) * Fill_Value_Float,
-                "azi": np.ones(header["n"], np.float32) * Fill_Value_Float,
+                "elevation_angle": np.ones(header["n"], np.float32) * Fill_Value_Float,
+                "azimuth_angle": np.ones(header["n"], np.float32) * Fill_Value_Float,
             }
             return vrs
 
@@ -523,7 +532,7 @@ def read_brt(file_name: str) -> dict:
                     ang = np.fromfile(file, np.float32, 1)
                 elif code == 666000:
                     ang = np.fromfile(file, np.int32, 1)
-                data["ele"][sample], data["azi"][sample] = _angle_calc(ang, code)
+                data["elevation_angle"][sample], data["azimuth_angle"][sample] = _angle_calc(ang, code)
             file.close()
             return data
 
@@ -639,8 +648,8 @@ def read_irt(file_name: str) -> dict:
                 "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
                 "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
                 "irt": np.ones([header["n"], header["_n_f"]], np.float32) * Fill_Value_Float,
-                "ir_ele": np.ones(header["n"], np.float32) * Fill_Value_Float,
-                "ir_azi": np.ones(header["n"], np.float32) * Fill_Value_Float,
+                "ir_elevation_angle": np.ones(header["n"], np.float32) * Fill_Value_Float,
+                "ir_azimuth_angle": np.ones(header["n"], np.float32) * Fill_Value_Float,
             }
             return vrs
 
@@ -683,7 +692,7 @@ def read_irt(file_name: str) -> dict:
                     ang = np.fromfile(file, np.float32, 1)
                 elif code == 671112000:
                     ang = np.fromfile(file, np.int32, 1)
-                data["ir_ele"][sample], data["ir_azi"][sample] = _angle_calc(ang, code)
+                data["ir_elevation_angle"][sample], data["ir_azimuth_angle"][sample] = _angle_calc(ang, code)
             file.close()
             return data
 
@@ -872,8 +881,8 @@ def read_spc(file_name: str) -> dict:
                 "time": np.ones(header["n"], np.int32) * Fill_Value_Int,
                 "rain": np.ones(header["n"], np.byte) * Fill_Value_Int,
                 "tb": np.ones([header["n"], header["_n_f"]], np.float32) * Fill_Value_Float,
-                "ele": np.ones(header["n"], np.float32) * Fill_Value_Float,
-                "azi": np.ones(header["n"], np.float32) * Fill_Value_Float,
+                "elevation_angle": np.ones(header["n"], np.float32) * Fill_Value_Float,
+                "azimuth_angle": np.ones(header["n"], np.float32) * Fill_Value_Float,
             }
             return vrs
 
@@ -908,7 +917,7 @@ def read_spc(file_name: str) -> dict:
                     ang = np.fromfile(file, np.float32, 1)
                 elif code == 667000:
                     ang = np.fromfile(file, np.int32, 1)
-                data["ele"][sample], data["azi"][sample] = _angle_calc(ang, code)
+                data["elevation_angle"][sample], data["azimuth_angle"][sample] = _angle_calc(ang, code)
             file.close()
             return data
 

@@ -56,7 +56,7 @@ _CMAP_QF = [
     _COLORS["shockred"],
     _COLORS["seaweed_roll"],
     _COLORS["blue"],
-    _COLORS["yellow"],
+    _COLORS["purple"],
     _COLORS["yellowgreen"],
 ]
 

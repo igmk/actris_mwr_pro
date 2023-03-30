@@ -110,49 +110,52 @@ ATTRIBUTES_1B01 = {
         "nominal frequency of some channels, frequency+freq_shift gives more accurate values.",
     ),
     "receiver_nb": MetaData(
-        long_name="Number of the microwave receiver",
+        long_name="Microwave receiver number",
+        units="1",
     ),
     "receiver": MetaData(
         long_name="Corresponding microwave receiver for each channel",
+        units="1"
     ),
     "bandwidth": MetaData(
-        long_name="Bandwidth of the microwave channels",
+        long_name="Bandwidth of microwave channels",
         units="GHz",
     ),
     "n_sidebands": MetaData(
         long_name="Number of sidebands",
+        units="1",
         comment="0: direct-detection receivers, 1: single-sideband, 2: double-sideband.\n"
         "The frequency separation of sidebands is indicated in sideband_IF_separation.",
     ),
     "sideband_IF_separation": MetaData(
-        long_name="For double sideband channels, this is the positive and negative IF range\n"
+        long_name="Sideband IF separation",
+        comment="For double sideband channels, this is the positive and negative IF range\n"
         "distance of the two band passes around the centre frequency (which is the LO frqeuency)",
         units="GHz",
-        comment="ositive number for IF centre frequency",
     ),
     "beamwidth": MetaData(
         long_name="Beam width (FWHM) of the microwave radiometer",
-        units="degrees",
+        units="degree",
     ),
     "freq_shift": MetaData(
-        long_name="For more accurate frequency values use frequency+freq_shift.",
+        long_name="Frequency shift of the microwave channels",
+        comment="For more accurate frequency values use frequency + freq_shift.",
         units="GHz",
     ),
     "tb": MetaData(
-        long_name="Microwave brightness temperatures",
-        standard_name="microwave_brightness_temperature",
+        long_name="Microwave brightness temperature",
+        standard_name="brightness_temperature",
         units="K",
     ),
-    "azi": MetaData(
-        long_name="Sensor azimuth angle",
+    "azimuth_angle": MetaData(
+        long_name="Azimuth angle",
         standard_name="sensor_azimuth_angle",
-        units="degrees",
+        units="degree",
         comment="0=North, 90=East, 180=South, 270=West",
     ),
-    "ele": MetaData(
+    "elevation_angle": MetaData(
         long_name="Sensor elevation angle",
-        standard_name="sensor_elevation_angle",
-        units="degrees",
+        units="degree",
         comment="0=horizon, 90=zenith",
     ),
     "tb_accuracy": MetaData(
@@ -175,31 +178,31 @@ ATTRIBUTES_1B01 = {
     ),
     "quality_flag": MetaData(
         long_name="Quality flag",
-        units="1 (bit variable)",
+        units="1",
         definition=DEFINITIONS_1B01["quality_flag"],
         comment="0 indicates data with good quality according to applied tests.\n"
         "The list of (not) applied tests is encoded in quality_flag_status",
     ),
     "quality_flag_status": MetaData(
         long_name="Quality flag status",
-        units="1 (bit variable)",
+        units="1",
         definition=DEFINITIONS_1B01["quality_flag_status"],
         comment="Checks not executed in determination of quality_flag.\n"
         "0 indicates quality check has been applied.",
     ),
     "liquid_cloud_flag": MetaData(
         long_name="Liquid cloud flag",
-        units="1 (bit variable)",
+        units="1",
         comment="Flag meaning: no liquid cloud (0), liquid cloud present (1), undefined (2)",
     ),
     "liquid_cloud_flag_status": MetaData(
         long_name="Liquid cloud flag status",
-        units="1 (bit variable)",
+        units="1",
         comment="Flag meaning: using mwr and ir (0), using mwr only (1), other (2)",
     ),
     "pointing_flag": MetaData(
         long_name="Pointing flag",
-        units="1 (bit variable)",
+        units="1",
         comment="Flag indicating a single pointing (staring = 0)\n"
         "or multiple pointing (scanning = 1) observation sequence",
     ),
@@ -229,26 +232,24 @@ ATTRIBUTES_1B11 = {
         units="µm",
     ),
     "ir_bandwidth": MetaData(
-        long_name="Bandwidth of the infrared channel",
-        standard_name="sensor_band_spectral_width",
+        long_name="Bandwidth of infrared channels",
         units="µm",
-        comment="channel centre frequency",
+        comment="Channel centre frequency.",
     ),
     "ir_beamwidth": MetaData(
         long_name="Beam width of the infrared radiometer",
-        units="degrees",
+        units="degree",
     ),
     "irt": MetaData(long_name="Infrared brightness temperatures", units="K"),
-    "ir_azi": MetaData(
+    "ir_azimuth_angle": MetaData(
         long_name="Infrared sensor azimuth angle",
         standard_name="sensor_azimuth_angle",
-        units="degrees",
+        units="degree",
         comment="0=North, 90=East, 180=South, 270=West",
     ),
-    "ir_ele": MetaData(
+    "ir_elevation_angle": MetaData(
         long_name="Infrared sensor elevation angle",
-        standard_name="sensor_elevation_angle",
-        units="degrees",
+        units="degree",
         comment="0=horizon, 90=zenith",
     ),
 }
@@ -260,7 +261,7 @@ DEFINITIONS_1B21 = {
         "Bit 1: low_quality_air_temperature\n"
         "Bit 2: low_quality_relative_humidity\n"
         "Bit 3: low_quality_air_pressure\n"
-        "Bit 4: low_quality_rain_rate\n"
+        "Bit 4: low_quality_rainfall_rate\n"
         "Bit 5: low_quality_wind_direction\n"
         "Bit 6: low_quality_wind_speed"
     )
@@ -269,33 +270,37 @@ DEFINITIONS_1B21 = {
 ATTRIBUTES_1B21 = {
     "air_temperature": MetaData(
         long_name="Air temperature",
+        standard_name="air_temperature",
         units="K",
     ),
     "relative_humidity": MetaData(
         long_name="Relative humidity",
+        standard_name="relative_humidity",
         units="1",
     ),
     "air_pressure": MetaData(
         long_name="Air pressure",
-        units="hPa",
+        standard_name="air_pressure",
+        units="Pa",
     ),
-    "rain_rate": MetaData(
-        long_name="Precipitation amount",
+    "rainfall_rate": MetaData(
+        long_name="Rainfall rate",
         standard_name="rainfall_rate",
-        units="mm/h",
+        units="m s-1",
     ),
     "wind_direction": MetaData(
         long_name="Wind direction",
         standard_name="wind_from_direction",
-        units="degrees",
+        units="degree",
     ),
     "wind_speed": MetaData(
         long_name="Wind speed",
-        units="m/s",
+        standard_name="wind_speed",
+        units="m s-1",
     ),
     "met_quality_flag": MetaData(
         long_name="Meterological data quality flag",
-        units="1 (bit variable)",
+        units="1",
         definition=DEFINITIONS_1B21["met_quality_flag"],
         comment="0=ok, 1=problem. Note: should also be set to 1\n"
         "if corresponding sensor not available",

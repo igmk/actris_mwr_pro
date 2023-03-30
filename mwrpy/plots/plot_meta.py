@@ -81,7 +81,7 @@ _CLABEL = {
         ("low_quality_air_temperature", _COLORS["shockred"]),
         ("low_quality_relative_humidity", _COLORS["darkpurple"]),
         ("low_quality_air_pressure", _COLORS["lightbrown"]),
-        ("low_quality_rain_rate", _COLORS["blue"]),
+        ("low_quality_rainfall_rate", _COLORS["blue"]),
         ("low_quality_wind_direction", _COLORS["orange"]),
         ("low_quality_wind_speed", _COLORS["seaweed_roll"]),
     ),
@@ -107,8 +107,8 @@ ATTRIBUTES = {
         plot_type="bar",
         source="int",
     ),
-    "water_vapor_vmr": PlotMeta(
-        name="Retrieved water vapour profile",
+    "absolute_humidity": PlotMeta(
+        name="Absolute Humidity",
         cbar="Spectral_r",
         clabel=_KGM3,
         plot_range=(-0.00000000000001, 0.02),
@@ -165,7 +165,7 @@ ATTRIBUTES = {
         plot_type="bar",
         source="met",
     ),
-    "rain_rate": PlotMeta(
+    "rainfall_rate": PlotMeta(
         name="Precipitation amount",
         ylabel=_MMH,
         plot_range=(0, 50),
@@ -201,14 +201,14 @@ ATTRIBUTES = {
         plot_type="bar",
         source="tb",
     ),
-    "ele": PlotMeta(
+    "elevation_angle": PlotMeta(
         name="Sensor elevation angle",
         ylabel=_DEG,
         plot_range=(-1, 93),
         plot_type="bar",
         source="sen",
     ),
-    "azi": PlotMeta(
+    "azimuth_angle": PlotMeta(
         name="Sensor azimuth angle",
         ylabel=_DEG,
         plot_range=(-5, 363),
