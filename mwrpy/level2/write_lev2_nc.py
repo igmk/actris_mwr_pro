@@ -286,7 +286,7 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
                     np.tanh(fac[ix] * hidden_layer.dot(c_w2[ix, :, :])) * op_sc[ix, :]
                     + op_os[ix, :]
                 )
-                if product == "absolue_humidity":
+                if product == "absolute_humidity":
                     rpg_dat[product][ix, :] = rpg_dat[product][ix, :] / 1000.0
 
     elif data_type == "2P02":
