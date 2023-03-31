@@ -189,7 +189,7 @@ def prepare_data(
                 )
                 add_interpol1d(
                     rpg_bin.data,
-                    rpg_met.data["air_pressure"],
+                    rpg_met.data["air_pressure"] * 100.0,
                     rpg_met.data["time"],
                     "air_pressure",
                 )
@@ -469,9 +469,9 @@ def _add_blb(brt: dict, blb: dict, hkd: dict, params: dict, site: str) -> None:
                 (brt.data["time"] > time_blb - 3600) & (brt.data["time"] < time_blb + 3600)
             )[0]
             brt_azi = ma.median(brt.data["azimuth_angle"][brt_ind])
-            azi_add = np.concatenate(
+            azimuth_angle_add = np.concatenate(
                 (
-                    azi_add,
+                    azimuth_angle_add,
                     np.ones(blb.header["_n_ang"]) * ((scan_quadrant + brt_azi) % 360),
                 )
             )

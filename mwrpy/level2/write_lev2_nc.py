@@ -160,6 +160,9 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
         coeff["retrieval_elevation_angles"] = str(
             np.sort(np.unique(ele_retrieval(lev1["elevation_angle"][index], coeff)))
         )
+        coeff["retrieval_frequencies"] = str(
+            np.sort(np.unique(coeff["freq"]))
+        )
 
         if coeff["ret_type"] < 2:
             coeff_offset = offset(lev1["elevation_angle"][index])
@@ -246,6 +249,9 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
         coeff["retrieval_elevation_angles"] = str(
             np.sort(np.unique(ele_retrieval(lev1["elevation_angle"][index], coeff)))
         )
+        coeff["retrieval_frequencies"] = str(
+            np.sort(np.unique(coeff["freq"]))
+        )        
 
         rpg_dat["altitude"] = coeff["height_grid"][:] + params["station_altitude"]
         rpg_dat[product] = ma.masked_all((len(index), coeff["n_height_grid"]))
@@ -304,6 +310,10 @@ def get_products(site: str, lev1: dict, data_type: str, params: dict) -> dict:
         _, freq_bl, _ = np.intersect1d(
             coeff["freq"], coeff["freq_bl"], assume_unique=False, return_indices=True
         )
+        
+        coeff["retrieval_frequencies"] = str(
+            np.sort(np.unique(coeff["freq"]))
+        )        
 
         ix0 = np.where(
             (lev1["elevation_angle"][:] > coeff["ele"][0] - 0.5)
@@ -582,7 +592,7 @@ def retrieval_input(lev1: dict, coeff: list) -> np.ndarray:
                 ret_in = np.concatenate(
                     (
                         ret_in,
-                        np.reshape(lev1["air_pressure"][:].data * 100.0, (len(lev1["time"][:]), 1)),
+                        np.reshape(lev1["air_pressure"][:].data, (len(lev1["time"][:]), 1)),
                     ),
                     axis=1,
                 )
